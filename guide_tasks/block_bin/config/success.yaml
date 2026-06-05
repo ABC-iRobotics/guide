@@ -1,0 +1,6 @@
+instructions:
+  - cmd: 'is_prim_contained'
+    kwargs:
+      prim_path: '/blocks/*'
+      scope: '/bin_*'
+      tolerance: 0.0

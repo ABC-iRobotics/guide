@@ -1,0 +1,44 @@
+instructions:
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/*'
+      pose:
+        position:
+          random:
+            low: [-0.25, 0.0, 0.025]
+            high: [0.25, 0.25, 0.025]
+        orientation:
+          random:
+            axis: [0.0, 0.0, 1.0]
+            angle: 180
+    parallel: false
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_0'
+      pose:
+        position:
+          value: [0.25, -0.4, 0.09]
+          random:
+            low: [-0.05, -0.05, 0.0]
+            high: [0.05, 0.05, 0.0]
+        orientation:
+          random:
+            axis: [0.0, 0.0, 1.0]
+            angle: 180
+    parallel: false
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_1'
+      pose:
+        position:
+          value: [0.25, 0.4, 0.09]
+          random:
+            low: [-0.05, -0.05, 0.0]
+            high: [0.05, 0.05, 0.0]
+        orientation:
+          random:
+            axis: [0.0, 0.0, 1.0]
+            angle: 180
+    parallel: false

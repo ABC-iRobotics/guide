@@ -1,0 +1,12 @@
+startup:
+  renderer: "RaytracedLighting"
+  headless: False
+  anti_aliasing: 0
+  verbose: False
+  step_freq: 60
+
+world:
+  stage_units_in_meters: 1.0
+
+extensions:
+  - isaacsim.storage.native

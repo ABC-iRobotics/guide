@@ -1,0 +1,5 @@
+string path
+---
+geometry_msgs/Pose pose
+string message
+bool success

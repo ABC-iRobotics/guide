@@ -1,0 +1,68 @@
+instructions:
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/red_block'
+      pose:
+        position:
+          value: [0.25, -0.4, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/yellow_block'
+      pose:
+        position:
+          value: [0.35, -0.4, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/green_block'
+      pose:
+        position:
+          value: [0.45, -0.4, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/blue_block'
+      pose:
+        position:
+          value: [0.55, -0.4, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_joint'
+    kwargs:
+      articulation_root: '/fr3'
+      joint_positions: [0.0, -0.7854, 0.0, -2.3562, 0.0, 1.5708, 0.7854, 0.0, 0.0]
+      joint_velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      joint_efforts: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_0'
+      pose:
+        position:
+          value: [0.4, 0.4, 0.09]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_1'
+      pose:
+        position:
+          value: [0.4, -0.4, 0.09]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true

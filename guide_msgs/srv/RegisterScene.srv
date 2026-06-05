@@ -1,0 +1,6 @@
+string path
+---
+uint8 id
+float32[] offset
+string message
+bool success

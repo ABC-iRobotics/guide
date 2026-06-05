@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # To use:
 #
 #     pre-commit run -a
@@ -14,36 +15,69 @@
 
 repos:
   # Standard hooks
+=======
+repos:
+>>>>>>> 1a59891 (feat: GUIDE 1.0)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.4.0
     hooks:
       - id: check-added-large-files
+<<<<<<< HEAD
+=======
+        args: ['--maxkb=50000']  # Allow up to 50MB for USD and STL files
+>>>>>>> 1a59891 (feat: GUIDE 1.0)
       - id: check-ast
       - id: check-case-conflict
       - id: check-docstring-first
       - id: check-merge-conflict
       - id: check-symlinks
       - id: check-xml
+<<<<<<< HEAD
       #- id: check-yaml
+=======
+      - id: check-yaml
+>>>>>>> 1a59891 (feat: GUIDE 1.0)
       - id: debug-statements
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: trailing-whitespace
       - id: check-byte-order-marker  # Forbid UTF-8 byte-order markers
 
+<<<<<<< HEAD
   # Python hooks
   - repo: https://github.com/PyCQA/autoflake
     rev: v2.3.3
+=======
+  - repo: https://github.com/pycqa/autoflake
+    rev: v2.3.1
+>>>>>>> 1a59891 (feat: GUIDE 1.0)
     hooks:
     - id: autoflake
       args: [--remove-all-unused-imports, --in-place]
 
+<<<<<<< HEAD
   # - repo: https://github.com/pycqa/flake8
   #   rev: 3.9.0
   #   hooks:
   #   - id: flake8
   #     args: ["--ignore=E501,W503"]
 
+=======
+  # -----------------------------
+  # isort (import)
+  # -----------------------------
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args:
+          - --profile=black
+        files: \.py$
+
+  # -----------------------------
+  # black (formatter)
+  # ------------------------------
+>>>>>>> 1a59891 (feat: GUIDE 1.0)
   - repo: https://github.com/asottile/pyupgrade
     rev: v2.7.2
     hooks:
@@ -51,6 +85,7 @@ repos:
         args: [--py36-plus]
 
   - repo: https://github.com/psf/black
+<<<<<<< HEAD
     rev: 22.3.0
     hooks:
       - id: black
@@ -136,3 +171,20 @@ repos:
       - id: codespell
         args: ['--write-changes']
         exclude: \.(svg|pyc|drawio)$
+=======
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3
+        args: ["--line-length=100"]
+
+  # -----------------------------
+  # flake8 (lint)
+  # -----------------------------
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: ["--ignore=E501,W503,F841,F821"]
+>>>>>>> 1a59891 (feat: GUIDE 1.0)

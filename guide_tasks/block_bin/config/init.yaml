@@ -1,0 +1,88 @@
+usd_path: '/assets/block_bin.usd'
+
+robots:
+  franka :
+    path: '/fr3'
+    end_effector_name: 'fr3_hand_tcp'
+    default_joint_states:
+      - 0.0
+      - -0.785398
+      - 0.0
+      - -2.35619
+      - 0.0
+      - 1.5708
+      - 0.785398
+      - 0.0
+      - 0.0
+
+cameras:
+  top:
+    path: '/top'
+    width: 640
+    height: 480
+    topic: '/cam_top'
+
+  base:
+    path: '/base'
+    width: 640
+    height: 480
+    topic: '/cam_base'
+
+  wrist:
+    path: '/fr3/rsd455/RSD455/Camera_OmniVision_OV9782_Color'
+    width: 640
+    height: 480
+    topic: '/cam_wrist'
+
+dataset:
+  images:
+    - top: top
+    - base: base
+    - wrist: wrist
+  cartesian_velocity_robot: franka
+  end_effector_name: fr3_hand_tcp
+  observations:
+    - joint1.pos: franka.fr3_joint1.pos
+    - joint2.pos: franka.fr3_joint2.pos
+    - joint3.pos: franka.fr3_joint3.pos
+    - joint4.pos: franka.fr3_joint4.pos
+    - joint5.pos: franka.fr3_joint5.pos
+    - joint6.pos: franka.fr3_joint6.pos
+    - joint7.pos: franka.fr3_joint7.pos
+    - gripper.pos: franka.fr3_finger_joint1.pos
+    - x: x
+    - y: y
+    - z: z
+    - wx: wx
+    - wy: wy
+    - wz: wz
+  action:
+    - joint1.pos: joint_command.fr3_joint1.pos
+    - joint2.pos: joint_command.fr3_joint2.pos
+    - joint3.pos: joint_command.fr3_joint3.pos
+    - joint4.pos: joint_command.fr3_joint4.pos
+    - joint5.pos: joint_command.fr3_joint5.pos
+    - joint6.pos: joint_command.fr3_joint6.pos
+    - joint7.pos: joint_command.fr3_joint7.pos
+    - gripper.pos: joint_command.fr3_finger_joint1.pos
+    - x: x
+    - y: y
+    - z: z
+    - wx: wx
+    - wy: wy
+    - wz: wz
+
+limits:
+  xp: 5.0
+  xn: 5.0
+
+  yp: 5.0
+  yn: 5.0
+
+  zp: 5.0
+  zn: 5.0
+
+origin:
+  - 0.0
+  - 0.0
+  - -1.0
