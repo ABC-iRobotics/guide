@@ -59,7 +59,7 @@ ros2 launch block_bin bringup.launch.py
 Using a separate terminal, the demonstration generation can be triggered via a ROS 2 service:
 
 ```bash
-ros2 run block_bin solve_task --ros-args -p namespace:=/Sim_0/Scene_0
+ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration "{amount: 5, path: '~/'}"
 ```
 *(Exact launch commands and service calls depend on the instantiated task configuration.)*
 
