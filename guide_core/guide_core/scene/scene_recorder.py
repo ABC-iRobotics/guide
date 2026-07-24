@@ -82,11 +82,23 @@ class SceneRecorder(Thread):
         # so a full queue must NEVER block -- otherwise a recorder that falls behind
         # stalls the whole simulation and services stop responding.
         # Control signals (FINALIZE_EPISODE / DISCARD_EPISODE / FINALIZE / SHUTDOWN)
-        # must always be delivered, so block for those (they are rare). Frame dicts
-        # are droppable: drop the frame instead of blocking and keep stepping.
+        # must always be delivered, but must NOT block either: stop_recording /
+        # finalize_recording call this while holding the per-scene lock that
+        # start_recording also needs, so a blocking put on a full queue wedges that
+        # lock and every recording service hangs (and FINALIZE never reaches the
+        # recorder, so the dataset is never finalized). Instead, evict droppable
+        # frames to guarantee a slot -- control is rare, frames are droppable.
         if isinstance(data, str):
-            self.record_queue.put(data)
-            return
+            while True:
+                try:
+                    self.record_queue.put_nowait(data)
+                    return
+                except queue.Full:
+                    try:
+                        self.record_queue.get_nowait()  # drop one buffered frame
+                        self._dropped_frames += 1
+                    except queue.Empty:
+                        pass
         try:
             self.record_queue.put_nowait(data)
         except queue.Full:
@@ -107,9 +119,34 @@ class SceneRecorder(Thread):
     def wait_shutdown(self, timeout=None):
         return self.shutdown_event.wait(timeout)
 
+    def _attach_file_log(self):
+        """Send this recorder's logs to a file (idempotent, best-effort).
+
+        Path: ~/.ros/log/guide_recorder_<task>_<pid>.log when that dir exists,
+        else ~/guide_recorder_<task>_<pid>.log."""
+        try:
+            self._logger.setLevel(logging.INFO)
+            if any(isinstance(h, logging.FileHandler) for h in self._logger.handlers):
+                return
+            import os
+
+            log_dir = Path.home() / ".ros" / "log"
+            log_dir = log_dir if log_dir.is_dir() else Path.home()
+            fh = logging.FileHandler(log_dir / f"guide_recorder_{self.task_name}_{os.getpid()}.log")
+            fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+            self._logger.addHandler(fh)
+            self._logger.propagate = False
+        except Exception:
+            pass  # logging must never break recording
+
     def run(self):
         # We initialize the logger inside the process so it's isolated
         self._logger = logging.getLogger(f"SceneRecorder_{self.task_name}")
+        # The recorder lives in a forked BaseManager process whose stdout is not
+        # captured, so these logs (Saving episode / Episode saved / Exception in
+        # recorder loop / Finalizing) otherwise vanish -- which is exactly the
+        # trail needed to see where the recorder stalls. Mirror them to a file.
+        self._attach_file_log()
         self._logger.info("Starting SceneRecorder thread...")
 
         try:
