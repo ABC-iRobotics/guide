@@ -1,3 +1,4 @@
+import omni.graph.core as og
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.utils.types import ArticulationAction
 # OmniGraph ROS 2 shortcut helpers. These moved across Isaac Sim versions:
@@ -101,13 +102,54 @@ def _cmd_create_robot_control(
     _finalize_graph(js_graph)
 
 
+def _set_render_resolution(graph_path: str, width: int, height: int) -> None:
+    """Force a camera graph's render product to the configured resolution.
+
+    ``Ros2CameraGraph`` builds its ``IsaacCreateRenderProduct`` node with only
+    ``inputs:cameraPrim`` set, so the node keeps its own defaults --  1280x720, from
+    ``OgnIsaacCreateRenderProduct.ogn``. Nothing downstream complains, and the result
+    is that the published images do not match the ones a dataset was recorded from:
+    ``scene_orchestrator.create_render_products`` builds the recorder's annotator
+    render products at the size ``config/init.yaml`` asks for, so a dataset renders at
+    640x480 while inference reads a 1280x720 topic. ``irob_lerobot_ros.ros2camera``
+    then scales that to 853x480 and centre-crops to 640x480, keeping 75% of the
+    horizontal field of view, and 16:9 against 4:3 costs another quarter vertically --
+    about a 1.33x zoom into a framing the policy never trained on. Both halves of the
+    pipeline have to render at the same resolution or the policy is fed a different
+    camera than the one it learned from.
+
+    Set after ``make_graph``: the node does not exist before it, and ``make_graph``
+    also moves ``_og_path`` on to the next free path. Read back rather than assumed,
+    because a node renamed in a future Isaac release would otherwise put us straight
+    back to a silent mismatch.
+    """
+    for name, value in (("width", int(width)), ("height", int(height))):
+        attribute_path = f"{graph_path}/RenderProduct.inputs:{name}"
+        try:
+            attribute = og.Controller.attribute(attribute_path)
+            attribute.set(value)
+            written = attribute.get()
+        except Exception as error:  # node renamed, or the graph failed to build
+            raise RuntimeError(
+                f"Could not set '{attribute_path}'. The camera would publish at the "
+                f"node's default 1280x720 instead of {width}x{height}, which silently "
+                f"mismatches the resolution the recorder renders at."
+            ) from error
+        if written != value:
+            raise RuntimeError(
+                f"'{attribute_path}' kept {written} after being set to {value}."
+            )
+
+
 def _cmd_create_camera(
     self,
     pose: Pose | None = None,
     camera_path: str = "/Camera",
     path: str | None = None,
-    width: int = 1920,
-    height: int = 1080,
+    # Matches the caller's fallback in _cmd_simulator and the recorder's render
+    # products: both halves must render at the same size (see _set_render_resolution).
+    width: int = 640,
+    height: int = 480,
     frame: str = "sim_camera",
     namespace: str = "",
     topic: str = "/rgb",
@@ -135,6 +177,8 @@ def _cmd_create_camera(
 
     print("Creating camera")
     _finalize_graph(cp)
+    # The graph is built with the node's own 1280x720 default until this runs.
+    _set_render_resolution(cp._og_path, width, height)
 
 
 def _cmd_create_tf_graph(
