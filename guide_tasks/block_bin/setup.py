@@ -54,6 +54,7 @@ setup(
         "console_scripts": [
             "solve_task = block_bin.solve_task:main",
             "eval_policy = block_bin.eval_policy:main",
+            "eval_policy_servo = block_bin.eval_policy_servo:main",
         ],
     },
 )

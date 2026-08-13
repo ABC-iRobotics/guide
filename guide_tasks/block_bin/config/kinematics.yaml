@@ -1,0 +1,89 @@
+# IK for MoveIt Servo during policy evaluation (block_bin/eval_policy_servo.py).
+#
+# Loaded ONLY into servo_node, by describe_robot() in launch/eval_servo.launch.py.
+# move_group comes up through guide_moveit.launch.py with its own
+# franka_fr3_moveit_config/config/kinematics.yaml, so planning -- homing between
+# episodes, and solve_task recording demonstrations -- keeps the stock KDL solver and
+# is unaffected by anything here. That separation is the point of this file: the
+# servo loop wants redundancy resolved, the planner already does it globally.
+#
+# Why not KDL: fr3_arm is 7-DOF driving a 6-DOF Cartesian task, so one degree of
+# freedom (the elbow/wrist swivel) is unconstrained by the command. Servo resolves each
+# step with searchPositionIK seeded from the current joint positions
+# (moveit_servo/src/utils/command.cpp, jointDeltaFromIK). KDL has no posture cost and
+# no null-space term, so that free coordinate takes whatever local solution the Newton
+# iteration lands on and is never pulled back. Integrated over a 300-step rollout it
+# random-walks into a joint bound and pins there -- measured on this scene as fr3_joint6
+# 2.95 rad from home with 0.105 rad of travel left.
+#
+# pick_ik minimises a weighted cost instead of just solving, so the same free coordinate
+# can be given somewhere to go. The three weights below are the tuning knobs; all of
+# them default to 0.0, which is what makes stock pick_ik behave like KDL here.
+
+fr3_arm:
+  kinematics_solver: pick_ik/PickIkPlugin
+  # Servo overrides this per call with publish_period / 2 (0.01 s at 50 Hz), so it only
+  # bounds the planning-side use of this group. Kept small to match.
+  kinematics_solver_timeout: 0.005
+  kinematics_solver_attempts: 3
+
+  # MUST be local. `global` runs pick_ik's memetic population search, which explores the
+  # whole configuration space and can return a different IK branch between consecutive
+  # 20 ms cycles -- a discontinuous joint jump straight into the arm controller. `local`
+  # is gradient descent from the seed, which is the previous cycle's solution, so the
+  # trajectory stays continuous. It is also the only one that fits in a servo cycle.
+  mode: local
+
+  # Task error, i.e. how closely the commanded pose is tracked. rotation_scale < 1 keeps
+  # a small orientation error cheaper than the equivalent position error, which is what
+  # lets the solver spend the redundant DOF on the costs below instead of on the wrist.
+  position_scale: 1.0
+  rotation_scale: 0.5
+  position_threshold: 0.001
+  orientation_threshold: 0.01
+  # Only gates the secondary goals below: make_is_solution_test_fn rejects a solution
+  # whose goal cost is >= cost_threshold^2 (note the SQUARE, and that it is applied per
+  # goal, not to their sum). Raised from the 0.001 default purely for headroom -- 1e-4
+  # against a designed goal cost of ~1e-7 -- so retuning a weight does not silently
+  # start vetoing every solution. Pose accuracy is not affected by this number.
+  cost_threshold: 0.01
+
+  # The three secondary costs. THESE WEIGHTS ARE TINY ON PURPOSE -- read this before
+  # raising them, because the obvious values (0.5, 1.0) break IK completely.
+  #
+  # pick_ik minimises `pose_cost + sum(goal_eval * weight^2)` (make_cost_fn, goal.cpp:188)
+  # and then accepts the result only if the pose is still within position_threshold /
+  # orientation_threshold. Those two numbers are on wildly different scales: at the 1 mm
+  # acceptance boundary the pose term is (1e-3)^2 = 1e-6, while center_joints_weight
+  # evaluates to ~0.13 for this arm in a drifted posture. So at weight 0.5 the goal term
+  # is 3.2e-2 -- 31000x the pose term -- and gradient descent simply optimises posture,
+  # walks off the commanded pose and gets rejected. That is servo's "Could not find IK
+  # solution ... error code -31" (NO_IK_SOLUTION), on every single cycle.
+  #
+  # The budget: goal_eval * weight^2 must stay BELOW ~1e-6. Measured goal_eval for
+  # fr3_arm is 0.054 at home and 0.126 drifted, so weight <= 1e-3 keeps the goal term at
+  # ~0.13x the pose term. Re-derive before changing these -- the safe weight scales as
+  # position_threshold / sqrt(goal_eval).
+  #
+  # Small is not weak. The pose cost is FLAT along the redundant direction -- moving in
+  # the null space does not change the tip pose -- so along exactly the axis that drifts,
+  # these terms supply the only gradient there is. They are negligible where the task
+  # constrains the arm and decisive where it does not, which is the whole point.
+  #
+  # minimal_displacement_weight keeps the solution near the seed, so successive 20 ms
+  # solutions form a smooth trajectory instead of independent IK answers.
+  # avoid_joint_limits_weight evaluates to 0.0 except near a bound (0.065 in the measured
+  # drifted posture), so it is the late backstop.
+  # center_joints_weight acts everywhere and is what stops the drift developing at all.
+  minimal_displacement_weight: 0.0
+  # avoid_joint_limits_weight: 0.001
+  # center_joints_weight: 0.001
+
+  # Left at the default true: the descent starts at the seed and moves downhill on the
+  # COMBINED cost, so the centering gradient is already acting on the steps it does take,
+  # and stopping at the first valid solution keeps the solve well inside the 10 ms servo
+  # gives it. Setting it false buys more centering per cycle at the cost of burning the
+  # whole budget every cycle -- which is how servo starts missing its publish period.
+  stop_optimization_on_valid_solution: true
+  gd_max_iters: 100
+  gd_step_size: 0.0001
