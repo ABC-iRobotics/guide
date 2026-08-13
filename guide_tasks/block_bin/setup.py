@@ -56,6 +56,7 @@ setup(
             "eval_policy = block_bin.eval_policy:main",
             "eval_policy_servo = block_bin.eval_policy_servo:main",
             "eval_policy_pink = block_bin.eval_policy_pink:main",
+            "sweep_checkpoints = block_bin.sweep_checkpoints:main",
         ],
     },
 )
