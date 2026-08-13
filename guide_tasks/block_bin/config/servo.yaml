@@ -1,0 +1,98 @@
+# MoveIt Servo for LIBERO-style delta-action evaluation (block_bin/eval_policy_servo.py).
+#
+# Loaded by launch/eval_servo.launch.py under the `moveit_servo` parameter prefix that
+# ServoNode's generate_parameter_library listener expects. Topic names are RELATIVE:
+# the node runs inside the robot namespace (/Sim_0/Scene_i/franka), so `joint_states`
+# resolves to the one Isaac publishes and `fr3_arm_controller/joint_trajectory` to the
+# scene's own arm controller.
+
+move_group_name: fr3_arm
+
+# Servo's internal loop. The policy runs far slower (5 Hz); servo holds the last twist
+# and keeps integrating it at this rate until the next one lands.
+publish_period: 0.01
+command_out_type: trajectory_msgs/JointTrajectory
+command_out_topic: fr3_arm_controller/joint_trajectory
+joint_topic: joint_states
+# fr3_arm_controller drives Isaac through a position command interface, so velocities
+# in the trajectory would just be ignored.
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+
+# Deltas arrive in metres and radians, already divided by the control period, so they
+# are real speeds rather than joystick-style unitless input. In speed_units mode scale.*
+# is the MAX velocity, i.e. a cap, so it has to clear the fastest motion the policy was
+# trained to produce: max|delta| * fps. For the 07_27 checkpoint at 5 Hz that is
+# 0.0852 m -> 0.426 m/s and 0.3301 rad -> 1.650 rad/s (the q99 motions are far smaller,
+# 0.261 m/s and 0.451 rad/s -- these are the extremes, not the norm). The values below
+# clear both with headroom while still bounding a runaway prediction.
+# NOTE: the requirement scales with --fps. At --fps 10 the same deltas need 0.85 m/s and
+# 3.3 rad/s, so raise these in step or the fastest motions are silently truncated.
+command_in_type: speed_units
+scale:
+  linear: 0.1
+  rotational: 0.1
+
+# How long ONE twist stays live, and the only thing that bounds how far a single action
+# travels. An action is a displacement over one control period sent as delta/period, and
+# processTwistCommand keeps re-integrating the last twist every publish_period until a
+# newer one lands or this timeout expires -- so it has to be the control period exactly.
+# Longer, and a step whose successor is late (a chunk re-plan, a GIL stall behind policy
+# inference) runs on at full velocity for the difference: at 0.3 against a 0.2 s slot
+# that is half again the commanded distance, silently, on the steps already running late.
+# Shorter, and the arm halts inside every slot.
+#
+# So this MUST equal 1/--fps: 0.2 at the default 5 Hz, 0.1 at --fps 10. It is latched
+# when servo_node starts (ServoNode copies the parameter struct by value at
+# construction), so writing the parameter on a running node does nothing -- change it
+# here and relaunch. Servo::check_command_lifetime refuses to start on a mismatch.
+incoming_command_timeout: 0.2
+
+# Only consulted when the incoming twist is NOT already in the planning frame. The eval
+# publishes in fr3_link0 (servo's planning frame == the IK solver's base) so this should
+# never fire -- but if it does, `true` takes the rotation-only path, while `false` takes
+# a spatial-twist adjoint that is miscoded in 2.12.4 and swaps the linear and angular
+# halves of the twist. See twist_frame_for() in eval_policy_servo.py.
+#
+# It does NOT change how the rotation is applied to the arm: poseFromCartesianDelta
+# always rotates about the EE point in the reference frame's axes (T * R * T'), which is
+# exactly the recorded (R_{t+1} R_t^T) convention.
+apply_twist_commands_about_ee_frame: true
+
+# move_group owns the planning scene; servo subscribes to it rather than serving a
+# second, competing copy.
+is_primary_planning_scene_monitor: false
+
+check_collisions: false
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02
+
+lower_singularity_threshold: 30.0
+hard_stop_singularity_threshold: 100.0
+leaving_singularity_threshold_multiplier: 2.0
+joint_limit_margins: [0.001]
+
+# What happens when a joint does reach its bound anyway. jointVariablesToHalt flags a
+# joint only while it is past the margin AND still being driven further in, and
+# Servo::haltJoints then either pins that one joint or, with this left at its default
+# true, replaces the whole target with the CURRENT state -- freezing all seven joints for
+# that cycle. Since a policy pushing a wrist joint outward keeps doing so for many steps,
+# the default turns one saturated joint into an arm that does not move at all for the
+# rest of the episode, and the rollout scores as a failure that never really ran.
+#
+# false pins only the offending joint and lets the other six keep tracking. The cost is
+# real and worth naming: the executed EEF motion no longer matches the commanded twist,
+# because the pinned joint is not contributing its share. That is the wrong trade on real
+# hardware near obstacles -- here the arm is in Isaac with check_collisions off, and a
+# degraded rollout is strictly more informative than a frozen one.
+#
+# With pick_ik centering the redundant DOF (config/kinematics.yaml) this should rarely
+# fire at all; it is the backstop for when it does.
+halt_all_joints_in_cartesian_mode: false
+
+# The acceleration-limited smoothing plugin needs its own update_period and per-joint
+# acceleration limits; at 5 Hz the policy is the slow part anyway, so it buys nothing
+# here. Turn on with a fast controller if the motion looks jerky.
+use_smoothing: false
