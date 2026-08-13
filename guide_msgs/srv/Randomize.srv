@@ -1,6 +1,13 @@
 uint8 id
 bool use_zone
 int32 zone
+# Draw this episode's layout from a named seed instead of the scene's episode
+# counter, so two evaluations of different policies see IDENTICAL scenes and can be
+# compared as paired samples. Reproducible within one simulator session: the seed is
+# combined with the scene's master seed, which is drawn from OS entropy at
+# registration unless it was injected.
+bool use_seed
+int32 seed
 ---
 string message
 bool success
