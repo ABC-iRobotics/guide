@@ -265,7 +265,7 @@ class SceneRecorder(Thread):
                 "wz": float,
             }
 
-        from lerobot.datasets.utils import hw_to_dataset_features
+        from lerobot.utils.feature_utils import hw_to_dataset_features
 
         obs_features = hw_to_dataset_features(obs_features, "observation", use_video=True)
         action_features = hw_to_dataset_features(action_features, "action", use_video=True)
@@ -304,7 +304,7 @@ class SceneRecorder(Thread):
 
         relative_time = current_time - episode_start_time
 
-        from lerobot.datasets.utils import build_dataset_frame
+        from lerobot.utils.feature_utils import build_dataset_frame
 
         observation_frame = build_dataset_frame(
             self.dataset.features, item.get("observation", {}), prefix="observation"

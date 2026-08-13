@@ -64,10 +64,12 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 
 # GUIDE runtime deps (-c protects Isaac's torch/numpy pins from being upgraded):
-uv pip install --python .venv/bin/python python-fcl lerobot -c $PINS
+uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
 ```
 > Always pass `-c $PINS` when installing torch-dependent packages — without it the resolver
-> re-resolves torch and breaks the CUDA stack.
+> re-resolves torch/numpy and breaks the CUDA/Isaac stack. lerobot 0.6.0 caps `numpy<2.3.0`,
+> which conflicts with Isaac's exact `numpy==2.3.1`; `-c $PINS` forces Isaac's version (works
+> for lerobot at runtime). lerobot 0.6.0 also needs `transformers 5.4-5.6` + `huggingface-hub 1.x`.
 
 **4. Build the workspace** (`.venv` is hidden, so colcon skips it automatically):
 ```bash
