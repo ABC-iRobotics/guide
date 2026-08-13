@@ -422,12 +422,13 @@ class SceneManager:
             self._scenes[scene_id].state = SceneState.PREPARATION
             # Forward the requested dataset base dir to the recorder (empty => ~/dataset).
             self._scenes[scene_id].recorder.set_output_path(path)
-            self._scenes[scene_id].recorder.clear_start_recording()
+            # self._scenes[scene_id].recorder.clear_start_recording()
             if hasattr(self._scenes[scene_id], "clear_recording_history"):
                 self._scenes[scene_id].clear_recording_history()
 
     def stop_recording(self, scene_id: int, save_episode: bool = True):
         with self._locks[scene_id]:
+            self._scenes[scene_id].recorder.clear_start_recording()
             self._scenes[scene_id].state = SceneState.FINALIZING
             self._scenes[scene_id].recorder.clear_stop_recording()
             if save_episode:
