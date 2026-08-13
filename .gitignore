@@ -90,3 +90,4 @@ CATKIN_IGNORE
 *.lock
 env_isaaclab
 cli_runner/
+*.claude
