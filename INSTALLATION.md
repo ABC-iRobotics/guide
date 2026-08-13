@@ -34,11 +34,16 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 # guide deps (protect Isaac's numpy2/torch pins so they aren't clobbered):
 uv pip install --python .venv/bin/python python-fcl -c modules/isaac6-safe-pins.txt
-uv pip install --python .venv/bin/python lerobot -c modules/isaac6-safe-pins.txt   # newer lerobot (torch<2.12, numpy>=2)
+uv pip install --python .venv/bin/python "lerobot==0.6.0" "transformers>=5.4,<5.6" -c modules/isaac6-safe-pins.txt   # lerobot 0.6.0 caps numpy<2.3.0 -> MUST pass -c (see Gotcha)
 ```
-**Gotcha:** installing torch-dependent pkgs (lerobot) without `-c` re-resolves torch to
-cu128 and breaks the CUDA stack (`ncclDevCommDestroy` / torchvision CUDA mismatch). If it
-happens: `uv pip install torch==2.11.0 torchvision --index-url .../cu130` to restore.
+**Gotcha:** installing torch-dependent pkgs (lerobot/transformers) without `-c` re-resolves
+the CUDA stack. lerobot 0.6.0 caps `numpy<2.3.0`, which conflicts with Isaac 6.0.1's exact
+`numpy==2.3.1`: without `-c`, uv downgrades numpy->2.2.6, dragging torchvision->0.25.0 /
+torch->2.10.0 and breaking Isaac (`uv pip check` then reports 9 incompatibilities). The
+`-c modules/isaac6-safe-pins.txt` forces Isaac's numpy==2.3.1 / torch==2.11.0 / torchvision==0.26.0
+over lerobot's cap (numpy 2.3.1 runs fine for lerobot). lerobot 0.6.0 also needs
+`transformers 5.4-5.6` + `huggingface-hub 1.x`. Restore after drift (also fixes cu128 breakage):
+`uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c modules/isaac6-safe-pins.txt`.
 
 **Running** needs `export OMNI_KIT_ACCEPT_EULA=YES` (the launchers set it).
 
