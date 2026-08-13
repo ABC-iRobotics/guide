@@ -51,6 +51,9 @@ setup(
         ],
     },
     entry_points={
-        "console_scripts": ["solve_task = block_bin.solve_task:main"],
+        "console_scripts": [
+            "solve_task = block_bin.solve_task:main",
+            "eval_policy = block_bin.eval_policy:main",
+        ],
     },
 )

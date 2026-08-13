@@ -4,7 +4,7 @@ usd_path: '/assets/block_bin.usd'
 # the recorder captures images GUIDE-side via annotators, and publishing the large
 # reliable image streams floods localhost DDS and starves service replies. Turn ON
 # at inference time when a deployed policy needs live camera images over ROS.
-publish_camera_topics: false
+publish_camera_topics: true
 
 robots:
   franka :
