@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from importlib import resources
 from pathlib import Path
@@ -193,13 +194,26 @@ class SceneOrchestrator(ABC):
         return robot_list
 
     def create_camera_graphs(self):
-        # ROS 2 camera publisher graphs are optional (config: publish_camera_topics).
-        # During dataset generation the recorder captures images GUIDE-side via
-        # render-product annotators, so publishing the /cam_* topics is unnecessary
-        # and the large reliable image streams flood the localhost DDS transport,
-        # starving small service replies (e.g. PoseRequest). Enable at inference time
-        # when a policy needs live images over ROS.
-        if not self._config.get("publish_camera_topics", True):
+        # ROS 2 camera publisher graphs are optional and OFF by default. Each one is a
+        # second render product for a camera the recorder already renders, and it
+        # publishes raw images every rendered frame: three 640x480 rgb8 streams at 60 Hz
+        # is ~166 MB/s of reliable traffic over the localhost DDS transport, which both
+        # doubles the renderer's per-frame work and starves small service replies
+        # (e.g. PoseRequest). Dataset generation never reads them -- the recorder
+        # captures GUIDE-side via render-product annotators.
+        #
+        # Turn them on only for inference, where a deployed policy does need live images
+        # over ROS. Either switch does it, so an eval run does not have to edit the
+        # task's YAML and a task that always needs them does not have to remember a
+        # launch argument:
+        #   ros2 launch guide_core bringup.launch.py camera_topics:=true
+        #   publish_camera_topics: true   (task config/init.yaml)
+        env_flag = os.environ.get("GUIDE_CAMERA_TOPICS", "")
+        publish = bool(self._config.get("publish_camera_topics", False)) or (
+            env_flag.strip().lower() in ("1", "true", "yes", "on")
+        )
+
+        if not publish:
             self._logger.info(
                 "[SceneOrchestrator] publish_camera_topics=false: skipping ROS 2 camera "
                 "publisher graphs (recorder still captures images via annotators)."
@@ -406,6 +420,7 @@ class SceneOrchestrator(ABC):
         images_cfg = dataset_cfg.get("images", [])
 
         self.rgb_annotators = {}
+        self.rgb_render_products = []
 
         for img_item in images_cfg:
             for ds_key, cam_name in img_item.items():
@@ -417,8 +432,29 @@ class SceneOrchestrator(ABC):
                     annotator = rep.AnnotatorRegistry.get_annotator("rgb")
                     annotator.attach([rp])
                     self.rgb_annotators[ds_key] = annotator
+                    self.rgb_render_products.append(rp)
 
         self.setup_dataset()
+
+    def set_render_products_enabled(self, enabled: bool) -> None:
+        """Switch the recorder's camera render products on or off.
+
+        Once created, a render product renders its camera every rendered frame for the
+        life of the stage, whether or not anything reads it. Three 640x480 RTX passes
+        per frame is most of this scene's frame budget, and the recorder consumes them
+        ten times a second -- while idle, between episodes, and after a run has
+        finished it consumes them not at all. So they are off unless a capture is
+        actually about to read them (SceneManager.step) or the scene is warming up.
+
+        Isaac's own code drives render products this way; see
+        ``omni/replicator/core/scripts/annotators.py`` and
+        ``isaacsim/replicator/nurec_utils/render.py``.
+        """
+        for rp in getattr(self, "rgb_render_products", []):
+            try:
+                rp.hydra_texture.set_updates_enabled(enabled)
+            except Exception as e:  # a render product destroyed with its stage
+                self._logger.debug(f"Could not toggle render product updates: {e}")
 
     def setup_dataset(self):
         # Deferred import: Isaac Sim extension modules only become importable

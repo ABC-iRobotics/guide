@@ -13,8 +13,11 @@
 #
 # This is step 3 of 3. Run the other two first, in their own terminals:
 #
-#   1. Isaac + the scene. config/init.yaml needs `publish_camera_topics: true`,
-#      otherwise the policy gets no images and the run dies on the first step.
+#   1. Isaac + the scene, WITH the camera topics -- they are off by default because
+#      demonstration generation does not read them:
+#        ros2 launch guide_core bringup.launch.py camera_topics:=true
+#      (or `publish_camera_topics: true` in config/init.yaml). Without them the policy
+#      gets no images and the run dies on the first step.
 #
 #   2. MoveIt + MoveIt Servo, WITHOUT the demonstration solver:
 #        ros2 launch block_bin eval_servo.launch.py

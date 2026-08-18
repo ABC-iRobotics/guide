@@ -4,6 +4,18 @@ startup:
   anti_aliasing: 0
   verbose: False
   step_freq: 60
+  # PhysX Hz. 2x step_freq => 2 physics substeps per rendered frame; Isaac derives the
+  # substep count from the ratio. This is the clock the recorder's interval is measured
+  # against (SceneManager.step), so changing it does not change the recording rate.
+  physics_freq: 120
+  # Pace the loop to sim time. Set false for batch demonstration generation to let the
+  # sim run ahead of real time once a frame costs less than 1/step_freq.
+  realtime: true
+  # Viewport render resolution -- NOT the cameras. The camera render products are pinned
+  # to the size the datasets were recorded at (see _set_render_resolution in _cmd_robot),
+  # so this is the only render target free to shrink. Isaac's default is 1280x720.
+  width: 640
+  height: 360
   # This machine has two mismatched GPUs (RTX A4000 + A2000) with no CUDA peer
   # access. Isaac Sim's multi-GPU renderer then deadlocks on device 1 when a camera
   # RenderProduct is created ("Failed to begin render graph ... semaphore timed out").

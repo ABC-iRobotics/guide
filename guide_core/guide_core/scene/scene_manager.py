@@ -365,11 +365,26 @@ class SceneManager:
         return result
 
     def step(self, runtime: IsaacSimRuntime):
+        f_sim = 0
+        substeps = 1
+
         def step_task(step_size: float):
+            nonlocal f_sim, substeps
+            if not f_sim:
+                # `current_time_step_index` counts PHYSICS steps, not rendered frames,
+                # so the record interval has to be measured against the physics clock --
+                # which is exactly the dt this callback is handed. Was hard-coded to
+                # 120, which was only right while physics_freq happened to be
+                # 2 * step_freq. Resolved once; the alternative is reading it back off
+                # the world 120 times a second.
+                f_sim = round(1.0 / step_size)
+                substeps = max(1, round(runtime._world.get_rendering_dt() * f_sim))
+
             current_step = runtime._world.current_time_step_index
 
             for scene_id, scene in enumerate(self._scenes):
                 state = scene.state
+                interval = max(1, f_sim // getattr(scene, "record_frequency", 10))
 
                 if state == SceneState.PREPARATION:
                     import omni.replicator.core as rep
@@ -393,26 +408,35 @@ class SceneManager:
                                 scene.recorder.set_start_recording()
 
                 elif state == SceneState.RECORDING:
-                    f_sim = 120  # Hardware/Sim dependent
-                    f_record = getattr(scene, "record_frequency", 10)
-                    interval = max(1, f_sim // f_record)
+                    # A render product only has to be live for the one frame each capture
+                    # reads; the other interval-1 steps render images nobody looks at.
+                    # Ordering inside an app.update() is pre-step callbacks -> physics ->
+                    # render, so switching it on `substeps` ticks early makes the frame
+                    # rendered at the end of THIS update the one read at
+                    # `current_step % interval == 0`. Below that margin there is no idle
+                    # frame to skip, so leave the products alone.
+                    gated = interval > substeps
+                    if gated and (current_step + substeps) % interval == 0:
+                        scene.set_render_products_enabled(True)
 
                     if current_step % interval == 0:
                         try:
                             # record_step must run natively and return a frame dict
                             data = scene.record_step(current_step)
                             if data:
-                                import queue
-
-                                try:
-                                    scene.recorder.put_record_data(data)
-                                except queue.Full:
-                                    pass  # Drop frame to not block physics
+                                # A full queue is dropped inside the recorder process
+                                # (SceneRecorder.put_record_data); nothing to catch here.
+                                scene.recorder.put_record_data(data)
                         except Exception as e:
                             print(f"Error in record_step: {e}")
+                        finally:
+                            if gated:
+                                scene.set_render_products_enabled(False)
 
                 elif state == SceneState.FINALIZING:
-                    if scene.recorder.is_idle():
+                    # is_idle() is a blocking round trip to the recorder process. Poll it
+                    # at the record rate, not on every physics tick.
+                    if current_step % interval == 0 and scene.recorder.is_idle():
                         scene.state = SceneState.IDLE
 
         return step_task
@@ -420,6 +444,10 @@ class SceneManager:
     def start_recording(self, scene_id: int, path: str = ""):
         with self._locks[scene_id]:
             self._scenes[scene_id].state = SceneState.PREPARATION
+            # Warmup renders the cameras so the first captured frame is not a cold
+            # RTX frame; SceneManager.step takes the products back over once RECORDING
+            # starts, and stop_recording switches them off again.
+            self._scenes[scene_id].set_render_products_enabled(True)
             # Forward the requested dataset base dir to the recorder (empty => ~/dataset).
             self._scenes[scene_id].recorder.set_output_path(path)
             # self._scenes[scene_id].recorder.clear_start_recording()
@@ -428,6 +456,10 @@ class SceneManager:
 
     def stop_recording(self, scene_id: int, save_episode: bool = True):
         with self._locks[scene_id]:
+            # Nothing reads the cameras again until the next start_recording, so stop
+            # rendering them. They otherwise keep costing three RTX passes a frame for
+            # the whole idle stretch between episodes and after the run ends.
+            self._scenes[scene_id].set_render_products_enabled(False)
             self._scenes[scene_id].recorder.clear_start_recording()
             self._scenes[scene_id].state = SceneState.FINALIZING
             self._scenes[scene_id].recorder.clear_stop_recording()

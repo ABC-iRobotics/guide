@@ -43,6 +43,15 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
+                "camera_topics",
+                default_value=os.environ.get("GUIDE_CAMERA_TOPICS", "false"),
+                description="Publish the cameras as ROS 2 image topics (/cam_*). Needed "
+                "for policy evaluation; during demonstration generation it is pure cost "
+                "-- a second render product per camera plus ~166 MB/s of raw images over "
+                "localhost DDS that nothing reads. Read by create_camera_graphs, where it "
+                "overrides the task's publish_camera_topics.",
+            ),
+            DeclareLaunchArgument(
                 "python_executable",
                 default_value=default_python,
                 description="Path to the Isaac Sim Python interpreter (the '.venv' Python 3.12 "
@@ -52,7 +61,7 @@ def generate_launch_description():
                 cmd=[LaunchConfiguration("python_executable"), node_path, "--debug", "False"],
                 name="GUIDE",
                 output="both",
-                additional_env=env,
+                additional_env={**env, "GUIDE_CAMERA_TOPICS": LaunchConfiguration("camera_topics")},
             ),
         ]
     )

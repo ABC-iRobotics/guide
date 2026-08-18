@@ -204,6 +204,17 @@ class IsaacSimRuntime:
         self._step_hz: float = startup_config.get("step_freq", 60.0)
         self._dt = 1.0 / self._step_hz
 
+        # PhysX ticks faster than the renderer; Isaac derives substeps from the ratio
+        # (isaacsim.core.api SimulationContext.set_simulation_dt). This is the clock
+        # `current_time_step_index` counts and SceneManager measures its record
+        # interval against -- NOT step_freq. Keep them in one place.
+        self._physics_hz: float = startup_config.get("physics_freq", 2 * self._step_hz)
+
+        # Pace the loop to sim time. False lets a scene that renders faster than its
+        # frame budget run ahead of real time, which is what batch demonstration
+        # generation wants.
+        self._realtime: bool = startup_config.get("realtime", True)
+
         self.state = INITIALIZING
         try:
             if SimulationApp is None:
@@ -340,14 +351,13 @@ class IsaacSimRuntime:
         try:
             self._logger.debug("Creating World...")
             self._world = World(
-                stage_units_in_meters=1.0, physics_dt=self._dt, rendering_dt=self._dt
+                stage_units_in_meters=1.0,
+                physics_dt=1.0 / self._physics_hz,
+                rendering_dt=self._dt,
             )
 
             self._pc = self._world.get_physics_context()
             self._pc.enable_gpu_dynamics(True)
-
-            self._pc.set_physics_dt(self._dt / 2, substeps=4)
-            self._world.instance().set_simulation_dt(physics_dt=self._dt / 2, rendering_dt=self._dt)
 
         except Exception as e:
             self._logger.error(f"Error in create_world: {e}")
@@ -382,17 +392,6 @@ class IsaacSimRuntime:
     # -------------------------
     # Stepping interface
     # -------------------------
-    def step(self, n: int = 1) -> None:
-        """Steps simulation by the given number of steps. If internal state is RUNNING, it also renders.
-
-        Args:
-            n (int, optional): Number of steps. Defaults to 1.
-        """
-        assert self.state == RUNNING
-
-        for _ in range(n):
-            self._world.step(render=True)
-
     def update(self, n: int = 1) -> None:
         """Updates the application by the given number of steps. If internal state is RUNNING, it also renders.
 
@@ -407,24 +406,56 @@ class IsaacSimRuntime:
     # -------------------------
     # Runtime loop
     # -------------------------
+    # Frames between frame-budget reports: ~5 s of sim time at 60 Hz.
+    FRAME_LOG_EVERY = 300
+
     def run_loop(self) -> None:
         """Runs the runtime loop. \\
         This is a blocking method, but needs to be run in the main thread. \\
         Ends when objects internal state is SHUTTING_DOWN.
         """
+        frames = 0
+        step_s = 0.0
+        loop_s = 0.0
+        window_start = time.perf_counter()
+
         while self.state not in [SHUTTING_DOWN, UNINITIALIZED]:
-            start = time.time()
+            start = time.perf_counter()
 
             self._process_commands(max_per_cycle=50)
 
-            if self.state == RUNNING:
-                try:
-                    self._world.step()
-                except BaseException as e:
-                    self._logger.error(f"Error in simulation step: {e}", exc_info=True)
+            if self.state != RUNNING:
+                # Nothing renders, so don't make commands wait a frame period for the
+                # next pass: every call() in the between-episode reset/randomize/home
+                # chain queues up here.
+                time.sleep(0.001)
+                continue
 
-            sleep_s = max(0.0, start + self._dt - time.time())
-            time.sleep(sleep_s)
+            step_start = time.perf_counter()
+            try:
+                self._world.step()
+            except BaseException as e:
+                self._logger.error(f"Error in simulation step: {e}", exc_info=True)
+
+            now = time.perf_counter()
+            step_s += now - step_start
+            loop_s += now - start
+            frames += 1
+            if frames >= self.FRAME_LOG_EVERY:
+                # RTF < 1 means the frame costs more than its budget -- the sleep below
+                # is already 0 and the sim is falling behind. Split out so a slow
+                # command handler is not mistaken for a slow renderer.
+                wall = now - window_start
+                self._logger.info(
+                    f"[runtime] {1e3 * step_s / frames:.1f} ms/step + "
+                    f"{1e3 * (loop_s - step_s) / frames:.1f} ms/cmds "
+                    f"(budget {1e3 * self._dt:.1f} ms), RTF {frames * self._dt / wall:.2f}"
+                )
+                frames, step_s, loop_s = 0, 0.0, 0.0
+                window_start = time.perf_counter()
+
+            if self._realtime:
+                time.sleep(max(0.0, start + self._dt - time.perf_counter()))
 
     def _process_commands(self, max_per_cycle: int) -> None:
         for _ in range(max_per_cycle):
