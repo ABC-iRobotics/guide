@@ -1,6 +1,7 @@
 import omni.graph.core as og
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.utils.types import ArticulationAction
+
 # OmniGraph ROS 2 shortcut helpers. These moved across Isaac Sim versions:
 #   4.5: isaacsim.ros2.bridge.scripts.og_shortcuts
 #   5.x: isaacsim.ros2.bridge.impl.og_shortcuts
@@ -136,9 +137,62 @@ def _set_render_resolution(graph_path: str, width: int, height: int) -> None:
                 f"mismatches the resolution the recorder renders at."
             ) from error
         if written != value:
-            raise RuntimeError(
-                f"'{attribute_path}' kept {written} after being set to {value}."
-            )
+            raise RuntimeError(f"'{attribute_path}' kept {written} after being set to {value}.")
+
+
+# One camera prim publishes up to two ROS 2 streams, laid out the way image_transport
+# lays them out so a raw subscriber and a compressed one never collide on one topic
+# name (two message types on one name is legal in DDS and unreadable in `ros2 topic`):
+#
+#   <topic>              sensor_msgs/Image           rgb8               encoding: rgb
+#   <topic>/compressed   sensor_msgs/CompressedImage h264               encoding: rgb_h264
+#   <topic>/depth        sensor_msgs/Image           32FC1, metres      depth: true
+#
+# ``irob_lerobot_ros.ros2camera`` discovers which of the first two the camera helper
+# actually created rather than being told, so a policy does not have to be configured
+# to match the simulator it happens to be pointed at.
+def _rgb_topic_for(topic: str, encoding: str) -> str:
+    return topic if encoding == "rgb" else f"{topic}/compressed"
+
+
+def _depth_topic_for(topic: str) -> str:
+    return f"{topic}/depth"
+
+
+def _set_rgb_encoding(graph_path: str, encoding: str) -> None:
+    """Switch the camera graph's RGB publisher from raw Image to H.264 CompressedImage.
+
+    ``Ros2CameraGraph.make_graph`` hard-codes ``RGBPublish.inputs:type = "rgb"``
+    (isaacsim/ros2/ui/og_rtx_sensors.py), which publishes ``sensor_msgs/Image``: 640x480
+    rgb8 is 921 kB per message, per camera, per rendered frame. ``rgb_h264`` swaps the
+    writer for ``ROS2PublishCompressedImage`` -- ``sensor_msgs/CompressedImage``,
+    ``format: "h264"``, encoded on the GPU by NVENC -- for roughly 1% of the bytes.
+
+    It does not reduce the renderer's work: the render product still renders every
+    frame. This is a transport fix (it stops the image stream starving small service
+    replies over localhost DDS), not a frame-budget one.
+
+    Must run after ``make_graph`` and before the first tick: ``ROS2CameraHelper.compute``
+    reads ``inputs:type`` once and latches ``state.initialized``. ``make_graph`` stops
+    the timeline, so nothing has ticked yet. Read back for the same reason
+    ``_set_render_resolution`` does -- a node renamed in a future Isaac release would
+    otherwise leave the topic silently raw.
+    """
+    if encoding == "rgb":
+        return
+
+    attribute_path = f"{graph_path}/RGBPublish.inputs:type"
+    try:
+        attribute = og.Controller.attribute(attribute_path)
+        attribute.set(encoding)
+        written = attribute.get()
+    except Exception as error:  # node renamed, or the graph failed to build
+        raise RuntimeError(
+            f"Could not set '{attribute_path}' to '{encoding}'. The camera would publish "
+            f"raw sensor_msgs/Image on a topic nothing is subscribed to."
+        ) from error
+    if written != encoding:
+        raise RuntimeError(f"'{attribute_path}' kept '{written}' after being set to '{encoding}'.")
 
 
 def _cmd_create_camera(
@@ -153,6 +207,12 @@ def _cmd_create_camera(
     frame: str = "sim_camera",
     namespace: str = "",
     topic: str = "/rgb",
+    # Which streams this camera publishes, and in what form. Resolved upstream by
+    # SceneOrchestrator.resolve_cameras() from the task's config/init.yaml; the
+    # defaults here are the ones a camera gets when the config says nothing.
+    rgb: bool = True,
+    depth: bool = False,
+    encoding: str = "rgb",
 ):
 
     assert self.state in [READY, PAUSED, STOPPED]
@@ -172,13 +232,18 @@ def _cmd_create_camera(
     cp._camera_prim = camera_path
     cp._frame_id = frame
     cp._node_namespace = namespace
-    cp._rgb_topic = topic
-    cp._depth_pub = False
+    cp._rgb_pub = rgb
+    cp._rgb_topic = _rgb_topic_for(topic, encoding)
+    cp._depth_pub = depth
+    cp._depth_topic = _depth_topic_for(topic)
 
     print("Creating camera")
     _finalize_graph(cp)
+    # Both publishers hang off one IsaacCreateRenderProduct, so this sizes them both.
     # The graph is built with the node's own 1280x720 default until this runs.
     _set_render_resolution(cp._og_path, width, height)
+    if rgb:
+        _set_rgb_encoding(cp._og_path, encoding)
 
 
 def _cmd_create_tf_graph(

@@ -28,6 +28,24 @@ from guide_core.types.scene_state import SceneState
 logger = logging.getLogger("SceneOrchestrator")
 
 
+def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
+    """Isaac's float32 metres -> the (H, W, 1) uint16 millimetres lerobot records.
+
+    Not our convention -- lerobot's. ``hw_to_dataset_features`` flags a 1-channel
+    camera as ``is_depth_map``, which routes the stream through ``DepthEncoderConfig``
+    (HEVC Main 12, lossless), and ``quantize_depth`` reads a non-floating dtype as
+    millimetres (``lerobot/datasets/depth_utils.py``). Handing it uint16 mm means no
+    conversion happens anywhere between here and the encoder.
+
+    ``distance_to_image_plane`` returns +inf where the ray hit nothing. Those become 0
+    -- the value the quantizer treats as "no reading" -- rather than saturating to
+    65.5 m and dragging the depth range with them.
+    """
+    metres = np.nan_to_num(np.asarray(depth, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    millimetres = np.clip(metres * 1000.0, 0.0, 65535.0).astype(np.uint16)
+    return millimetres.reshape(millimetres.shape[0], millimetres.shape[1], 1)
+
+
 class SceneOrchestrator(ABC):
 
     scene_id: int
@@ -220,7 +238,47 @@ class SceneOrchestrator(ABC):
             )
             return []
 
-        camera_list: List[Dict] = []
+        return self.resolve_cameras()
+
+    #: Appended to a dataset feature key to keep a camera's depth stream apart from its
+    #: own rgb stream. Only used when the camera publishes both -- see resolve_cameras.
+    DEPTH_SUFFIX = "_depth"
+
+    def resolve_cameras(self) -> List[Dict]:
+        """The camera plan: one entry per configured camera, derived once from the config.
+
+        Everything downstream reads this instead of walking ``config/init.yaml`` again --
+        the recorder's render products and annotators, the dataset feature names, and the
+        ROS 2 publisher graphs. Two of those three used to derive their own answer
+        separately, which is how a camera could be recorded at one resolution and
+        published at another.
+
+        A camera carries up to two streams, ``rgb`` (default on) and ``depth`` (default
+        off), and the dataset feature names follow from that pair:
+
+        ======  ======  ==============  ======================
+        rgb     depth   rgb feature     depth feature
+        ======  ======  ==============  ======================
+        true    false   ``<key>``       --
+        true    true    ``<key>``       ``<key>_depth``
+        false   true    --              ``<key>``
+        ======  ======  ==============  ======================
+
+        A camera whose only stream is depth keeps the plain key: the suffix is there to
+        keep one camera's two streams apart, not to label the modality. ``<key>`` is the
+        ``dataset.images`` key rather than the camera name -- the two are free to differ,
+        and a camera absent from ``dataset.images`` gets no features at all, because it
+        is published for a live policy but never recorded.
+        """
+        # dataset.images is a list of single-entry dicts: {feature key: camera name}.
+        feature_key: Dict[str, str] = {}
+        for img_item in self._config.get("dataset", {}).get("images", []):
+            for ds_key, cam_name in img_item.items():
+                feature_key[cam_name] = ds_key
+
+        encoding = self._config.get("camera_encoding", "rgb")
+
+        cameras: List[Dict] = []
         for name, data in self._config.get("cameras", {}).items():
             path = data["path"]
             assert path is not None
@@ -231,17 +289,37 @@ class SceneOrchestrator(ABC):
             topic = data["topic"]
             assert topic is not None
 
-            camera_list.append(
+            rgb = bool(data.get("rgb", True))
+            depth = bool(data.get("depth", False))
+            if not (rgb or depth):
+                self._logger.warning(
+                    f"[SceneOrchestrator] camera '{name}' has rgb and depth both off; "
+                    f"skipping it entirely."
+                )
+                continue
+
+            ds_key = feature_key.get(name)
+            cameras.append(
                 {
+                    "name": f"{name}",
                     "camera_path": f"{path}",
                     "path": f"/{name}",
                     "width": width,
                     "height": height,
                     "frame": f"{name}",
                     "topic": f"{topic}",
+                    "rgb": rgb,
+                    "depth": depth,
+                    "encoding": encoding,
+                    "rgb_feature": ds_key if (rgb and ds_key) else None,
+                    "depth_feature": (
+                        (f"{ds_key}{self.DEPTH_SUFFIX}" if rgb else ds_key)
+                        if (depth and ds_key)
+                        else None
+                    ),
                 }
             )
-        return camera_list
+        return cameras
 
     def parse_instruction(self, path: Path):
 
@@ -416,23 +494,31 @@ class SceneOrchestrator(ABC):
         return state
 
     def create_render_products(self, rep):
-        dataset_cfg = self._config.get("dataset", {})
-        images_cfg = dataset_cfg.get("images", [])
-
         self.rgb_annotators = {}
-        self.rgb_render_products = []
+        self.depth_annotators = {}
+        self.render_products = []
 
-        for img_item in images_cfg:
-            for ds_key, cam_name in img_item.items():
-                cam_cfg = self._config.get("cameras", {}).get(cam_name)
-                if cam_cfg:
-                    cam_path = cam_cfg["path"]
-                    res = (cam_cfg["width"], cam_cfg["height"])
-                    rp = rep.create.render_product(f"/Scene_{self._scene_id}{cam_path}", res)
-                    annotator = rep.AnnotatorRegistry.get_annotator("rgb")
-                    annotator.attach([rp])
-                    self.rgb_annotators[ds_key] = annotator
-                    self.rgb_render_products.append(rp)
+        for camera in self.resolve_cameras():
+            if not (camera["rgb_feature"] or camera["depth_feature"]):
+                continue  # published for a live policy, but not part of the dataset
+
+            # One render product per camera, shared by both annotators: rgb and depth
+            # come off the same RTX pass, so a depth camera costs no extra render.
+            res = (camera["width"], camera["height"])
+            rp = rep.create.render_product(f"/Scene_{self._scene_id}{camera['camera_path']}", res)
+            self.render_products.append(rp)
+
+            if camera["rgb_feature"]:
+                annotator = rep.AnnotatorRegistry.get_annotator("rgb")
+                annotator.attach([rp])
+                self.rgb_annotators[camera["rgb_feature"]] = annotator
+
+            if camera["depth_feature"]:
+                # distance_to_image_plane, not distance_to_camera: the plane distance is
+                # what a depth sensor reports and what a pinhole unprojection expects.
+                annotator = rep.AnnotatorRegistry.get_annotator("distance_to_image_plane")
+                annotator.attach([rp])
+                self.depth_annotators[camera["depth_feature"]] = annotator
 
         self.setup_dataset()
 
@@ -450,7 +536,7 @@ class SceneOrchestrator(ABC):
         ``omni/replicator/core/scripts/annotators.py`` and
         ``isaacsim/replicator/nurec_utils/render.py``.
         """
-        for rp in getattr(self, "rgb_render_products", []):
+        for rp in getattr(self, "render_products", []):
             try:
                 rp.hydra_texture.set_updates_enabled(enabled)
             except Exception as e:  # a render product destroyed with its stage
@@ -620,6 +706,12 @@ class SceneOrchestrator(ABC):
                     if data.ndim == 3 and data.shape[2] == 4:
                         data = data[:, :, :3]
                     observation[ds_key] = data
+
+        if hasattr(self, "depth_annotators"):
+            for ds_key, annotator in self.depth_annotators.items():
+                data = annotator.get_data()
+                if data is not None and getattr(data, "size", 0):
+                    observation[ds_key] = depth_to_uint16_mm(data)
 
         # Joint states
         if hasattr(self, "obs_masks"):

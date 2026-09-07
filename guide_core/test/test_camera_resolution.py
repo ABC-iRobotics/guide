@@ -42,7 +42,7 @@ class FakeController:
         name = path.rsplit(":", 1)[-1]
         if name in self.missing:
             raise ValueError(f"no attribute {path}")
-        self.store.setdefault(path, 1280 if name == "width" else 720)
+        self.store.setdefault(path, {"width": 1280, "height": 720}.get(name, "rgb"))
         return FakeAttribute(self.store, path, writable=name not in self.read_only)
 
 
@@ -120,3 +120,54 @@ def test_the_default_size_matches_the_callers_fallback(commands):
 
     assert parameters["width"].default == 640
     assert parameters["height"].default == 480
+
+
+def test_the_encoding_reaches_the_camera_helper(commands):
+    # Ros2CameraGraph hard-codes RGBPublish.inputs:type = "rgb"; nothing in its API
+    # exposes it, so a compressed stream exists only if this write lands.
+    store = {}
+    commands.og.Controller = FakeController(store)
+
+    commands._set_rgb_encoding("/Scene_0/Graph/top_camera_graph", "rgb_h264")
+
+    assert store == {"/Scene_0/Graph/top_camera_graph/RGBPublish.inputs:type": "rgb_h264"}
+
+
+def test_raw_rgb_leaves_the_node_untouched(commands):
+    store = {}
+    commands.og.Controller = FakeController(store)
+
+    commands._set_rgb_encoding("/g", "rgb")
+
+    assert store == {}
+
+
+def test_an_encoding_that_does_not_stick_is_an_error(commands):
+    # A silently-raw topic is the failure this guards: the subscriber discovers the
+    # wire format off the graph, so it would happily read raw images at 166 MB/s and
+    # nothing would report that compression was asked for and never happened.
+    commands.og.Controller = FakeController({}, read_only={"type"})
+
+    with pytest.raises(RuntimeError, match="rgb_h264"):
+        commands._set_rgb_encoding("/g", "rgb_h264")
+
+
+def test_a_renamed_publisher_node_is_an_error_not_a_silent_raw_topic(commands):
+    commands.og.Controller = FakeController({}, missing={"type"})
+
+    with pytest.raises(RuntimeError, match="RGBPublish"):
+        commands._set_rgb_encoding("/g", "rgb_h264")
+
+
+def test_the_stream_defaults_match_the_callers_fallbacks(commands):
+    # _cmd_simulator passes camera.get("rgb", True) / ("depth", False) / ("encoding",
+    # "rgb"), and SceneOrchestrator.resolve_cameras resolves the same three. A
+    # signature default that disagreed would make a camera's behaviour depend on which
+    # of the two built the dict.
+    import inspect
+
+    parameters = inspect.signature(commands._cmd_create_camera).parameters
+
+    assert parameters["rgb"].default is True
+    assert parameters["depth"].default is False
+    assert parameters["encoding"].default == "rgb"

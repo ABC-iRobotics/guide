@@ -8,6 +8,16 @@ usd_path: '/assets/block_bin.usd'
 #   ros2 launch guide_core bringup.launch.py camera_topics:=true
 publish_camera_topics: false
 
+# Wire format of the rgb topics, when they are published at all.
+#   rgb       sensor_msgs/Image on <topic>            -- 640x480 rgb8, 921 kB a frame
+#   rgb_h264  sensor_msgs/CompressedImage on          -- NVENC H.264, ~1% of the bytes
+#             <topic>/compressed
+# Subscribers are not configured to match: ros2camera asks the ROS graph which of the
+# two the camera helper created. H.264 costs nothing to render and everything it saves
+# is DDS bandwidth, so it is worth turning on wherever the topics are on at all --
+# 'rgb' stays the default only because it is the format every existing tool expects.
+camera_encoding: rgb
+
 robots:
   franka :
     path: '/fr3'
@@ -23,24 +33,35 @@ robots:
       - 0.0
       - 0.0
 
+# `rgb` and `depth` are independent streams off one render product (a depth camera
+# costs no extra RTX pass). They decide the dataset feature names too: a camera with
+# both records <key> and <key>_depth, a depth-only camera records <key>. Depth is
+# float32 metres on <topic>/depth over ROS, and (H, W, 1) uint16 millimetres in the
+# dataset -- the shape lerobot flags as is_depth_map and encodes losslessly.
 cameras:
   top:
     path: '/top'
     width: 640
     height: 480
     topic: '/cam_top'
+    rgb: true
+    depth: false
 
   base:
     path: '/base'
     width: 640
     height: 480
     topic: '/cam_base'
+    rgb: true
+    depth: false
 
   wrist:
     path: '/fr3/rsd455/RSD455/Camera_OmniVision_OV9782_Color'
     width: 640
     height: 480
     topic: '/cam_wrist'
+    rgb: true
+    depth: false
 
 dataset:
   images:
