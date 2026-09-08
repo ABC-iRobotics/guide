@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 
 from guide_core.core.runtime import IsaacSimRuntime
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
+from guide_core.scene.scene_recorder import DEFAULT_FPS
 from guide_core.types.scene_state import SceneState
 
 
@@ -34,6 +35,42 @@ class SceneManager:
 
     def get_scene_camera_graphs(self, scene_id: int):
         return self._scenes[scene_id].create_camera_graphs()
+
+    def gate_render(self, frame_index: int, step_hz: float, enabled: bool | None = None) -> None:
+        """Render each scene's cameras on one frame in N, where N gives record_frequency.
+
+        Called from the runtime loop, once per rendered frame, and it is the ONLY owner
+        of these switches.
+
+        Why not the physics callback, where the recording interval already lives: that
+        callback fires once per physics substep, so "one rendered frame" has to be
+        expressed as a run of `substeps` consecutive step indices -- and that is only
+        one frame while the physics counter and the render boundary stay in phase. They
+        do not. A reset, a randomization, or any extra ``simulation_app.update()``
+        slips the phase, and a window that then straddles two updates renders twice per
+        interval. A frame index has no phase to lose.
+
+        One owner matters because there is one render product per camera, not two:
+        ``rep.create.render_product`` returns an existing product with the same camera
+        and resolution instead of making another, and ``IsaacCreateRenderProduct``
+        looks for one before creating its own -- so the recorder's annotators and the
+        ROS 2 camera graph share a product, and therefore share a hydra texture.
+
+        The window opens on the frame BEFORE the capture reads it: the recorder samples
+        on the physics clock and reads whatever the annotator last received, so the
+        frame has to have been rendered already.
+
+        Note what this does NOT do: it does not set the ROS 2 publish rate. Pausing the
+        texture stops the RTX pass, but the writers hang off an ON_DEMAND branch that
+        runs per ``app.update()`` and re-publishes the last frame regardless. That rate
+        is a static ``frameSkipCount`` on the camera helper, set once when the graph is
+        built -- see ``_set_publish_rate``.
+        """
+        for scene in self._scenes:
+            interval = max(1, round(step_hz / getattr(scene, "record_frequency", DEFAULT_FPS)))
+            scene.set_render_products_enabled(
+                enabled if enabled is not None else (frame_index + 1) % interval == 0
+            )
 
     def wait_start_recording_event(self, scene_id: int, timeout=None):
         return self._scenes[scene_id].recorder.wait_start_recording(timeout)
@@ -366,10 +403,9 @@ class SceneManager:
 
     def step(self, runtime: IsaacSimRuntime):
         f_sim = 0
-        substeps = 1
 
         def step_task(step_size: float):
-            nonlocal f_sim, substeps
+            nonlocal f_sim
             if not f_sim:
                 # `current_time_step_index` counts PHYSICS steps, not rendered frames,
                 # so the record interval has to be measured against the physics clock --
@@ -378,13 +414,12 @@ class SceneManager:
                 # 2 * step_freq. Resolved once; the alternative is reading it back off
                 # the world 120 times a second.
                 f_sim = round(1.0 / step_size)
-                substeps = max(1, round(runtime._world.get_rendering_dt() * f_sim))
 
             current_step = runtime._world.current_time_step_index
 
             for scene_id, scene in enumerate(self._scenes):
                 state = scene.state
-                interval = max(1, f_sim // getattr(scene, "record_frequency", 10))
+                interval = max(1, int(f_sim // getattr(scene, "record_frequency", DEFAULT_FPS)))
 
                 if state == SceneState.PREPARATION:
                     import omni.replicator.core as rep
@@ -408,17 +443,11 @@ class SceneManager:
                                 scene.recorder.set_start_recording()
 
                 elif state == SceneState.RECORDING:
-                    # A render product only has to be live for the one frame each capture
-                    # reads; the other interval-1 steps render images nobody looks at.
-                    # Ordering inside an app.update() is pre-step callbacks -> physics ->
-                    # render, so switching it on `substeps` ticks early makes the frame
-                    # rendered at the end of THIS update the one read at
-                    # `current_step % interval == 0`. Below that margin there is no idle
-                    # frame to skip, so leave the products alone.
-                    gated = interval > substeps
-                    if gated and (current_step + substeps) % interval == 0:
-                        scene.set_render_products_enabled(True)
-
+                    # Capture only. The render products are switched by gate_render on
+                    # the render clock, which is the only clock that can select exactly
+                    # one frame; this branch reads whatever the annotators last
+                    # received, which gate_render has already arranged to be the frame
+                    # rendered just before this tick.
                     if current_step % interval == 0:
                         try:
                             # record_step must run natively and return a frame dict
@@ -429,9 +458,6 @@ class SceneManager:
                                 scene.recorder.put_record_data(data)
                         except Exception as e:
                             print(f"Error in record_step: {e}")
-                        finally:
-                            if gated:
-                                scene.set_render_products_enabled(False)
 
                 elif state == SceneState.FINALIZING:
                     # is_idle() is a blocking round trip to the recorder process. Poll it

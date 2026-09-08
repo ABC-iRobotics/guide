@@ -42,7 +42,9 @@ class FakeController:
         name = path.rsplit(":", 1)[-1]
         if name in self.missing:
             raise ValueError(f"no attribute {path}")
-        self.store.setdefault(path, {"width": 1280, "height": 720}.get(name, "rgb"))
+        self.store.setdefault(
+            path, {"width": 1280, "height": 720, "frameSkipCount": 0}.get(name, "rgb")
+        )
         return FakeAttribute(self.store, path, writable=name not in self.read_only)
 
 
@@ -160,14 +162,74 @@ def test_a_renamed_publisher_node_is_an_error_not_a_silent_raw_topic(commands):
 
 
 def test_the_stream_defaults_match_the_callers_fallbacks(commands):
-    # _cmd_simulator passes camera.get("rgb", True) / ("depth", False) / ("encoding",
-    # "rgb"), and SceneOrchestrator.resolve_cameras resolves the same three. A
-    # signature default that disagreed would make a camera's behaviour depend on which
-    # of the two built the dict.
+    # _cmd_simulator passes camera.get("rgb", True) / ("encoding", "rgb"), and
+    # SceneOrchestrator.resolve_cameras resolves the same two. A signature default that
+    # disagreed would make a camera's behaviour depend on which of the two built the
+    # dict. `depth` is deliberately absent: it configures the recorder, not the graph.
     import inspect
 
     parameters = inspect.signature(commands._cmd_create_camera).parameters
 
     assert parameters["rgb"].default is True
-    assert parameters["depth"].default is False
     assert parameters["encoding"].default == "rgb"
+    assert "depth" not in parameters, "depth is a dataset setting, not a publisher one"
+
+
+def test_the_publish_rate_reaches_every_helper_node(commands):
+    # 60 Hz render / 10 Hz dataset -> one message every 6th frame -> skip 5.
+    store = {}
+    commands.og.Controller = FakeController(store)
+
+    commands._set_publish_rate("/g", 5, rgb=True)
+
+    assert store == {
+        "/g/CameraInfoPublish.inputs:frameSkipCount": 5,
+        "/g/RGBPublish.inputs:frameSkipCount": 5,
+    }
+
+
+def test_depth_is_never_published(commands):
+    # Depth reaches the dataset through the render product's annotator, in-process.
+    # It has no compressed form in the camera helper -- 32FC1 is 4 bytes a pixel,
+    # more than the rgb8 it would sit beside -- and nothing subscribes to it.
+    store = {}
+    commands.og.Controller = FakeController(store)
+
+    commands._set_publish_rate("/g", 5, rgb=True)
+
+    assert not any("DepthPublish" in key for key in store)
+
+
+def test_publishing_every_frame_writes_nothing(commands):
+    # frame_skip 0 is the node default, and a non-zero value logs an Isaac deprecation
+    # warning -- so don't write one when the rate already matches the render rate.
+    store = {}
+    commands.og.Controller = FakeController(store)
+
+    commands._set_publish_rate("/g", 0, rgb=True)
+
+    assert store == {}
+
+
+def test_a_rate_that_does_not_stick_is_an_error(commands):
+    # Silent failure here is the 20-Hz-instead-of-10 bug: the topic publishes on every
+    # rendered frame and nothing reports that a rate was asked for.
+    commands.og.Controller = FakeController({}, read_only={"frameSkipCount"})
+
+    with pytest.raises(RuntimeError, match="kept 0 after being set to 5"):
+        commands._set_publish_rate("/g", 5, rgb=True)
+
+
+def test_a_renamed_helper_node_is_an_error_too(commands):
+    commands.og.Controller = FakeController({}, missing={"frameSkipCount"})
+
+    with pytest.raises(RuntimeError, match="every rendered frame"):
+        commands._set_publish_rate("/g", 5, rgb=True)
+
+
+def test_the_publish_rate_is_off_unless_asked_for(commands):
+    import inspect
+
+    parameters = inspect.signature(commands._cmd_create_camera).parameters
+
+    assert parameters["publish_fps"].default == 0.0

@@ -1,6 +1,9 @@
 startup:
   renderer: "RaytracedLighting"
-  headless: False
+  # No Kit window. The GUI viewport is a whole extra render target plus the UI, and
+  # nothing reads it during generation or evaluation -- watch a camera over ROS instead
+  # (guide_core/scripts/view_camera.py). Set False to get the window back for debugging.
+  headless: True
   anti_aliasing: 0
   verbose: False
   step_freq: 60
@@ -21,7 +24,12 @@ startup:
   # RenderProduct is created ("Failed to begin render graph ... semaphore timed out").
   # Force single-GPU rendering on GPU 0 (the A4000). Override per-machine if needed.
   multi_gpu: False
-  active_gpu: 0
+  # Index 1 is the A4000, NOT index 0. Kit/nvidia-smi enumerate by PCI bus id, so 0 is
+  # the A2000 -- and with active_gpu: 0 Isaac rendered on the weaker card, pegged at
+  # 100% while the A4000 idled at 45%. CUDA orders the other way (FASTEST_FIRST), so
+  # torch's cuda:0 is the A4000 and cuda:1 the A2000: an inference --device that reads
+  # like "the other GPU" may well be this one. Confirm with nvidia-smi after a restart.
+  active_gpu: 1
 
 world:
   stage_units_in_meters: 1.0

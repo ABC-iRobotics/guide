@@ -13,6 +13,16 @@ import numpy as np
 # Schema version for the GUIDE metadata sidecar (guide_info.json / guide_episodes.jsonl).
 GUIDE_META_SCHEMA = 1
 
+#: Capture rate in Hz when a task config carries no ``dataset.fps``.
+#:
+#: One number for three consumers that used to hold three different ones: the interval
+#: SceneManager samples the scene on, the rate the ROS 2 camera topics publish at, and
+#: the ``fps`` written into the dataset metadata. While the key went unset those were
+#: 10 (a ``getattr`` default nothing ever assigned), 60 (every rendered frame), and 30
+#: (this file's old literal) -- so every dataset recorded in that window claims a rate
+#: it was not recorded at. 10 is what the recorder actually did.
+DEFAULT_FPS = 10
+
 
 class SceneRecorder(Thread):
     def __init__(self, package_name: str, task_name: str, config: dict):
@@ -275,7 +285,7 @@ class SceneRecorder(Thread):
 
         self.dataset = self.LeRobotDataset.create(
             repo_id=self.package_name,
-            fps=self.config.get("dataset", {}).get("fps", 30),
+            fps=self.config.get("dataset", {}).get("fps", DEFAULT_FPS),
             features=features,
             root=str(dataset_path),
             use_videos=True,

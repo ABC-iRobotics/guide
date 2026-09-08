@@ -146,17 +146,18 @@ def _set_render_resolution(graph_path: str, width: int, height: int) -> None:
 #
 #   <topic>              sensor_msgs/Image           rgb8               encoding: rgb
 #   <topic>/compressed   sensor_msgs/CompressedImage h264               encoding: rgb_h264
-#   <topic>/depth        sensor_msgs/Image           32FC1, metres      depth: true
 #
-# ``irob_lerobot_ros.ros2camera`` discovers which of the first two the camera helper
-# actually created rather than being told, so a policy does not have to be configured
-# to match the simulator it happens to be pointed at.
+# Colour only. Depth and semantics are recorded into the dataset through the render
+# product's annotators, in-process, and are never published: depth has no compressed
+# form in the camera helper (32FC1 is 4 bytes a pixel, more than the rgb8 it replaces),
+# and nothing subscribes to either. `depth: true` in a task config therefore configures
+# the recorder, not the graph.
+#
+# ``irob_lerobot_ros.ros2camera`` discovers which of the two the camera helper actually
+# created rather than being told, so a policy does not have to be configured to match
+# the simulator it happens to be pointed at.
 def _rgb_topic_for(topic: str, encoding: str) -> str:
     return topic if encoding == "rgb" else f"{topic}/compressed"
-
-
-def _depth_topic_for(topic: str) -> str:
-    return f"{topic}/depth"
 
 
 def _set_rgb_encoding(graph_path: str, encoding: str) -> None:
@@ -195,6 +196,49 @@ def _set_rgb_encoding(graph_path: str, encoding: str) -> None:
         raise RuntimeError(f"'{attribute_path}' kept '{written}' after being set to '{encoding}'.")
 
 
+def _set_publish_rate(graph_path: str, frame_skip: int, rgb: bool) -> None:
+    """Publish one camera message every ``frame_skip + 1`` rendered frames.
+
+    ``ROS2CameraHelper`` reads this into ``state.publishStepSize`` and its ``post_attach``
+    writes it to ``<rendervar>IsaacSimulationGate.inputs:step`` -- "Number of ticks per
+    execution output" -- once ``BaseWriterNode`` has attached the writer. That gate is
+    the only thing that throttles these topics: the writers hang off an ON_DEMAND branch
+    that runs per ``app.update()``, so pausing the render product's hydra texture stops
+    the RTX pass but leaves the writer re-publishing the last frame at the full loop
+    rate. Which is exactly what "10 Hz configured, 20 Hz on the wire" looked like.
+
+    Isaac logs a deprecation warning for a non-zero ``frameSkipCount`` and points at
+    ``omni:sensor:tickRate`` instead. Ignore it: replicator documents that attribute as
+    "a hint to the simulation about the expected rate ... it does not in itself drive
+    the ticking of the sensor". This input does.
+
+    Set before the first tick, like the resolution and the encoding -- ``compute`` reads
+    it once, on the tick that initialises the writer.
+    """
+    if frame_skip <= 0:
+        return
+
+    nodes = ["CameraInfoPublish"]
+    if rgb:
+        nodes.append("RGBPublish")
+
+    for node in nodes:
+        attribute_path = f"{graph_path}/{node}.inputs:frameSkipCount"
+        try:
+            attribute = og.Controller.attribute(attribute_path)
+            attribute.set(frame_skip)
+            written = attribute.get()
+        except Exception as error:  # node renamed, or the graph failed to build
+            raise RuntimeError(
+                f"Could not set '{attribute_path}' to {frame_skip}. The topic would "
+                f"publish on every rendered frame instead."
+            ) from error
+        if written != frame_skip:
+            raise RuntimeError(
+                f"'{attribute_path}' kept {written} after being set to {frame_skip}."
+            )
+
+
 def _cmd_create_camera(
     self,
     pose: Pose | None = None,
@@ -211,8 +255,10 @@ def _cmd_create_camera(
     # SceneOrchestrator.resolve_cameras() from the task's config/init.yaml; the
     # defaults here are the ones a camera gets when the config says nothing.
     rgb: bool = True,
-    depth: bool = False,
     encoding: str = "rgb",
+    # Hz the topics should publish at -- the dataset's own rate, resolved by
+    # SceneOrchestrator.resolve_cameras. 0 leaves them on every rendered frame.
+    publish_fps: float = 0.0,
 ):
 
     assert self.state in [READY, PAUSED, STOPPED]
@@ -234,16 +280,21 @@ def _cmd_create_camera(
     cp._node_namespace = namespace
     cp._rgb_pub = rgb
     cp._rgb_topic = _rgb_topic_for(topic, encoding)
-    cp._depth_pub = depth
-    cp._depth_topic = _depth_topic_for(topic)
+    # Never: depth belongs to the dataset, not the wire. See the topic map above.
+    cp._depth_pub = False
 
     print("Creating camera")
     _finalize_graph(cp)
-    # Both publishers hang off one IsaacCreateRenderProduct, so this sizes them both.
     # The graph is built with the node's own 1280x720 default until this runs.
     _set_render_resolution(cp._og_path, width, height)
     if rgb:
         _set_rgb_encoding(cp._og_path, encoding)
+
+    # Frames per message, from the render rate this runtime actually runs at and the
+    # rate the dataset was recorded at. Both halves have to meet here: only the task
+    # config knows the dataset rate, only the runtime knows the render rate.
+    if publish_fps > 0:
+        _set_publish_rate(cp._og_path, max(0, round(self._step_hz / publish_fps) - 1), rgb=rgb)
 
 
 def _cmd_create_tf_graph(

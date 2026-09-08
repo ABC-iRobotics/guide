@@ -41,6 +41,8 @@ def plan(orchestrator, cameras, images, encoding=None):
         _logger=logging.getLogger("test"),
         DEPTH_SUFFIX=orchestrator.SceneOrchestrator.DEPTH_SUFFIX,
     )
+    # The real property, so the plan's fps and the recorder's fps cannot drift apart.
+    scene.record_frequency = orchestrator.SceneOrchestrator.record_frequency.fget(scene)
     return {c["name"]: c for c in orchestrator.SceneOrchestrator.resolve_cameras(scene)}
 
 
@@ -94,6 +96,16 @@ def test_defaults_are_rgb_on_depth_off_raw_encoding(orchestrator):
     assert cameras["top"]["encoding"] == "rgb"
 
 
+def test_the_plan_carries_the_dataset_rate_to_the_publisher(orchestrator):
+    # The topics publish at the rate the dataset was recorded at; the runtime turns it
+    # into a frameSkipCount, because only it knows the render rate.
+    cameras = plan(orchestrator, {"top": CAMERA}, [{"top": "top"}])
+    assert cameras["top"]["fps"] == 10.0
+
+    cameras = plan(orchestrator, {"top": CAMERA}, [{"top": "top"}])
+    assert cameras["top"]["fps"] == 10.0
+
+
 def test_encoding_reaches_every_camera(orchestrator):
     cameras = plan(orchestrator, {"top": CAMERA}, [{"top": "top"}], encoding="rgb_h264")
 
@@ -125,3 +137,54 @@ def test_misses_read_as_zero_not_as_maximum_range(orchestrator):
     depth = orchestrator.depth_to_uint16_mm(np.array([[np.inf, np.nan, 100.0]], dtype=np.float32))
 
     assert depth[..., 0].tolist() == [[0, 0, 65535]]
+
+
+def frequency(orchestrator, config):
+    """The rate SceneManager samples at and the camera topics are gated to."""
+    return orchestrator.SceneOrchestrator.record_frequency.fget(SimpleNamespace(_config=config))
+
+
+def test_the_capture_rate_comes_from_dataset_fps(orchestrator):
+    assert frequency(orchestrator, {"dataset": {"fps": 20}}) == 20.0
+
+
+def test_the_rate_and_the_recorded_fps_are_one_number(orchestrator):
+    # The bug this closes: SceneManager sampled at a `getattr(scene,
+    # "record_frequency", 10)` that nothing in the repo assigned, while the recorder
+    # stamped `fps=30` into the dataset metadata. Every dataset written before this
+    # claims a rate 3x what it was recorded at. Both sides now read one key with one
+    # default, and this test fails if either grows its own literal again.
+    import inspect
+
+    from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder
+
+    assert frequency(orchestrator, {}) == float(DEFAULT_FPS)
+    assert DEFAULT_FPS == 10, "10 Hz is what the recorder has always actually captured at"
+
+    stamped = inspect.getsource(SceneRecorder._initialize_dataset)
+    assert 'get("fps", DEFAULT_FPS)' in stamped
+    assert 'get("fps", 30)' not in stamped
+
+
+def semantics(orchestrator, config, scene_id=0):
+    scene = SimpleNamespace(_config=config, _scene_id=scene_id, _logger=logging.getLogger("test"))
+    return orchestrator.SceneOrchestrator.resolve_semantics(scene)
+
+
+def test_semantic_patterns_are_scoped_to_the_scene(orchestrator):
+    # The task config is written relative to the scene root so one config works in
+    # whichever Scene_N it is instantiated into -- the same convention reset.yaml and
+    # randomize.yaml use for prim_path.
+    labels = semantics(
+        orchestrator,
+        {"dataset": {"semantics": {"red_block": "/blocks/red_block"}}},
+        scene_id=3,
+    )
+
+    assert labels == {"red_block": "/Scene_3/blocks/red_block"}
+
+
+def test_a_task_without_semantics_labels_nothing(orchestrator):
+    assert semantics(orchestrator, {}) == {}
+    assert semantics(orchestrator, {"dataset": {}}) == {}
+    assert semantics(orchestrator, {"dataset": {"semantics": None}}) == {}

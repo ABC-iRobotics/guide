@@ -409,6 +409,20 @@ class IsaacSimRuntime:
     # Frames between frame-budget reports: ~5 s of sim time at 60 Hz.
     FRAME_LOG_EVERY = 300
 
+    def _gate_render(self, frame_index: int = 0, enabled: bool | None = None) -> None:
+        """Hand the render-product gate to the scene manager, if there is one yet.
+
+        ``enabled=True`` overrides the schedule and holds the products open, which is
+        what the loop does whenever it is not RUNNING.
+        """
+        scene_manager = getattr(getattr(self, "_simulator", None), "_scene_manager", None)
+        if scene_manager is None:
+            return
+        try:
+            scene_manager.gate_render(frame_index, self._step_hz, enabled=enabled)
+        except Exception as e:
+            self._logger.debug(f"Could not gate render products: {e}")
+
     def run_loop(self) -> None:
         """Runs the runtime loop. \\
         This is a blocking method, but needs to be run in the main thread. \\
@@ -418,6 +432,9 @@ class IsaacSimRuntime:
         step_s = 0.0
         loop_s = 0.0
         window_start = time.perf_counter()
+        # Monotonic count of RENDERED frames, which is the clock the camera render
+        # products have to be gated on -- see SceneManager.gate_render.
+        frame_index = 0
 
         while self.state not in [SHUTTING_DOWN, UNINITIALIZED]:
             start = time.perf_counter()
@@ -428,14 +445,27 @@ class IsaacSimRuntime:
                 # Nothing renders, so don't make commands wait a frame period for the
                 # next pass: every call() in the between-episode reset/randomize/home
                 # chain queues up here.
+                #
+                # Leave the render products ON while stopped. The gate below only runs
+                # while RUNNING, so whatever it last wrote would otherwise stick for
+                # the whole reset/randomize chain -- five frames in six that is "off",
+                # and a camera topic that goes quiet across a scene change looks to a
+                # policy evaluation exactly like a simulator that died.
+                self._gate_render(enabled=True)
                 time.sleep(0.001)
                 continue
+
+            # Open the render window for exactly this frame, before the step that
+            # renders it. Doing it here rather than in the physics callback is the
+            # whole point: see SceneManager.gate_render.
+            self._gate_render(frame_index=frame_index)
 
             step_start = time.perf_counter()
             try:
                 self._world.step()
             except BaseException as e:
                 self._logger.error(f"Error in simulation step: {e}", exc_info=True)
+            frame_index += 1
 
             now = time.perf_counter()
             step_s += now - step_start

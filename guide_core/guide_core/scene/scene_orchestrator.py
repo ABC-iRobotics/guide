@@ -11,7 +11,7 @@ import numpy as np
 import yaml
 from scipy.spatial.transform import Rotation as R
 
-from guide_core.scene.scene_recorder import SceneRecorder
+from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import (
     RandomizationRecord,
@@ -254,7 +254,9 @@ class SceneOrchestrator(ABC):
         published at another.
 
         A camera carries up to two streams, ``rgb`` (default on) and ``depth`` (default
-        off), and the dataset feature names follow from that pair:
+        off). Only ``rgb`` reaches ROS 2; depth is captured in-process by the render
+        product's annotator and only ever lands in the dataset, like the semantic
+        labels. The dataset feature names follow from the pair:
 
         ======  ======  ==============  ======================
         rgb     depth   rgb feature     depth feature
@@ -311,6 +313,10 @@ class SceneOrchestrator(ABC):
                     "rgb": rgb,
                     "depth": depth,
                     "encoding": encoding,
+                    # The topics publish at the rate the dataset was recorded at; the
+                    # runtime turns it into a frame-skip count, since only it knows the
+                    # render rate. See _set_publish_rate.
+                    "fps": self.record_frequency,
                     "rgb_feature": ds_key if (rgb and ds_key) else None,
                     "depth_feature": (
                         (f"{ds_key}{self.DEPTH_SUFFIX}" if rgb else ds_key)
@@ -520,6 +526,7 @@ class SceneOrchestrator(ABC):
                 annotator.attach([rp])
                 self.depth_annotators[camera["depth_feature"]] = annotator
 
+        self.apply_semantics()
         self.setup_dataset()
 
     def set_render_products_enabled(self, enabled: bool) -> None:
@@ -536,11 +543,85 @@ class SceneOrchestrator(ABC):
         ``omni/replicator/core/scripts/annotators.py`` and
         ``isaacsim/replicator/nurec_utils/render.py``.
         """
+        # Idempotent: gate_render calls this once per rendered frame and most frames
+        # change nothing.
+        if getattr(self, "_render_products_enabled", None) == enabled:
+            return
+        self._render_products_enabled = enabled
+
         for rp in getattr(self, "render_products", []):
             try:
                 rp.hydra_texture.set_updates_enabled(enabled)
             except Exception as e:  # a render product destroyed with its stage
                 self._logger.debug(f"Could not toggle render product updates: {e}")
+
+    @property
+    def record_frequency(self) -> float:
+        """Hz at which the recorder captures and the ROS 2 camera topics publish.
+
+        One key, ``dataset.fps``, drives all three of the rates that describe a
+        dataset: the interval SceneManager samples on, the rate the camera topics are
+        gated to, and the ``fps`` stamped into the dataset metadata. They used to be
+        independent -- SceneManager read a ``getattr(scene, "record_frequency", 10)``
+        that nothing in the repo ever assigned, the metadata said 30, and the topics
+        published every rendered frame -- so the number a dataset reported was not the
+        number it was recorded at. See ``scene_recorder.DEFAULT_FPS``.
+        """
+        return float(self._config.get("dataset", {}).get("fps", DEFAULT_FPS))
+
+    def resolve_semantics(self) -> Dict[str, str]:
+        """Identifier -> scene-scoped prim-path pattern, from ``dataset.semantics``.
+
+        These are the labels an instance-segmentation mask is keyed by. Each value is an
+        Isaac prim-path pattern in the same syntax ``reset.yaml`` and ``randomize.yaml``
+        use for ``prim_path`` -- written relative to the scene root, so one task config
+        works whichever ``Scene_N`` it is instantiated into.
+
+        A pattern may match several prims (``/blocks/*``), in which case they all carry
+        the same identifier: the segmentation annotator still separates them as
+        instances, it just reports them under one name. Give a prim its own key when it
+        needs its own name.
+        """
+        semantics = self._config.get("dataset", {}).get("semantics", {}) or {}
+        return {str(label): f"/Scene_{self._scene_id}{expr}" for label, expr in semantics.items()}
+
+    def apply_semantics(self) -> Dict[str, list]:
+        """Stamp the configured identifiers onto the stage. Returns {label: [prim paths]}.
+
+        A prim carrying no label is invisible to the instance-segmentation annotator, so
+        this is what makes a mask addressable by name instead of by whatever id the
+        renderer happened to hand out. Labels go on the ``class`` taxonomy, which is the
+        one the segmentation annotators read, and USD resolves them down to descendants
+        -- so labelling an asset's root Xform covers its meshes.
+
+        Applied once, when the scene is prepared: it needs the stage populated, and
+        ``_resolve_prims`` needs the simulation backend up.
+        """
+        from isaacsim.core.experimental.utils.semantics import add_labels
+
+        labelled: Dict[str, list] = {}
+        for label, expr in self.resolve_semantics().items():
+            paths = self._resolve_prims(expr)
+            if not paths:
+                self._logger.warning(
+                    f"[SceneOrchestrator] semantics: '{expr}' matched no prims, so "
+                    f"nothing in the scene will carry the identifier '{label}'."
+                )
+                continue
+            for path in paths:
+                try:
+                    add_labels(path, labels=[label])
+                except Exception as e:
+                    self._logger.warning(f"Could not label '{path}' as '{label}': {e}")
+                    continue
+                labelled.setdefault(label, []).append(path)
+
+        if labelled:
+            self._logger.info(
+                f"[SceneOrchestrator] semantic identifiers: "
+                f"{ {k: len(v) for k, v in labelled.items()} }"
+            )
+        return labelled
 
     def setup_dataset(self):
         # Deferred import: Isaac Sim extension modules only become importable

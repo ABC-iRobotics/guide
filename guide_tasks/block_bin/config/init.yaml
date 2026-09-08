@@ -6,7 +6,7 @@ usd_path: '/assets/block_bin.usd'
 # service replies. Turn ON at inference time, when a deployed policy needs live camera
 # images over ROS -- either here, or without editing this file:
 #   ros2 launch guide_core bringup.launch.py camera_topics:=true
-publish_camera_topics: false
+publish_camera_topics: true
 
 # Wire format of the rgb topics, when they are published at all.
 #   rgb       sensor_msgs/Image on <topic>            -- 640x480 rgb8, 921 kB a frame
@@ -16,7 +16,7 @@ publish_camera_topics: false
 # two the camera helper created. H.264 costs nothing to render and everything it saves
 # is DDS bandwidth, so it is worth turning on wherever the topics are on at all --
 # 'rgb' stays the default only because it is the format every existing tool expects.
-camera_encoding: rgb
+camera_encoding: rgb_h264
 
 robots:
   franka :
@@ -34,10 +34,14 @@ robots:
       - 0.0
 
 # `rgb` and `depth` are independent streams off one render product (a depth camera
-# costs no extra RTX pass). They decide the dataset feature names too: a camera with
-# both records <key> and <key>_depth, a depth-only camera records <key>. Depth is
-# float32 metres on <topic>/depth over ROS, and (H, W, 1) uint16 millimetres in the
-# dataset -- the shape lerobot flags as is_depth_map and encodes losslessly.
+# costs no extra RTX pass). They decide the dataset feature names: a camera with both
+# records <key> and <key>_depth, a depth-only camera records <key>.
+#
+# Only `rgb` is published to ROS 2. Depth is captured in-process by the annotator and
+# goes straight into the dataset as (H, W, 1) uint16 millimetres -- the shape lerobot
+# flags as is_depth_map and encodes losslessly -- exactly like the semantic labels
+# below. Nothing subscribes to depth, and 32FC1 on the wire costs more than the colour
+# image it would sit beside.
 cameras:
   top:
     path: '/top'
@@ -64,10 +68,35 @@ cameras:
     depth: false
 
 dataset:
+  # Prims that carry a semantic identifier, for instance-segmentation masks. The key is
+  # the identifier the mask is keyed by; the value is a prim-path pattern relative to the
+  # scene root -- the same syntax reset.yaml and randomize.yaml use for `prim_path`.
+  #
+  # A pattern that matches several prims gives them all one identifier ('/blocks/*' would
+  # label every block "block"); the annotator still separates them as instances, it just
+  # reports them under one name. Each block is named separately here so a mask can say
+  # which block, not just that a block is there.
+  semantics:
+    red_block: '/blocks/red_block'
+    yellow_block: '/blocks/yellow_block'
+    green_block: '/blocks/green_block'
+    blue_block: '/blocks/blue_block'
+    bin_0: '/bin_0'
+    bin_1: '/bin_1'
+    robot: '/fr3'
+  # Capture rate, in Hz. One number for three things that used to disagree: the rate
+  # SceneManager samples the scene at, the rate the ROS 2 camera topics are gated to
+  # (they publish every rendered frame otherwise -- 60 Hz), and the fps stamped into
+  # the LeRobot dataset metadata. 10 is what this task has always actually recorded at;
+  # the metadata said 30 only because the key was never set.
+  fps: 10
   images:
     - top: top
+    - top_depth: top_depth
     - base: base
+    - base_depth: base_depth
     - wrist: wrist
+    - wrist_depth: wrist_depth
   cartesian_velocity_robot: franka
   end_effector_name: fr3_hand_tcp
   observations:

@@ -121,11 +121,11 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 frame=camera.get("frame", "cam"),
                 namespace=f"{simulator._sim_path}{scene_path}",
                 topic=camera.get("topic", "/rgb"),
-                # Resolved in SceneOrchestrator.resolve_cameras(); the fallbacks here
-                # only apply to a caller that builds the list by hand.
+                # Resolved in SceneOrchestrator.resolve_cameras(); the fallbacks
+                # here only apply to a caller that builds the list by hand.
                 rgb=camera.get("rgb", True),
-                depth=camera.get("depth", False),
                 encoding=camera.get("encoding", "rgb"),
+                publish_fps=camera.get("fps", 0.0),
             )
             self._cmd_create_tf_graph(
                 namespace=f"{simulator._sim_path}{scene_path}",

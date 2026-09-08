@@ -1,15 +1,17 @@
 # flake8: noqa: E402
-"""The recorder samples on the physics clock, and only renders the frames it samples.
+"""Two clocks, and only one of them can select a single rendered frame.
 
-``current_time_step_index`` counts PHYSICS steps, not rendered frames, so a record
-interval measured against ``step_freq`` is wrong by the substep count -- which is how
-``f_sim = 120`` came to be hard-coded next to a ``step_freq: 60`` config. Deriving it
-from ``get_physics_dt()`` keeps the capture rate fixed at ``record_frequency`` whatever
-``physics_freq`` is set to.
+The recorder samples on the PHYSICS clock: ``current_time_step_index`` counts physics
+steps, not rendered frames, so a record interval measured against ``step_freq`` is wrong
+by the substep count -- which is how ``f_sim = 120`` came to be hard-coded next to a
+``step_freq: 60`` config.
 
-The second thing under test is the render-product gate: a product has to be switched on
-one rendered frame BEFORE the capture reads it, because the ordering inside an
-``app.update()`` is pre-step callbacks -> physics -> render.
+Gating the render products, though, has to happen on the RENDER clock. Expressing "one
+rendered frame" as a run of ``substeps`` consecutive physics indices only works while
+the two clocks stay in phase, and they do not: a reset, a randomization, or any extra
+``simulation_app.update()`` slips the phase, and a window that then straddles two
+updates renders -- and publishes -- twice per interval. That is what ``gate_render``
+exists for, and what these tests pin down.
 """
 
 import sys
@@ -18,16 +20,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# SceneManager.step() imports omni.replicator.core so it is off the per-tick path;
-# importing it for real bootstraps the Kit kernel. isaacsim itself imports fine, so
-# leave it alone -- stubbing it leaks a MagicMock SimulationApp into every later test.
-REPLICATOR = ("omni", "omni.replicator", "omni.replicator.core")
+# SceneManager.step() imports omni.replicator.core, so it is off the per-tick path and
+# has to be stubbed. Stubbing `omni` then breaks the real `isaacsim`, whose bootstrap
+# needs omni.kit -- and it fails by raising SystemExit, which runtime.py's
+# `except Exception` around `from isaacsim import SimulationApp` does not catch. So
+# isaacsim is stubbed too, and everything is restored on teardown: a MagicMock
+# SimulationApp left in sys.modules would follow every later test in the session.
+# (Without the restore this file passed only when something alphabetically earlier had
+# already stubbed isaacsim, and failed when run on its own.)
+STUBBED = ("omni", "omni.replicator", "omni.replicator.core", "isaacsim")
 
 
 @pytest.fixture
 def SceneManager():
-    saved = {name: sys.modules.get(name) for name in REPLICATOR}
-    for name in REPLICATOR:
+    saved = {name: sys.modules.get(name) for name in STUBBED}
+    for name in STUBBED:
         sys.modules[name] = MagicMock()
 
     from guide_core.scene.scene_manager import SceneManager as _SceneManager
@@ -58,7 +65,7 @@ class FakeRecorder:
 
 
 class FakeScene:
-    """Just enough scene for the RECORDING branch of step_task."""
+    """Just enough scene for step_task and gate_render."""
 
     def __init__(self, record_frequency=10):
         from guide_core.types.scene_state import SceneState
@@ -66,24 +73,24 @@ class FakeScene:
         self.state = SceneState.RECORDING
         self.record_frequency = record_frequency
         self.recorder = FakeRecorder()
-        self.render_enabled = True
-        self.render_log = []
         self._config = {}
+        # The real setter early-returns when nothing changed (gate_render calls it once
+        # per rendered frame), so mirror that and the log becomes a list of transitions.
+        self.render_enabled = None
+        self.render_log = []
 
     def set_render_products_enabled(self, enabled):
+        if self.render_enabled == enabled:
+            return
         self.render_enabled = enabled
         self.render_log.append(enabled)
 
     def record_step(self, current_step):
-        assert self.render_enabled, (
-            f"step {current_step} captured with the render products switched off -- "
-            "the image would be whatever was last rendered, not this frame"
-        )
         return {"timestamp": current_step}
 
 
-def drive(SceneManager, scene, physics_hz, render_hz, ticks):
-    """Run step_task over `ticks` physics steps and hand back the scene."""
+def drive(SceneManager, scene, physics_hz, render_hz, ticks, first_tick=0):
+    """Run step_task over `ticks` physics steps. `first_tick` offsets the phase."""
     manager = SceneManager(logger=MagicMock())
     manager._scenes = [scene]
     manager._locks = {0: MagicMock()}
@@ -91,14 +98,28 @@ def drive(SceneManager, scene, physics_hz, render_hz, ticks):
     world = SimpleNamespace(
         get_physics_dt=lambda: 1.0 / physics_hz,
         get_rendering_dt=lambda: 1.0 / render_hz,
-        current_time_step_index=0,
+        current_time_step_index=first_tick,
     )
     step_task = manager.step(SimpleNamespace(_world=world))
 
-    for tick in range(ticks):
+    for tick in range(first_tick, first_tick + ticks):
         world.current_time_step_index = tick
         step_task(1.0 / physics_hz)
     return scene
+
+
+def render(SceneManager, scene, step_hz, frames, first_frame=0):
+    """Run gate_render over `frames` rendered frames and hand back the scene."""
+    manager = SceneManager(logger=MagicMock())
+    manager._scenes = [scene]
+    manager._locks = {0: MagicMock()}
+
+    for frame in range(first_frame, first_frame + frames):
+        manager.gate_render(frame, step_hz)
+    return scene
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~ the physics clock: what gets captured ~~~~~~~~~~~~~~~~~~~~~~~
 
 
 @pytest.mark.parametrize("physics_hz", [60, 120, 240])
@@ -118,30 +139,12 @@ def test_the_old_hard_coded_120_would_have_halved_the_rate(SceneManager):
     assert len(scene.recorder.frames) != 5, "5 Hz is what f_sim=120 on a 60 Hz clock gives"
 
 
-def test_render_products_are_on_for_exactly_one_frame_per_capture(SceneManager):
+def test_the_physics_callback_no_longer_touches_the_render_switches(SceneManager):
+    # It used to open the window itself, on physics-step parity. That is the bug this
+    # whole split exists to fix -- one owner, and it is gate_render.
     scene = drive(SceneManager, FakeScene(record_frequency=10), 120, 60, 120)
 
-    # FakeScene.record_step asserts the products were live when it ran, so reaching
-    # here means every capture saw a freshly rendered frame.
-    assert len(scene.recorder.frames) == 10
-    # Strictly alternating: one enable per capture, one disable per capture, never two
-    # of a kind in a row. It opens with a disable because the capture on tick 0 lands
-    # the instant RECORDING begins -- start_recording already switched the products on
-    # for warmup, which is the state FakeScene starts in.
-    assert scene.render_log == [False, True] * 10
-    assert scene.render_enabled is True, (
-        "the last enable has no matching capture inside the window; it is the one the "
-        "next capture will read"
-    )
-
-
-def test_the_gate_is_skipped_when_there_is_no_idle_frame_to_skip(SceneManager):
-    # record_frequency == the render rate: every rendered frame is captured, so
-    # toggling would switch the products off over the only frame that matters.
-    scene = drive(SceneManager, FakeScene(record_frequency=60), 120, 60, 120)
-
-    assert len(scene.recorder.frames) == 60
-    assert scene.render_log == [], "nothing to gate at the full render rate"
+    assert scene.render_log == []
 
 
 def test_finalizing_polls_the_recorder_at_the_record_rate_not_every_tick(SceneManager):
@@ -154,3 +157,64 @@ def test_finalizing_polls_the_recorder_at_the_record_rate_not_every_tick(SceneMa
     # is_idle() is a blocking round trip to the recorder process; 10 polls a second,
     # not 120.
     assert scene.recorder.idle_polls == 10
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~ the render clock: what gets rendered ~~~~~~~~~~~~~~~~~~~~~~~
+
+
+def test_one_render_per_interval_at_the_configured_rate(SceneManager):
+    # 60 rendered frames is one second at step_freq 60; ten of them render.
+    scene = render(SceneManager, FakeScene(record_frequency=10), 60, 60)
+
+    assert scene.render_log.count(True) == 10
+
+
+def test_the_window_is_one_frame_wide_and_strictly_alternates(SceneManager):
+    scene = render(SceneManager, FakeScene(record_frequency=10), 60, 18)
+
+    # (frame + 1) % 6 == 0 -> frames 5, 11, 17. Off before each, on for exactly one.
+    assert scene.render_log == [False, True, False, True, False, True]
+
+
+def test_the_window_closes_before_the_capture_reads_it(SceneManager):
+    # The frame has to be rendered BEFORE the physics tick that captures it: the
+    # recorder reads whatever the annotator last received. Frame 5 renders, the capture
+    # at physics step 12 (== frame 6) reads it.
+    scene = render(SceneManager, FakeScene(record_frequency=10), 60, 6)
+
+    assert scene.render_log == [False, True], "on for frame 5, the one before the capture"
+
+
+def test_the_rate_does_not_depend_on_the_physics_phase(SceneManager):
+    # The reported bug: a window expressed in physics-step indices was one rendered
+    # frame only while the two clocks stayed in phase. Off phase it straddled two
+    # updates and published at 20 Hz instead of 10. gate_render never consults the
+    # physics counter, so an offset changes nothing.
+    aligned = render(SceneManager, FakeScene(record_frequency=10), 60, 60, first_frame=0)
+    offset = render(SceneManager, FakeScene(record_frequency=10), 60, 60, first_frame=1)
+
+    assert aligned.render_log.count(True) == 10
+    assert offset.render_log.count(True) == 10
+
+
+def test_every_frame_renders_when_the_rate_matches_the_render_rate(SceneManager):
+    scene = render(SceneManager, FakeScene(record_frequency=60), 60, 60)
+
+    assert scene.render_log == [True], "on once, and never switched off again"
+
+
+def test_stopping_holds_the_render_products_open(SceneManager):
+    # gate_render only runs while the loop is RUNNING, so whatever it last wrote sticks
+    # for the whole reset/randomize/home chain -- five frames in six that is "off", and
+    # a camera topic that goes quiet across a scene change looks to a policy evaluation
+    # exactly like a simulator that died. The loop overrides while stopped.
+    manager = SceneManager(logger=MagicMock())
+    scene = FakeScene(record_frequency=10)
+    manager._scenes = [scene]
+    manager._locks = {0: MagicMock()}
+
+    manager.gate_render(0, 60)  # frame 0 of 6: closed
+    assert scene.render_enabled is False
+
+    manager.gate_render(0, 60, enabled=True)
+    assert scene.render_enabled is True
