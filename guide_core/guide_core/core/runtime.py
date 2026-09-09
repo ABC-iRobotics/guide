@@ -215,6 +215,11 @@ class IsaacSimRuntime:
         # generation wants.
         self._realtime: bool = startup_config.get("realtime", True)
 
+        # PhysX on the GPU. NVIDIA documents GPU dynamics as a win at scale -- many
+        # bodies, many contacts -- and this scene is one arm, two bins and four
+        # blocks. It also puts PhysX on the same card the renderer is saturating.
+        self._gpu_dynamics: bool = startup_config.get("gpu_dynamics", True)
+
         self.state = INITIALIZING
         try:
             if SimulationApp is None:
@@ -357,7 +362,7 @@ class IsaacSimRuntime:
             )
 
             self._pc = self._world.get_physics_context()
-            self._pc.enable_gpu_dynamics(True)
+            self._pc.enable_gpu_dynamics(self._gpu_dynamics)
 
         except Exception as e:
             self._logger.error(f"Error in create_world: {e}")
