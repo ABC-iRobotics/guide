@@ -332,3 +332,41 @@ nvidia-smi and the Kit launch args, never with the setting or your own log line.
 physics. Render has been flat at ~27-36 ms through every experiment in this document
 and is what remains: 5 render products, RaytracedLighting, SDG forcing synchronous
 render-and-readback every frame. Nothing tried so far has moved it.
+
+
+## CORRECTION: seed pairing does not make rollouts reproducible (2026-09-09)
+
+Re-running seeds 1000-1013 on the merged config -- identical physics, identical
+seeds, nothing changed -- gives **7/14 against the baseline's 6/14, with 7 of the 14
+seeds flipping**. At a ~45% success rate, independent draws predict agreement of
+p^2+q^2 = 0.50, i.e. exactly 7/14. Seed-level outcomes are statistically
+indistinguishable from coin flips.
+
+`--seed-base` fixes the scene LAYOUT. It does not fix the rollout: the policy is
+driven at 5 Hz of sim time while inference runs on the wall clock in a background
+thread (`--lead 3`), so which chunk is ready at which control step varies run to run;
+`sleep_sim` polls the ROS clock at 2 ms granularity; PhysX and the IK need not be
+bit-identical across runs.
+
+**This retracts the `physics_freq: 60` fidelity verdict above.** The claim was "all
+six seeds that succeeded at 120 Hz failed at 60 Hz, therefore harm". That reasoning
+required paired seeds to be meaningful, and they are not -- those six were not
+expected to repeat in any case. Fisher exact on the aggregate:
+
+```
+physics_freq 60 vs baseline   6/14 vs 2/14   p = 0.209   not significant
+final config  vs baseline     6/14 vs 7/14   p = 1.0     no regression
+```
+
+`physics_freq: 60` remains pruned, on the performance result alone -- it was worth
+nothing (31.6 vs 31.5 ms). Whether it harms fidelity is UNKNOWN and this campaign
+never had the statistical power to say.
+
+**What a real fidelity test needs here.** Repeats per seed, not one run per seed, and
+enough episodes to separate a rate difference from noise. Distinguishing 45% from 25%
+at p<0.05 needs on the order of 80-100 episodes per arm -- about 3 hours per arm at
+RTF 0.53. Anything cheaper than that can only detect a catastrophic regression, and
+should be reported as such rather than as a fidelity verdict.
+
+**The one thing today's runs do establish:** 7/14 against 6/14, p = 1.0, means the
+merged camera and physics work caused no detectable regression.
