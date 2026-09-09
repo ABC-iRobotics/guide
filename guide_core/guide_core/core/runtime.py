@@ -250,6 +250,15 @@ class IsaacSimRuntime:
                 startup_config["multi_gpu"] = False
                 self._logger.info(f"Renderer on {render_device}.")
 
+            if self._physics_gpu >= 0:
+                # Has to go in before the app starts: SimulationApp turns physics_gpu
+                # into --/physics/cudaDevice=N on the Kit command line, and PhysX builds
+                # its CUDA context during startup. Setting the carb value afterwards
+                # logs a pin that never happens -- measured: the setting read cuda:1
+                # while nvidia-smi showed the A2000 idle at 1% throughout.
+                startup_config["physics_gpu"] = self._physics_gpu
+                self._logger.info(f"PhysX on cuda:{self._physics_gpu}.")
+
             # Start Isaac Sim
             self.simulation_app = SimulationApp(startup_config)
 
@@ -379,20 +388,6 @@ class IsaacSimRuntime:
     def _create_world(self) -> None:
         try:
             self._logger.debug("Creating World...")
-
-            if self._physics_gpu >= 0:
-                # Pin PhysX to its own card. useActiveCudaContext has to go off first or
-                # PhysX rides the renderer's CUDA context and ignores cudaDevice
-                # entirely. This is NOT the renderer's multi_gpu setting -- the renderer
-                # stays single-GPU on active_gpu; only PhysX moves.
-                import carb.settings
-
-                settings = carb.settings.get_settings()
-                settings.set_bool("/persistent/physics/useActiveCudaContext", False)
-                settings.set_int("/physics/cudaDevice", self._physics_gpu)
-                self._logger.info(
-                    f"PhysX pinned to cuda:{self._physics_gpu} (renderer unaffected)."
-                )
 
             if self._physics_threads >= 0:
                 import carb.settings

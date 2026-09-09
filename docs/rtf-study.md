@@ -260,3 +260,75 @@ count turned out to be 4 rather than 7.
 - **More GPU** -- measured: card-independent under load.
 - **CPU work** -- measured: 25% of 16 cores, nothing pegged.
 - **Rate limiting / the loop sleep** -- never fires above budget.
+
+
+## Experiment results (2026-09-09)
+
+Each on its own branch off the optimisation branch, measured idle and under a
+1-episode evaluation. Fidelity is a paired comparison over seeds 1000-1013 --
+`--seed-base` makes two runs see identical scenes, which is worth far more than the
+same number of independent episodes.
+
+| Experiment | idle | under load | fidelity | verdict |
+|---|---|---|---|---|
+| baseline (GPU dynamics, 120 Hz) | 29.3 ms / 0.57 | 57.7 ms / 0.29 | 6/14 | reference |
+| `physics_device: cpu` | 29.2 ms / 0.57 | **31.5 ms / 0.52** | not yet tested | **MERGED** |
+| `physics_freq: 60` | 29.1 ms / 0.57 | 31.6 ms / 0.52 | **2/14** | **PRUNED** |
+
+**`physics_freq: 60` is pruned.** No performance gain at all -- physics is already
+~4 ms of a 31.5 ms frame once it is on the CPU, so halving the substeps had nothing
+to take. And every one of the six seeds that succeeded at 120 Hz failed at 60 Hz
+(two previously-failing seeds flipped the other way; 8 flips in 14). One substep per
+rendered frame is too coarse for the contact resolution a grasp depends on. Losing
+6 of 6 by chance is roughly a 5% event at this base rate.
+
+Note the wall times: 1296 s for 14 seeds at 120 Hz against 1529 s at 60 Hz, with an
+identical per-frame cost. Failures run the full 60 s timeout while successes end
+early, so the slower wall clock is a fidelity signal, not a performance one.
+
+**Still untested:** `physics_device: cuda:0` (PhysX on the idle A2000 -- the cards
+have no peer access, so state crosses PCIe every frame) and `physics_threads`
+(0 = synchronous, or 16/32 against Isaac's default 8). Both config-only on branch
+`perf/physics-devices`.
+
+**Fidelity debt:** the merged CPU-dynamics change has NOT been through the paired
+comparison. It is a physics change on a grasping task, and `physics_freq: 60` has
+just shown that a physics change can hold RTF flat while gutting the success rate.
+The same 14 seeds are the test.
+
+
+## Physics experiments, complete (2026-09-09)
+
+All under evaluation load, `perf/physics-devices`, everything else held constant.
+
+| config | idle | under load | verdict |
+|---|---|---|---|
+| `physics_device: cpu` | 28.9 ms / 0.57 | **31.4 ms / 0.53** | **best, merged** |
+| `physics_device: cuda:1` (A2000) | 28.8 ms / 0.58 | 48.2 ms / 0.34 | pruned |
+| GPU dynamics on the renderer's card | 29.3 ms / 0.57 | 57.7 ms / 0.29 | original |
+| ...same, `useActiveCudaContext` off | -- | 73.7 ms / 0.23 | pruned |
+| `physics_threads` 0 / 8 / 16 / 32 | 36.5 ms / 0.46 | all within 0.7 ms | null lever |
+| `physics_freq: 60` | 29.1 ms / 0.57 | 31.6 ms / 0.52, fidelity 6/14 -> 2/14 | pruned |
+
+Offloading PhysX to the idle A2000 does relieve real contention -- 57.7 -> 48.2 ms --
+so the two workloads were genuinely fighting on one card. It is still 50% worse than
+the CPU, because the PCIe round trip and the weaker card cost more than the ~4 ms the
+CPU solver takes on a scene this size. The cards have no peer access.
+
+Forcing `useActiveCudaContext` off while physics is on the renderer's own card costs
+~16 ms a frame (57.7 -> 73.7). Only turn it off when actually moving PhysX elsewhere.
+
+**A trap worth remembering.** `physics_gpu` must be in the dict handed to
+`SimulationApp`: it becomes `--/physics/cudaDevice=N` on the Kit command line and
+PhysX builds its CUDA context during startup. Setting the carb value later succeeds,
+reads back correctly, and does nothing -- the first attempt at this experiment logged
+"PhysX pinned to cuda:1" while nvidia-smi showed the A2000 idle at 1% for the whole
+run, and produced a number that looked like a result. Verify device placement with
+nvidia-smi and the Kit launch args, never with the setting or your own log line.
+
+### Where the frame goes now
+
+31.4 ms against a 16.7 ms budget, RTF 0.53. Roughly 27 ms of that is render and ~4 ms
+physics. Render has been flat at ~27-36 ms through every experiment in this document
+and is what remains: 5 render products, RaytracedLighting, SDG forcing synchronous
+render-and-readback every frame. Nothing tried so far has moved it.
