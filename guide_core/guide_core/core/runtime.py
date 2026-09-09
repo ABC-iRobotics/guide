@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import os
 import time
 from dataclasses import dataclass
 from queue import Empty, Queue
@@ -202,12 +201,6 @@ class IsaacSimRuntime:
         startup_config, extensions, stage_config = self._parse_config(config)
         self.stage_config = stage_config
 
-        # Before anything touches CUDA. Without it "cuda:1" is the second-fastest
-        # card to torch and PhysX but the second PCI slot to nvidia-smi and Kit:
-        # two orderings, silently disagreeing. Pin one so a device name means one
-        # card everywhere in this process.
-        os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
-
         self._step_hz: float = startup_config.get("step_freq", 60.0)
         self._dt = 1.0 / self._step_hz
 
@@ -225,10 +218,14 @@ class IsaacSimRuntime:
         # PhysX on the GPU. NVIDIA documents GPU dynamics as a win at scale -- many
         # bodies, many contacts -- and this scene is one arm, two bins and four
         # blocks. It also puts PhysX on the same card the renderer is saturating.
-        # Where PhysX runs: "cpu", or "cuda:N" naming the same N nvidia-smi shows.
-        # CUDA_DEVICE_ORDER is pinned to PCI_BUS_ID above so that holds -- by default
-        # CUDA sorts FASTEST_FIRST and cuda:0 is a different card than nvidia-smi's 0,
-        # which is how this scene came to render on the slower card for weeks.
+        # Where PhysX runs: "cpu", or "cuda:N" as CUDA numbers devices -- which is NOT
+        # how nvidia-smi or render_device number them. CUDA defaults to FASTEST_FIRST,
+        # nvidia-smi and Kit go by PCI bus id, so the same N can name different cards.
+        # Pinning CUDA_DEVICE_ORDER would unify them but is a process-global change
+        # that also relocates every component defaulting to device 0 -- measured at
+        # ~7 ms a frame here, and unavailable on a host where the environment is not
+        # ours to set. So both keys log the card they resolved to instead; check the
+        # startup lines against nvidia-smi rather than trusting either convention.
         physics_device = str(startup_config.get("physics_device", "cpu")).strip().lower()
         self._gpu_dynamics: bool = physics_device != "cpu"
         self._physics_gpu: int = int(physics_device.split(":")[1]) if self._gpu_dynamics else -1

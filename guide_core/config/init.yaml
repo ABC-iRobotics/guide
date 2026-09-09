@@ -11,21 +11,32 @@ startup:
   # substep count from the ratio. This is the clock the recorder's interval is measured
   # against (SceneManager.step), so changing it does not change the recording rate.
   physics_freq: 120
-  # Devices, named the way CUDA names them -- and cuda:N is the same N nvidia-smi
-  # shows, because CUDA_DEVICE_ORDER is pinned to PCI_BUS_ID before anything touches
-  # CUDA. Left alone, CUDA sorts FASTEST_FIRST and cuda:0 is a different card than
-  # nvidia-smi's 0; that disagreement is how this scene came to render on the weaker
-  # card. On this box: cuda:0 = A2000, cuda:1 = A4000.
-  #
-  # Kept single-GPU regardless -- the cards are mismatched with no peer access, and
-  # Isaac's multi-GPU renderer deadlocks on them ("Failed to begin render graph ...
-  # semaphore timed out").
+  # Pace the loop to sim time. Set false for batch demonstration generation to let
+  # the sim run ahead of real time once a frame costs less than 1/step_freq.
+  realtime: true
+
+  # Viewport render resolution -- NOT the cameras. The camera render products are
+  # pinned to the size the datasets were recorded at (_set_render_resolution in
+  # _cmd_robot), so this is the only render target free to shrink. Isaac's default is
+  # 1280x720, which costs ~7 ms a frame here against 640x360.
+  width: 640
+  height: 360
+
+  # Renderer card, by the index nvidia-smi and Kit use (PCI bus order). On this box
+  # 0 = A2000, 1 = A4000. Kept single-GPU whatever is asked: the cards are mismatched
+  # with no peer access and Isaac's multi-GPU renderer deadlocks on them ("Failed to
+  # begin render graph ... semaphore timed out").
   render_device: cuda:1
 
-  # Where PhysX runs: "cpu", or "cuda:N". Measured on this scene (one arm, two bins,
-  # four blocks) under an evaluation: physics was 39.6 ms of a 57.7 ms frame on the
-  # renderer's card, and ~4 ms of a 31.5 ms frame on the CPU. NVIDIA documents GPU
-  # dynamics as a win at scale, which this is not.
+  # Where PhysX runs: "cpu", or "cuda:N" -- and CAREFUL, N here is CUDA's numbering,
+  # not nvidia-smi's. CUDA sorts FASTEST_FIRST by default, so its cuda:0 is the A4000
+  # while nvidia-smi's 0 is the A2000. The runtime logs the card each key resolved to
+  # at startup; check those lines rather than trusting either convention.
+  #
+  # Measured on this scene (one arm, two bins, four blocks) under an evaluation:
+  # physics was 39.6 ms of a 57.7 ms frame on the renderer's card, and ~4 ms of a
+  # 31.5 ms frame on the CPU. NVIDIA documents GPU dynamics as a win at scale, which
+  # this is not.
   physics_device: cpu
 
   # PhysX worker threads (/persistent/physics/numThreads). 0 runs the solver
