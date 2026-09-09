@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 import time
 from dataclasses import dataclass
 from queue import Empty, Queue
@@ -201,6 +202,12 @@ class IsaacSimRuntime:
         startup_config, extensions, stage_config = self._parse_config(config)
         self.stage_config = stage_config
 
+        # Before anything touches CUDA. Without it "cuda:1" is the second-fastest
+        # card to torch and PhysX but the second PCI slot to nvidia-smi and Kit:
+        # two orderings, silently disagreeing. Pin one so a device name means one
+        # card everywhere in this process.
+        os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+
         self._step_hz: float = startup_config.get("step_freq", 60.0)
         self._dt = 1.0 / self._step_hz
 
@@ -218,7 +225,17 @@ class IsaacSimRuntime:
         # PhysX on the GPU. NVIDIA documents GPU dynamics as a win at scale -- many
         # bodies, many contacts -- and this scene is one arm, two bins and four
         # blocks. It also puts PhysX on the same card the renderer is saturating.
-        self._gpu_dynamics: bool = startup_config.get("gpu_dynamics", True)
+        # Where PhysX runs: "cpu", or "cuda:N" naming the same N nvidia-smi shows.
+        # CUDA_DEVICE_ORDER is pinned to PCI_BUS_ID above so that holds -- by default
+        # CUDA sorts FASTEST_FIRST and cuda:0 is a different card than nvidia-smi's 0,
+        # which is how this scene came to render on the slower card for weeks.
+        physics_device = str(startup_config.get("physics_device", "cpu")).strip().lower()
+        self._gpu_dynamics: bool = physics_device != "cpu"
+        self._physics_gpu: int = int(physics_device.split(":")[1]) if self._gpu_dynamics else -1
+
+        # PhysX worker threads (/persistent/physics/numThreads). 0 runs the solver
+        # synchronously on the calling thread; -1 leaves Isaac's default of 8.
+        self._physics_threads: int = int(startup_config.get("physics_threads", -1))
 
         self.state = INITIALIZING
         try:
@@ -226,6 +243,16 @@ class IsaacSimRuntime:
                 raise RuntimeError(
                     "Isaac Sim is not available (isaacsim.SimulationApp import failed)."
                 )
+            # "cuda:N" -> the active_gpu index SimulationApp wants. Same N nvidia-smi
+            # shows, because CUDA_DEVICE_ORDER is pinned above. Kept single-GPU: these
+            # two cards have no peer access, and Isaac's multi-GPU renderer deadlocks
+            # on them ("Failed to begin render graph ... semaphore timed out").
+            render_device = str(startup_config.get("render_device", "")).strip().lower()
+            if render_device.startswith("cuda:"):
+                startup_config["active_gpu"] = int(render_device.split(":")[1])
+                startup_config["multi_gpu"] = False
+                self._logger.info(f"Renderer on {render_device}.")
+
             # Start Isaac Sim
             self.simulation_app = SimulationApp(startup_config)
 
@@ -355,6 +382,32 @@ class IsaacSimRuntime:
     def _create_world(self) -> None:
         try:
             self._logger.debug("Creating World...")
+
+            if self._physics_gpu >= 0:
+                # Pin PhysX to its own card. useActiveCudaContext has to go off first or
+                # PhysX rides the renderer's CUDA context and ignores cudaDevice
+                # entirely. This is NOT the renderer's multi_gpu setting -- the renderer
+                # stays single-GPU on active_gpu; only PhysX moves.
+                import carb.settings
+
+                settings = carb.settings.get_settings()
+                settings.set_bool("/persistent/physics/useActiveCudaContext", False)
+                settings.set_int("/physics/cudaDevice", self._physics_gpu)
+                self._logger.info(
+                    f"PhysX pinned to cuda:{self._physics_gpu} (renderer unaffected)."
+                )
+
+            if self._physics_threads >= 0:
+                import carb.settings
+
+                carb.settings.get_settings().set_int(
+                    "/persistent/physics/numThreads", self._physics_threads
+                )
+                self._logger.info(
+                    f"PhysX worker threads: {self._physics_threads}"
+                    f"{' (synchronous)' if self._physics_threads == 0 else ''}."
+                )
+
             self._world = World(
                 stage_units_in_meters=1.0,
                 physics_dt=1.0 / self._physics_hz,
