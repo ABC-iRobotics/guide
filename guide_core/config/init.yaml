@@ -11,6 +11,11 @@ startup:
   # substep count from the ratio. This is the clock the recorder's interval is measured
   # against (SceneManager.step), so changing it does not change the recording rate.
   physics_freq: 120
+  # PhysX on the GPU. Measured on this scene: physics is 2.1 ms idle and 39.6 ms
+  # under an evaluation -- 52% of the frame -- while render stays flat at ~36 ms.
+  # GPU dynamics is documented as a win at scale; this stage is one arm, two bins
+  # and four blocks, and it shares the card the renderer is already saturating.
+  gpu_dynamics: False
   # Pace the loop to sim time. Set false for batch demonstration generation to let the
   # sim run ahead of real time once a frame costs less than 1/step_freq.
   realtime: true
