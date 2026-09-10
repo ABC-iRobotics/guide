@@ -21,7 +21,7 @@ class SetGripperState(BaseNode):
     SETTLE_SECONDS = 1.0
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("GripperControl", alias, dynamic_map, static_args)
+        super().__init__("GripperControl", alias, dynamic_map, static_args, output_map)
 
     def run(self, robot: Robot, gripper_goal_pos: Dict[str, float]) -> ExecutionResult:
         """
@@ -76,40 +76,3 @@ class SetGripperState(BaseNode):
             status=DemoStatus.PERFECT,
         )
 
-
-class OpenGripper(SetGripperState):
-    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("OpenGripper", alias, dynamic_map, static_args, output_map)
-
-    def run(self, robot: Robot | ROS2Robot, **kwargs) -> ExecutionResult:
-        if isinstance(robot, ROS2Robot):
-            self.static_args = {
-                "gripper_goal_pos": {
-                    f"{joint}.pos": robot.config.gripper_open_position[idx]
-                    for idx, joint in enumerate(robot.config.gripper_joint_names)
-                }
-            }
-        else:
-            self.static_args = {
-                "gripper_goal_pos": {joint: 1.0 for joint in robot.config.gripper_joint_names}
-            }  # Assuming 1.0 is the open position for non-ROS2Robot implementations
-        return super().run(robot=robot, **kwargs)
-
-
-class CloseGripper(SetGripperState):
-    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("CloseGripper", alias, dynamic_map, static_args, output_map)
-
-    def run(self, robot: Robot | ROS2Robot, **kwargs) -> ExecutionResult:
-        if isinstance(robot, ROS2Robot):
-            self.static_args = {
-                "gripper_goal_pos": {
-                    f"{joint}.pos": robot.config.gripper_closed_position[idx]
-                    for idx, joint in enumerate(robot.config.gripper_joint_names)
-                }
-            }
-        else:
-            self.static_args = {
-                "gripper_goal_pos": {joint: 0.0 for joint in robot.config.gripper_joint_names}
-            }  # Assuming 0.0 is the closed position for non-ROS2Robot implementations
-        return super().run(robot=robot, **kwargs)

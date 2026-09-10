@@ -57,6 +57,9 @@ class BaseNode:
 
         return result
 
+    def _apply_override(self, overrides: Dict[str, "BaseNode"]) -> None:
+        """A leaf has nothing to replace; CompositeNode overrides this."""
+
     def run(self, **kwargs) -> ExecutionResult:
-        """To be implemented by subclasses in the Registry."""
+        """To be implemented by subclasses."""
         raise NotImplementedError

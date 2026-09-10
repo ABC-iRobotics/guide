@@ -1,3 +1,3 @@
 # subtasks
 
-Subtasks for the GUIDE-EXO framework.
+Subtasks for the GUIDE-EX framework.
