@@ -77,15 +77,12 @@ dataset:
     - wy: wy
     - wz: wz
 
+# Scene extent around origin, metres: [[x_min, x_max], [y_min, y_max], [z_min, z_max]].
+# Scenes are tiled along y by this box when several are registered.
 limits:
-  xp: 5.0
-  xn: 5.0
-
-  yp: 5.0
-  yn: 5.0
-
-  zp: 5.0
-  zn: 5.0
+  - [-5.0, 5.0]
+  - [-5.0, 5.0]
+  - [-5.0, 5.0]
 
 origin:
   - 0.0

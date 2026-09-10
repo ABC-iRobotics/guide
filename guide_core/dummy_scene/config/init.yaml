@@ -1,5 +1,5 @@
 usd_path: "/dummy.usd"
-limits: {}
+limits: [[0, 0], [0, 0], [0, 0]]
 origin: [0, 0, 0]
 robots: {}
 cameras: {}

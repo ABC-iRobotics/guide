@@ -21,6 +21,7 @@ from guide_core.types.randomization import (
     pose_from_yaml,
     single_grid,
 )
+from guide_core.types.randomization._quat import as_range
 from guide_core.types.scene_context import SceneContext
 from guide_core.types.scene_state import SceneState
 
@@ -153,18 +154,20 @@ class SceneOrchestrator(ABC):
         self._usd_path = self._path.joinpath(self._config["usd_path"].lstrip("/"))
 
     def _get_limits(self):
-        limits: Optional[dict] = self._config.get("limits", None)
+        # limits: [[x_min, x_max], [y_min, y_max], [z_min, z_max]] around the origin
+        limits = self._config.get("limits", None)
 
         assert limits is not None
 
-        # Creating bounding box
+        low, high = as_range(limits)
+        # Creating bounding box; *n entries are distances on the negative side
         self.bounding_box = {
-            "xp": limits.get("xp", 0.0),
-            "xn": limits.get("xn", 0.0),
-            "yp": limits.get("yp", 0.0),
-            "yn": limits.get("yn", 0.0),
-            "zp": limits.get("zp", 0.0),
-            "zn": limits.get("zn", 0.0),
+            "xp": float(high[0]),
+            "xn": float(-low[0]),
+            "yp": float(high[1]),
+            "yn": float(-low[1]),
+            "zp": float(high[2]),
+            "zn": float(-low[2]),
         }
 
     def _get_origin(self):
