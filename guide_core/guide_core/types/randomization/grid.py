@@ -147,7 +147,7 @@ def grid_from_yaml(position_spec: dict | None) -> Grid | None:
     ``grid.enabled``. Returns ``None`` when the position has no enabled grid.
 
     The region is computed the SAME way ``pose_from_yaml`` builds the position
-    ``UniformVec`` (base ``value`` + ``random.low/high``) so the grid tiles exactly
+    ``UniformVec`` (base ``value`` + the ``random`` matrix) so the grid tiles exactly
     the free range.
     """
     if not position_spec:
@@ -157,8 +157,7 @@ def grid_from_yaml(position_spec: dict | None) -> Grid | None:
         return None
     rand = position_spec.get("random")
     if not rand:
-        raise ValueError("a grid requires a position.random low/high range")
+        raise ValueError("a grid requires a position.random [[min, max], ...] range")
     base = _quat.as_vec(position_spec.get("value", [0.0, 0.0, 0.0]), 3)
-    low = base + _quat.as_vec(rand.get("low", [0.0, 0.0, 0.0]), 3)
-    high = base + _quat.as_vec(rand.get("high", [0.0, 0.0, 0.0]), 3)
-    return Grid(low, high, float(grid_cfg.get("resolution", 0.1)))
+    low, high = _quat.as_range(rand)
+    return Grid(base + low, base + high, float(grid_cfg.get("resolution", 0.1)))

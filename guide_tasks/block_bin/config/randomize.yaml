@@ -13,9 +13,10 @@ instructions:
       pose:
         position:
           value: [0.0, 0.0, 0.025]
-          random:
-            low: [-0.25, 0.0, 0.0]
-            high: [0.25, 0.4, 0.0]
+          random:            # [[x_min, x_max], [y_min, y_max], [z_min, z_max]], offsets from value
+            - [-0.25, 0.25]
+            - [0.0, 0.4]
+            - [0.0, 0.0]
           grid:
             enabled: true
             resolution: 0.1
@@ -36,8 +37,9 @@ instructions:
           # zone -> success correlation the stratified dataset is meant to measure.
           # Uncomment (both bins) to restore the original free-bin task.
           # random:
-          #   low: [-0.05, -0.05, 0.0]
-          #   high: [0.05, 0.05, 0.0]
+          #   - [-0.05, 0.05]
+          #   - [-0.05, 0.05]
+          #   - [0.0, 0.0]
         orientation:
           value: [0.0, 0.0, 0.0]
           # random:
@@ -52,8 +54,9 @@ instructions:
         position:
           value: [0.25, 0.4, 0.09]
           # random:
-          #   low: [-0.05, -0.05, 0.0]
-          #   high: [0.05, 0.05, 0.0]
+          #   - [-0.05, 0.05]
+          #   - [-0.05, 0.05]
+          #   - [0.0, 0.0]
         orientation:
           value: [0.0, 0.0, 0.0]
           # random:
