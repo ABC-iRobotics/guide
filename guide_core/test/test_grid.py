@@ -86,7 +86,7 @@ def test_restrict_samples_inside_the_cell():
 def test_grid_from_yaml_builds_region_like_pose_from_yaml():
     spec = {
         "value": [0.45, 0.0, 0.025],
-        "random": {"low": [-0.15, -0.2, 0.0], "high": [0.15, 0.2, 0.0]},
+        "random": [[-0.15, 0.15], [-0.2, 0.2], [0.0, 0.0]],
         "grid": {"enabled": True, "resolution": 0.1},
     }
     g = grid_from_yaml(spec)
@@ -96,8 +96,8 @@ def test_grid_from_yaml_builds_region_like_pose_from_yaml():
 
 def test_grid_from_yaml_absent_or_disabled_returns_none():
     assert grid_from_yaml(None) is None
-    assert grid_from_yaml({"random": {"low": [0, 0, 0], "high": [1, 1, 0]}}) is None
-    assert grid_from_yaml({"grid": {"enabled": False}, "random": {"low": [0, 0, 0], "high": [1, 1, 0]}}) is None
+    assert grid_from_yaml({"random": [[0, 1], [0, 1], [0, 0]]}) is None
+    assert grid_from_yaml({"grid": {"enabled": False}, "random": [[0, 1], [0, 1], [0, 0]]}) is None
 
 
 # --------------------------------------------------------------------------- #

@@ -213,8 +213,9 @@ def pose_from_yaml(pose_spec: dict) -> PoseDist:
 
     Mirrors the semantics previously inlined in
     ``SceneOrchestrator.parse_instruction``: a ``value`` base plus an optional
-    ``random`` block. Position randomization is an absolute uniform range
-    (base +/- low/high); orientation is a base Euler (XYZ, degrees) composed
+    ``random`` block. Position randomization is a uniform range given as a 3x2
+    ``[[min, max], ...]`` matrix of offsets from ``value``; orientation is a base
+    Euler (XYZ, degrees) composed
     with a uniform rotation about ``axis`` up to ``angle`` degrees.
     """
     pose_spec = pose_spec or {}
@@ -223,9 +224,9 @@ def pose_from_yaml(pose_spec: dict) -> PoseDist:
     base_pos = _quat.as_vec(pos_spec.get("value", [0.0, 0.0, 0.0]), 3)
     pos_rand = pos_spec.get("random")
     if pos_rand is not None:
-        low = base_pos + _quat.as_vec(pos_rand.get("low", [0.0, 0.0, 0.0]), 3)
-        high = base_pos + _quat.as_vec(pos_rand.get("high", [0.0, 0.0, 0.0]), 3)
-        position: Distribution = UniformVec(low, high)
+        # random: [[x_min, x_max], [y_min, y_max], [z_min, z_max]], offsets from value
+        low, high = _quat.as_range(pos_rand)
+        position: Distribution = UniformVec(base_pos + low, base_pos + high)
     else:
         position = Constant(base_pos)
 

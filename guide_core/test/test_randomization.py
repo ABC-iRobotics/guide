@@ -111,7 +111,7 @@ def test_spec_roundtrip():
 def test_pose_from_yaml_matches_block_bin_schema():
     spec = {
         "position": {"value": [0.25, -0.4, 0.09],
-                     "random": {"low": [-0.05, -0.05, 0.0], "high": [0.05, 0.05, 0.0]}},
+                     "random": [[-0.05, 0.05], [-0.05, 0.05], [0.0, 0.0]]},
         "orientation": {"random": {"axis": [0.0, 0.0, 1.0], "angle": 180}},
     }
     dist = pose_from_yaml(spec)
