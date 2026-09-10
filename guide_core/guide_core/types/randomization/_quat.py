@@ -22,6 +22,15 @@ def as_vec(arr, n: int | None = None) -> np.ndarray:
     return v
 
 
+def as_range(matrix) -> tuple[np.ndarray, np.ndarray]:
+    """Split a ``[[x_min, x_max], [y_min, y_max], [z_min, z_max]]`` matrix into
+    ``(low, high)`` vectors. An empty/None matrix is the zero range."""
+    m = np.asarray(matrix if matrix else np.zeros((3, 2)), dtype=float)
+    if m.shape != (3, 2):
+        raise ValueError(f"expected a 3x2 [[min, max], ...] matrix, got shape {m.shape}")
+    return m[:, 0].copy(), m[:, 1].copy()
+
+
 def wxyz_to_xyzw(q) -> np.ndarray:
     """Scalar-first ``[w, x, y, z]`` -> SciPy scalar-last ``[x, y, z, w]``."""
     w, x, y, z = as_vec(q, 4)

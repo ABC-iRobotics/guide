@@ -236,3 +236,25 @@ def test_scene_context_json_roundtrip():
     assert again.scene_id == 1 and again.episode_index == 3
     assert again.record.seed == 42 and again.record.values["color"] == "red"
     assert SceneContext.from_json(SceneContext(2).to_json()).record is None
+
+
+# --------------------------------------------------------------------------- #
+# 3x2 [[min, max], ...] ranges: init.yaml `limits` and the pose `random` field
+# --------------------------------------------------------------------------- #
+def test_as_range_splits_min_max_columns():
+    low, high = _quat.as_range([[-1, 2], [-3, 4], [0, 0]])
+    assert low.tolist() == [-1, -3, 0] and high.tolist() == [2, 4, 0]
+    low, high = _quat.as_range([])
+    assert low.tolist() == [0, 0, 0] and high.tolist() == [0, 0, 0]
+    with pytest.raises(ValueError):
+        _quat.as_range([[-1, 2], [-3, 4]])
+
+
+def test_scene_limits_matrix_becomes_bounding_box():
+    from types import SimpleNamespace
+
+    from guide_core.scene.scene_orchestrator import SceneOrchestrator
+
+    scene = SimpleNamespace(_config={"limits": [[-1.0, 2.0], [-3.0, 4.0], [-0.5, 0.5]]})
+    SceneOrchestrator._get_limits(scene)
+    assert scene.bounding_box == {"xp": 2.0, "xn": 1.0, "yp": 4.0, "yn": 3.0, "zp": 0.5, "zn": 0.5}
