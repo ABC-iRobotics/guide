@@ -102,18 +102,18 @@ directory the dataset is written under (leave empty for the default `~/dataset`)
 `counts` are parallel arrays saying how many successful episodes to record per zone:
 
 ```bash
-# 5 free (unstratified) demonstrations — zone -1 means "draw anywhere in the region"
+# 5 free (unstratified) demonstrations — empty zones means "draw anywhere in the region"
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
-  "{path: '', zones: [-1], counts: [5]}"
+  "{path: '', zones: [], counts: [5]}"
 
 # 4 demonstrations with the target cube in zone 2, and 10 in zone 16
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
   "{path: '', zones: [2, 16], counts: [4, 10]}"
 
-# 5 demonstrations in EVERY zone — an empty `zones` sweeps the whole grid
+# 5 demonstrations in EVERY zone — zone -1 sweeps the whole grid
 # (block_bin has 20 zones, so this records 100 episodes)
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
-  "{path: '', zones: [], counts: [5]}"
+  "{path: '', zones: [-1], counts: [5]}"
 ```
 Counts are *successful* episodes: a failed attempt is discarded and retried, so the episode
 count is exact regardless of the task's success rate. The dataset is saved to

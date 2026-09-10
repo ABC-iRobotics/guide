@@ -236,14 +236,17 @@ def test_single_grid_rejects_a_second_grid():
 # --------------------------------------------------------------------------- #
 # Demonstration request -> per-episode zone plan
 # --------------------------------------------------------------------------- #
-def test_zone_plan_free_demos_on_ungridded_scene():
-    # No grid (num_zones == 1): an empty `zones` means N free episodes, not N zoned ones.
+def test_zone_plan_empty_zones_means_free_draws():
+    # Empty `zones` is N free episodes whether or not the scene has a grid.
     assert zone_plan([], [3], num_zones=1) == [None, None, None]
+    assert zone_plan([], [3], num_zones=20) == [None, None, None]
 
 
-def test_zone_plan_empty_zones_sweeps_every_zone():
+def test_zone_plan_minus_one_sweeps_every_zone():
     # The multiplying case: 2 counts over 4 zones is 8 episodes, ascending by zone.
-    assert zone_plan([], [2], num_zones=4) == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert zone_plan([-1], [2], num_zones=4) == [0, 0, 1, 1, 2, 2, 3, 3]
+    # No grid to sweep: -1 degrades to free draws.
+    assert zone_plan([-1], [2], num_zones=1) == [None, None]
 
 
 def test_zone_plan_explicit_zones_and_counts():
@@ -255,9 +258,8 @@ def test_zone_plan_short_counts_falls_back_to_first():
     assert zone_plan([1, 2, 3], [2], num_zones=20) == [1, 1, 2, 2, 3, 3]
 
 
-def test_zone_plan_negative_zone_passes_through():
-    # The free-demo escape hatch survives planning untouched (see test_negative_zone_is_free).
-    assert zone_plan([-1], [3], num_zones=20) == [-1, -1, -1]
+def test_zone_plan_mixes_explicit_zones_with_a_sweep():
+    assert zone_plan([2, -1], [1, 1], num_zones=3) == [2, 0, 1, 2]
 
 
 def test_zone_plan_empty_counts_is_empty():

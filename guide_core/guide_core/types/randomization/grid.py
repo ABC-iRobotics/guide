@@ -117,28 +117,28 @@ def zone_plan(zones, counts, num_zones: int) -> list:
     Returns one entry per episode to record; ``None`` means a free (unstratified)
     draw. Three cases:
 
-    * **Empty ``zones``, ungridded scene** (``num_zones <= 1``) -> ``counts[0]`` free
-      episodes.
-    * **Empty ``zones``, gridded scene** -> ``counts[0]`` episodes in *every* zone,
-      ascending. Note this multiplies: 5 counts over 20 zones is 100 episodes.
+    * **Empty ``zones``** -> ``counts[0]`` free episodes, gridded scene or not.
+    * **``-1`` in ``zones``** -> that entry's count in *every* zone, ascending. Note
+      this multiplies: 5 counts over 20 zones is 100 episodes. On an ungridded scene
+      (``num_zones <= 1``) it is the same as a free draw.
     * **Explicit ``zones``** -> ``counts[i]`` episodes in ``zones[i]``, falling back to
       ``counts[0]`` when ``counts`` is shorter than ``zones``.
 
-    A negative zone is passed through untouched: ``draw_instructions`` only restricts to
-    a cell when ``zone >= 0``, so ``zones=[-1]`` is the free-draw escape hatch on a
-    scene that *does* have a grid.
+    Zones are not range-checked here: an out-of-range zone fails at draw time when
+    ``Grid.cell_bounds`` raises.
     """
     zones = [int(z) for z in zones]
     counts = [int(c) for c in counts]
     if not zones:
-        per = counts[0] if counts else 0
-        if int(num_zones) <= 1:
-            return [None] * per
-        return [z for z in range(int(num_zones)) for _ in range(per)]
+        return [None] * (counts[0] if counts else 0)
     plan = []
     for i, z in enumerate(zones):
         c = counts[i] if i < len(counts) else (counts[0] if counts else 0)
-        plan += [z] * c
+        if z == -1:
+            cells = range(int(num_zones)) if int(num_zones) > 1 else [None]
+            plan += [cell for cell in cells for _ in range(c)]
+        else:
+            plan += [z] * c
     return plan
 
 

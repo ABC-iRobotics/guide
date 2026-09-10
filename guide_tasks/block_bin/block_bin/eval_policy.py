@@ -393,7 +393,7 @@ def episode_plan(zone_spec: str, episodes: int) -> list:
 
     num_zones = scene_num_zones()
     if zone_spec == "all":
-        return zone_plan([], [episodes], num_zones)
+        return zone_plan([-1], [episodes], num_zones)
 
     zones, counts = [], []
     for item in zone_spec.split(","):

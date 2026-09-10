@@ -27,16 +27,16 @@ preserving current code shape. The grid is a first-class, pure, testable type; t
 pipeline threads a zone; distributions stay pure.
 
 Locked decisions: explicit `bool use_zone` on `Randomize.srv`; `Demonstration` carries
-`zones/counts` (an **empty `zones`** is the all-zones signal — the originally planned separate
-`all_zones` flag proved redundant); grid reuses `position.random` low/high in x,y; a `grid:`
+`zones/counts` (a zone of **`-1`** is the all-zones signal — the originally planned separate
+`all_zones` flag proved redundant); grid reuses the `position.random` matrix in x,y; a `grid:`
 block marks the candidate; zoning lands in the existing `block_bin` (§7); **at most one grid
 per scene** for now (see §11).
 
-Note on the `-1` sentinel: `use_zone` stays explicit at the `Randomize` layer, but at the
-`Demonstration` layer a zone of `-1` *is* the free-draw marker, since `zones: []` already
-means "sweep every zone" and there had to be some way to ask a gridded scene for
-unstratified episodes. `draw_instructions` gates on `zone >= 0`, so a negative zone falls
-through to the full range (pinned by `test_negative_zone_is_free`).
+Note on the sentinels: `use_zone` stays explicit at the `Randomize` layer. At the
+`Demonstration` layer an empty `zones` means free (unstratified) draws and a zone of `-1`
+means "every zone"; `zone_plan` expands `-1` before anything reaches the draw. Inside the
+draw, `draw_instructions` gates on `zone >= 0`, so a `None`/negative zone falls through to
+the full range (pinned by `test_negative_zone_is_free`).
 
 ## 2. The grid/zone model
 
@@ -95,7 +95,7 @@ disturbances in the same instruction stay free.
     prim_path: '/blocks/*'          # all four colored blocks
     pose:
       position:
-        random: { low: [0.30, -0.20, 0.025], high: [0.60, 0.20, 0.025] }  # region in front
+        random: [[0.30, 0.60], [-0.20, 0.20], [0.025, 0.025]]   # region in front
         grid: { enabled: true, resolution: 0.1 }   # <-- grid candidate
       orientation:
         random: { axis: [0,0,1], angle: 180 }
@@ -167,19 +167,19 @@ bool success
 **`guide_msgs/srv/Demonstration.srv`**:
 ```
 string path
-int32[] zones           # empty -> ALL zones; else the explicit zones to sample
-int32[] counts          # per-zone counts (parallel with zones); when zones is empty, counts[0] is used for every zone
+int32[] zones           # empty -> free draws; -1 -> ALL zones; else the explicit zones to sample
+int32[] counts          # per-zone counts (parallel with zones); counts[0] is reused when shorter
 ---
 bool success
 string message
 ```
 Semantics:
-- `zones` **empty** → "all zones": generate `counts[0]` demos in every zone
-  (for a scene with no grid, that is `counts[0]` free demos, i.e. a single zone).
-- `zones` **non-empty** → `counts[i]` demos in `zones[i]`.
+- `zones` **empty** → `counts[0]` free (unstratified) demos.
+- `zones` contains **`-1`** → that count in every zone (a scene with no grid: free demos).
+- `zones` **explicit** → `counts[i]` demos in `zones[i]`.
 
-**Not** request-validated, deliberately: `zone_plan` passes any zone through (it must, so
-`-1` can mean "free"), and an out-of-range *positive* zone fails at draw time when
+**Not** request-validated, deliberately: `zone_plan` passes explicit zones through, and an
+out-of-range *positive* zone fails at draw time when
 `Grid.cell_bounds` raises with an explicit `zone N out of range [0, M)`. A short `counts`
 reuses `counts[0]` rather than erroring. Adding request-time bounds checking would need
 `num_zones` at the service layer, which is scene-side state — see the zone-querying service
@@ -187,13 +187,13 @@ in the TODO doc.
 
 **Generation flow** (`block_bin/solve_task.py`):
 - Build a per-episode zone plan via `zone_plan()` (in `grid.py`, so future zoned tasks reuse
-  it): empty zones → `[0]*counts[0] + [1]*counts[0] + …`;
+  it): `zones=[-1]` → `[0]*counts[0] + [1]*counts[0] + …`; `zones=[]` → free draws;
   `zones=[2,16],counts=[4,10] -> [2,2,2,2,16,…]`.
 - Each episode: `Randomize.Request(id, use_zone=True, zone=z)` → solve → record.
 
 **Python wrapper** (task-side helpers):
 - `zoned_request({2: 4, 16: 10}, path="")` → `zones=[2,16], counts=[4,10]`.
-- `all_zones_request(count=10, path="")` → `zones=[], counts=[count]`.
+- `all_zones_request(count=10, path="")` → `zones=[-1], counts=[count]`.
 
 ## 6. Recording the zone (required)
 
@@ -211,9 +211,8 @@ Every episode's metadata must carry its zone:
 
 ## 7. `block_bin` gains a zone grid
 
-Zoning lands in the existing `guide_tasks/block_bin/` rather than a parallel package. An
-earlier draft of this design proposed a separate `block_bin_zoned`; that turned out to be
-unnecessary, because **the grid is inert unless a request asks for a zone** —
+Zoning lands in the existing `guide_tasks/block_bin/` rather than a parallel package,
+because **the grid is inert unless a request asks for a zone** —
 `draw_instructions` only restricts to a cell when `zone >= 0`, and `_cmd_randomize_scene`
 passes `None` unless `Randomize.use_zone` is set. A gridded task therefore still generates
 ordinary free demonstrations, so the split bought nothing and cost a duplicate copy of the
@@ -231,7 +230,7 @@ Changes to `block_bin`:
 - **`solve_task.py`**: zoned generation entry point; `scene_num_zones()` reads the grid from
   the package's own `randomize.yaml` so "all zones" expands to the right count.
 
-Hello-world usage: `{zones: [], counts: [10]}` (10 per zone) or a few chosen zones → a small,
+Hello-world usage: `{zones: [-1], counts: [10]}` (10 per zone) or a few chosen zones → a small,
 countable dataset covering the front region → first VLA agent.
 
 ## 8. File-by-file changes

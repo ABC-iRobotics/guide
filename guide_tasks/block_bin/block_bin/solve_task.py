@@ -502,8 +502,8 @@ def zoned_request(zone_counts: dict, path: str = "") -> Demonstration.Request:
 
 
 def all_zones_request(count: int, path: str = "") -> Demonstration.Request:
-    """`count` demos in EVERY zone (empty ``zones`` signal)."""
-    return Demonstration.Request(path=path, zones=[], counts=[int(count)])
+    """`count` demos in EVERY zone (``zones=[-1]``); ``zones=[]`` would be free draws."""
+    return Demonstration.Request(path=path, zones=[-1], counts=[int(count)])
 
 
 def generate_demos_thread(plan, scene_id, robot, path=""):
