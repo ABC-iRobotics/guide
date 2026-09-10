@@ -1,3 +1,3 @@
 # sequences
 
-Sequences for the GUIDE-EXO framework.
+Sequences for the GUIDE-EX framework.

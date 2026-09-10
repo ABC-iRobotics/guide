@@ -46,7 +46,6 @@ dataset:
     - base: base
     - wrist: wrist
   cartesian_velocity_robot: franka
-  end_effector_name: fr3_hand_tcp
   observations:
     - joint1.pos: franka.fr3_joint1.pos
     - joint2.pos: franka.fr3_joint2.pos

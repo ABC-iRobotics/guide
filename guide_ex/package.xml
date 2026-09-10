@@ -3,7 +3,7 @@
 <package format="3">
   <name>guide_ex</name>
   <version>0.1.0</version>
-  <description>GUIDE-EXO is a framework for high level task specification and execution for robots.</description>
+  <description>GUIDE-EX is a framework for high level task specification and execution for robots.</description>
   <maintainer email="makany.andras@uni-obuda.hu">András Makány</maintainer>
   <license>GPL-3.0-only</license>
 

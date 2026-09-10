@@ -78,22 +78,22 @@ class CompositeNode(BaseNode):
     def _extract_scoped(
         self, target_name: str, overrides: Dict[str, BaseNode]
     ) -> Dict[str, BaseNode]:
-        """Kivonja és megtisztítja az adott node-ra vonatkozó pont-notációs override-okat."""
+        """Return the overrides addressed to `target_name`'s subtree, with the `target_name.` prefix stripped."""
         prefix = f"{target_name}."
         return {k.removeprefix(prefix): v for k, v in overrides.items() if k.startswith(prefix)}
 
     def _apply_override(self, overrides: Dict[str, BaseNode]):
-        """Rekurzívan alkalmazza a felülírásokat a belső struktúrákra."""
+        """Recursively replace children, fallbacks and branches named in `overrides` (dot-notation paths)."""
         if not overrides:
             return
 
-        # 1. Children felülírása
+        # 1. Children
         for i, child in enumerate(self.children):
             if overrides.get(child.name):
                 self.children[i] = overrides[child.name]
             self.children[i]._apply_override(self._extract_scoped(self.children[i].name, overrides))
 
-        # 2. Fallbacks felülírása
+        # 2. Fallbacks
         for key, fallback in list(self.fallbacks.items()):
             if overrides.get(fallback.name):
                 self.fallbacks[key] = overrides[fallback.name]
@@ -101,13 +101,13 @@ class CompositeNode(BaseNode):
                 self._extract_scoped(self.fallbacks[key].name, overrides)
             )
 
-        # 3. Branches felülírása
+        # 3. Branches
         for branch_attr in ["true_branch", "false_branch"]:
             branch = getattr(self, branch_attr)
             if branch:
                 if overrides.get(branch.name):
                     setattr(self, branch_attr, overrides[branch.name])
-                # Frissített referencia lekérése a rekurzióhoz
+                # Re-read the attribute: it may have just been replaced
                 getattr(self, branch_attr)._apply_override(
                     self._extract_scoped(getattr(self, branch_attr).name, overrides)
                 )

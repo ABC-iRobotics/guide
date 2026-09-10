@@ -22,7 +22,7 @@ setup(
     zip_safe=True,
     maintainer="András Makány",
     maintainer_email="makany.andras@uni-obuda.hu",
-    description="GUIDE-EXO is a framework for high level task specification and execution for robots.",
+    description="GUIDE-EX is a framework for high level task specification and execution for robots.",
     license="GPL-3.0-only",
     extras_require={
         "test": [

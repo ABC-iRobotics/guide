@@ -234,8 +234,8 @@ class SceneOrchestrator(ABC):
         relative_path_keywords = ["prim_path", "articulation_root", "scope"]
 
         with path.open("r") as f:
-            file = yaml.safe_load(f)
-        instructions = file.get("instructions", None)
+            file = yaml.safe_load(f) or {}
+        instructions = file.get("instructions") or []
         instruction_list = []
         for instruction in instructions:
             for key, value in instruction.get("kwargs", {}).items():

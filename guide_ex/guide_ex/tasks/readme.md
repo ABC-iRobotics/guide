@@ -1,3 +1,3 @@
 # tasks
 
-Tasks for the GUIDE-EXO framework.
+Tasks for the GUIDE-EX framework.

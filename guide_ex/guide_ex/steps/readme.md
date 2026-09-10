@@ -1,3 +1,3 @@
 # Steps
 
-Steps for the GUIDE-EXO framework.
+Steps for the GUIDE-EX framework.
