@@ -72,7 +72,7 @@ def test_out_of_range_zone_raises():
 
 def test_restrict_samples_inside_the_cell():
     g = Grid([0.0, 0.0, 0.0], [0.3, 0.2, 0.0], 0.1)
-    base = PoseDist(UniformVec([0, 0, 0.025], [0.3, 0.2, 0.025]), AxisAngle([0, 0, 1], 0.0))
+    base = PoseDist(UniformVec([0, 0, 0.025], [0.3, 0.2, 0.025]), AxisAngle([0, 0, 1], (0.0, 0.0)))
     rng = np.random.default_rng(0)
     zone = 4  # col 1, row 1 -> x∈[0.1,0.2], y∈[0.1,0.2]
     for _ in range(200):
@@ -118,7 +118,7 @@ def _blocks_instruction():
             "kwargs": {"prim_path": "/Scene_0/blocks/*"},
             "pose_dist": PoseDist(
                 UniformVec([0.30, -0.20, 0.025], [0.60, 0.20, 0.025]),
-                AxisAngle([0, 0, 1], np.deg2rad(180)),
+                AxisAngle([0, 0, 1], np.deg2rad([-180, 180])),
             ),
             "grid": g,
         }
@@ -170,7 +170,7 @@ def test_zone_none_is_free_for_all():
 def test_non_grid_instruction_ignores_zone():
     instr = [{
         "kwargs": {"prim_path": "/Scene_0/bin_0"},
-        "pose_dist": PoseDist(UniformVec([0, 0, 0], [1, 1, 0]), AxisAngle([0, 0, 1], 0.0)),
+        "pose_dist": PoseDist(UniformVec([0, 0, 0], [1, 1, 0]), AxisAngle([0, 0, 1], (0.0, 0.0))),
     }]  # no "grid"
     draw_instructions(instr, _rzr(0), _builder, prim_resolver=lambda _: [], zone=3, zone_target=None)
     assert np.asarray(instr[0]["kwargs"]["pose"]).shape == (7,)

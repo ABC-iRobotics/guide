@@ -22,7 +22,7 @@ def _pose_dist() -> PoseDist:
     # Mirrors block_bin randomize.yaml: x,y uniform (z fixed) + yaw about Z.
     return PoseDist(
         UniformVec([-0.25, 0.0, 0.025], [0.25, 0.25, 0.025]),
-        AxisAngle([0.0, 0.0, 1.0], float(np.deg2rad(180.0))),
+        AxisAngle([0.0, 0.0, 1.0], np.deg2rad([-180.0, 180.0])),
     )
 
 
