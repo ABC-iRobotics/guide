@@ -24,7 +24,6 @@ import yaml
 from guide_core.types.randomization import _quat
 from guide_core.types.randomization.grid import Grid
 
-EVENT = "guide_randomize"
 
 _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the scene
 
@@ -39,14 +38,21 @@ def is_replicator_yaml(path: Path) -> bool:
 
 
 def prefixed(doc: dict, scene_prefix: str) -> dict:
-    """Return a copy with every ``path_pattern`` made scene-absolute."""
+    """Return a copy with every ``path_pattern`` made scene-absolute and every
+    ``event_name`` made scene-unique, so several scenes can share one task file."""
+    suffix = "_" + scene_prefix.strip("/")
 
     def walk(node):
         if isinstance(node, dict):
-            return {
-                k: (scene_prefix + v if k == "path_pattern" and isinstance(v, str) else walk(v))
-                for k, v in node.items()
-            }
+            out = {}
+            for k, v in node.items():
+                if k == "path_pattern" and isinstance(v, str):
+                    out[k] = scene_prefix + v
+                elif k == "event_name" and isinstance(v, str):
+                    out[k] = v + suffix
+                else:
+                    out[k] = walk(v)
+            return out
         if isinstance(node, list):
             return [walk(v) for v in node]
         return node
@@ -67,18 +73,25 @@ def principal_axis(axis) -> int:
 # --------------------------------------------------------------------------- #
 # the ``rep.guide`` namespace (what a YAML file may name)
 # --------------------------------------------------------------------------- #
-def grid(distribution: str, resolution: float = 0.1):
-    """Declare the zone grid over a *named* uniform position distribution."""
+def zone(distribution: str, path_pattern: str, resolution: float = 0.1):
+    """Declare the zone grid over a *named* uniform position distribution and re-draw the
+    scene's zone target inside its cell. Written inside the trigger block, after the group
+    randomizer, so it evaluates after it; per episode ``draw`` narrows ``path_pattern`` to the
+    target and the bounds to the cell (or the whole region for a free draw)."""
     import omni.graph.core as og
+    import omni.replicator.core as rep
     from omni.replicator.core.scripts.named_nodes import NamedNodes
 
     node = NamedNodes._named_nodes[distribution]
     low = _quat.as_vec(og.AttributeValueHelper(node.get_attribute("inputs:lower")).get(), 3)
     high = _quat.as_vec(og.AttributeValueHelper(node.get_attribute("inputs:upper")).get(), 3)
     g = Grid(low, high, float(resolution))
-    _registered["grid"] = g
-    _registered["region"] = distribution
-    return node
+    prims = rep.get.prims(path_pattern=path_pattern, cache_result=False)
+    with prims:
+        position = rep.distribution.uniform(lower=g.low.tolist(), upper=g.high.tolist())
+        rep.modify.pose(position=position, write_to_usd=True)
+    _registered.update(grid=g, zone_prims=prims.node, zone_position=position.node)
+    return prims
 
 
 def axis_angle(axis, angle):
@@ -107,35 +120,46 @@ def attach() -> None:
 def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
     """Parse the task's Replicator YAML for one scene; returns what the scene keeps."""
     import omni.replicator.core as rep
+    from omni.replicator.core.scripts.named_nodes import NamedNodes
     from omni.replicator.replicator_yaml import parse
 
     attach()
     _registered.clear()
+    _stop_orchestrator()  # a running orchestrator must not have its graph edited
     doc = prefixed(yaml.safe_load(yaml_path.read_text()), scene_prefix)
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
-        yaml.safe_dump(doc, f)
+        yaml.safe_dump(doc, f, sort_keys=False)  # order is evaluation order
         tmp = f.name
+    before = dict(NamedNodes._named_nodes)
     parse(yaml_path=tmp, root_dir=str(yaml_path.parent))
 
     state = dict(_registered)
-    if "grid" in state:
-        # One extra randomizer for the zone target: its prim pattern and bounds are rewritten
-        # every episode; it runs after the group under the same trigger so the target wins.
-        with rep.trigger.on_custom_event(event_name=EVENT):
-            prims = rep.get.prims(path_pattern="__none__", cache_result=False)
-            with prims:
-                position = rep.distribution.uniform(lower=[0.0, 0.0, 0.0], upper=[0.0, 0.0, 0.0])
-                rep.modify.pose(position=position)
-        state["zone_prims"] = prims.node
-        state["zone_position"] = position.node
-    rep.orchestrator.run()
+    state["event"] = _event_name(doc)
+    # this scene's named distributions (the registry is global; names repeat across scenes)
+    state["named"] = {k: v for k, v in NamedNodes._named_nodes.items() if before.get(k) is not v}
     return state
 
 
-def _named(name: str):
-    from omni.replicator.core.scripts.named_nodes import NamedNodes
+def _event_name(doc: dict) -> str:
+    """The (already scene-suffixed) event name of the file's custom-event trigger."""
+    for group in doc.values():
+        if isinstance(group, dict) and "trigger.on_custom_event" in group:
+            return group["trigger.on_custom_event"]["event_name"]
+    raise ValueError("randomize.yaml needs a trigger.on_custom_event group")
 
-    return NamedNodes._named_nodes[name]
+
+def _stop_orchestrator() -> None:
+    import omni.kit.app
+    import omni.replicator.core as rep
+
+    if not rep.orchestrator.get_is_started():
+        return
+    rep.orchestrator.stop()
+    app = omni.kit.app.get_app()
+    for _ in range(60):  # stop() is asynchronous; let it settle
+        app.update()
+        if not rep.orchestrator.get_is_started():
+            break
 
 
 def _set(node, attr: str, value) -> None:
@@ -155,27 +179,43 @@ def draw(state: dict[str, Any], seed: int, zone: int | None, zone_target: str | 
     import omni.replicator.core as rep
     from omni.replicator.core.utils import rng
 
-    rng.set_global_seed(int(seed))
+    import time
+
+    import omni.kit.app
+
+    t0 = time.perf_counter()
+    # A global-seed *change* resets every sampler from (seed, node id) -- through a settings
+    # subscription that runs on the next app update, so pump one before firing the event.
+    rng.set_global_seed(int(seed) % (2**31 - 1))  # the graph's seed slot is 32-bit
+    omni.kit.app.get_app().update()
+    t1 = time.perf_counter()
 
     g: Grid | None = state.get("grid")
-    if g is not None:
-        if zone is not None and zone >= 0 and zone_target:
-            low, high = g.cell_bounds(int(zone))
-            _set(state["zone_prims"], "inputs:pathPattern", re.escape(zone_target))
-            _set(state["zone_position"], "inputs:lower", low.tolist())
-            _set(state["zone_position"], "inputs:upper", high.tolist())
-        else:
-            _set(state["zone_prims"], "inputs:pathPattern", "__none__")
+    if g is not None and zone_target:
+        zoned = zone is not None and zone >= 0
+        low, high = g.cell_bounds(int(zone)) if zoned else (g.low, g.high)
+        _set(state["zone_prims"], "inputs:pathPattern", re.escape(zone_target) + "$")
+        _set(state["zone_position"], "inputs:lower", low.tolist())
+        _set(state["zone_position"], "inputs:upper", high.tolist())
 
-    rep.utils.send_og_event(EVENT)
-    rep.orchestrator.step(rt_subframes=1, pause_timeline=False, wait_for_render=False)
-
-    from omni.replicator.core.scripts.named_nodes import NamedNodes
+    # Started once and kept running: a stopped orchestrator re-initialises on every step()
+    # and evaluates every trigger, which fires the other scenes too and burns RNG state.
+    if not rep.orchestrator.get_is_started():
+        rep.orchestrator.run()
+    rep.utils.send_og_event(state["event"])
+    # With the orchestrator running, the graph evaluates on every app update. The event is
+    # queued and consumed on the *next* evaluation: one update delivers it, the second runs
+    # the randomizers it triggered (verified with scripts/spike_diag.py). orchestrator.step()
+    # would do the same but stalls ~6 s every other call.
+    for _ in range(2):
+        omni.kit.app.get_app().update()
+    t2 = time.perf_counter()
+    print(f"[replicator_guide] seed {t1 - t0:.3f}s  event+2 steps {t2 - t1:.3f}s", flush=True)
 
     samples = {}
-    for name, node in NamedNodes._named_nodes.items():
+    for name, node in state["named"].items():
         try:
             samples[name] = np.asarray(_get(node, "outputs:samples")).tolist()
-        except Exception:  # a named node without samples (get.prims)
+        except Exception:  # a named node without samples
             pass
     return samples

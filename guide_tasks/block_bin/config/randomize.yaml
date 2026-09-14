@@ -10,9 +10,12 @@ place_blocks:
     place_blocks:
       blocks:
         get.prims:
-          path_pattern: '/blocks/.*'
+          path_pattern: '/blocks/[^/]+$'         # the block Xforms only, not their meshes
+          path_pattern_exclusion: 'properties'
       with.blocks:
         modify.pose:
+          write_to_usd: true                     # PhysX teleports on USD writes, not Fabric;
+                                                 # poses stay local to the parent and keep scale
           position:
             distribution.uniform:                # absolute bounds, metres
               lower: [-0.25, 0.0, 0.025]
@@ -31,13 +34,13 @@ place_bins:
   randomizer.register:
     place_bins:
       bin_0:
-        get.prims: { path_pattern: '/bin_0' }
+        get.prims: { path_pattern: '/bin_0$' }
       bin_1:
-        get.prims: { path_pattern: '/bin_1' }
+        get.prims: { path_pattern: '/bin_1$' }
       with.bin_0:
-        modify.pose: { position: [0.25, -0.4, 0.09], rotation: [0, 0, 0] }
+        modify.pose: { position: [0.25, -0.4, 0.09], rotation: [0, 0, 0], write_to_usd: true }
       with.bin_1:
-        modify.pose: { position: [0.25,  0.4, 0.09], rotation: [0, 0, 0] }
+        modify.pose: { position: [0.25,  0.4, 0.09], rotation: [0, 0, 0], write_to_usd: true }
 
 episode:
   trigger.on_custom_event:
@@ -47,8 +50,7 @@ with_episode:
   with.episode:
     randomizer.place_blocks: null
     randomizer.place_bins: null
-
-zones:                                           # after with_episode: the named node exists now
-  guide.grid:
-    distribution: blocks_position                # region = that node's lower/upper
-    resolution: 0.1                              # 5 x 4 = 20 cells, row-major from the min corner
+    guide.zone:                                  # after place_blocks: re-draws the zone target in its cell
+      distribution: blocks_position              # region = that node's lower/upper
+      path_pattern: '/blocks/[^/]+$'             # narrowed to the target prim per episode
+      resolution: 0.1                            # 5 x 4 = 20 cells, row-major from the min corner

@@ -1,12 +1,12 @@
 """Spike: measure Replicator-YAML randomization against the instruction executor.
 
 Runs a headless Isaac Sim from the checked-out guide_core (not the installed one), registers
-the checked-out block_bin by path, and randomizes it repeatedly. With ``--legacy`` the same
-task is copied to a temp dir with the given (instruction-dialect) randomize.yaml, so both
-paths are measured by the same code.
+the checked-out block_bin by path (once per ``--scenes``), and randomizes it repeatedly. With
+``--legacy`` the task is staged with the given instruction-dialect randomize.yaml instead, so
+both paths are measured by the same code. Poses are read from PhysX, not from USD/Fabric.
 
   PYTHONPATH=<guide>/guide_core ~/ros2_ws/.venv/bin/python <guide>/guide_core/scripts/spike_replicator.py \
-      --task <guide>/guide_tasks/block_bin [--legacy <old randomize.yaml>] [--episodes 20]
+      --task <guide>/guide_tasks/block_bin [--legacy <old randomize.yaml>] [--episodes 20] [--scenes 2]
 """
 from __future__ import annotations
 
@@ -24,9 +24,36 @@ import yaml
 COLORS = ("red", "yellow", "green", "blue")
 
 
-def local_xy(rt, prim: str) -> np.ndarray:
-    pose = rt._cmd_get_local_poses(prim_path=prim)
-    return np.asarray(pose.position.to_numpy(), dtype=float)
+def physx_local(prim: str) -> np.ndarray:
+    """Position local to the prim's parent as PhysX sees it (RigidPrim view), i.e. the frame
+    set_local_poses and the yaml bounds are written in -- not the USD/Fabric xformOp."""
+    from isaacsim.core.prims import RigidPrim, XFormPrim
+    from scipy.spatial.transform import Rotation as R
+
+    world = np.asarray(RigidPrim(prim_paths_expr=prim).get_world_poses()[0], dtype=float).reshape(-1)[:3]
+    parent = XFormPrim(prim_paths_expr=prim.rsplit("/", 1)[0])
+    p_pos, p_quat = parent.get_world_poses()
+    p_pos = np.asarray(p_pos, dtype=float).reshape(-1)[:3]
+    w, x, y, z = np.asarray(p_quat, dtype=float).reshape(-1)[:4]
+    return R.from_quat([x, y, z, w]).inv().apply(world - p_pos)
+
+
+def local_scale(prim: str) -> np.ndarray:
+    from isaacsim.core.prims import XFormPrim
+
+    return np.asarray(XFormPrim(prim_paths_expr=prim).get_local_scales(), dtype=float).reshape(-1)[:3]
+
+
+def stage_task(src: Path, legacy: str | None) -> Path:
+    """SceneManager.add_scene's filesystem branch wants scene.py beside config/ and assets/."""
+    task = Path(tempfile.mkdtemp()) / src.name
+    task.mkdir()
+    shutil.copy(src / src.name / "scene.py", task / "scene.py")
+    shutil.copytree(src / "config", task / "config")
+    shutil.copytree(src / "assets", task / "assets")
+    if legacy:
+        shutil.copy(legacy, task / "config" / "randomize.yaml")
+    return task
 
 
 def main() -> None:
@@ -34,19 +61,9 @@ def main() -> None:
     ap.add_argument("--task", required=True)
     ap.add_argument("--legacy", default=None, help="instruction-dialect randomize.yaml to test instead")
     ap.add_argument("--episodes", type=int, default=20)
+    ap.add_argument("--scenes", type=int, default=1)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
-
-    src = Path(args.task).resolve()
-    # SceneManager.add_scene's filesystem branch wants the flat layout (scene.py beside
-    # config/ and assets/, like guide_core/dummy_scene), so stage the task that way.
-    task = Path(tempfile.mkdtemp()) / src.name
-    task.mkdir()
-    shutil.copy(src / src.name / "scene.py", task / "scene.py")
-    shutil.copytree(src / "config", task / "config")
-    shutil.copytree(src / "assets", task / "assets")
-    if args.legacy:
-        shutil.copy(args.legacy, task / "config" / "randomize.yaml")
 
     cfg = yaml.safe_load((Path(__file__).resolve().parents[1] / "config" / "init.yaml").read_text())
     cfg.setdefault("startup", {})["headless"] = True
@@ -59,73 +76,98 @@ def main() -> None:
     sim.init_scene_manager()
     rt = sim._runtime
 
-    t0 = time.perf_counter()
-    sid, _ = rt._cmd_register_scene(str(task))
-    t_register = time.perf_counter() - t0
+    task = stage_task(Path(args.task).resolve(), args.legacy)
+    sids, t_register = [], []
+    for _ in range(args.scenes):
+        t0 = time.perf_counter()
+        sid, _ = rt._cmd_register_scene(str(task))
+        t_register.append(round(time.perf_counter() - t0, 2))
+        sids.append(sid)
     rt._cmd_start()
     rt.update(5)
-    scene = sim._scene_manager._scenes[sid]
-    dialect = "replicator" if getattr(scene, "replicator_yaml", None) else "instructions"
-    blocks = [f"/Scene_{sid}/blocks/{c}_block" for c in COLORS]
 
-    def randomize(**kw):
+    scenes = {sid: sim._scene_manager._scenes[sid] for sid in sids}
+    dialect = "replicator" if getattr(scenes[sids[0]], "replicator_yaml", None) else "instructions"
+    blocks = {sid: [f"/Scene_{sid}/blocks/{c}_block" for c in COLORS] for sid in sids}
+
+    def randomize(sid, **kw):
         t = time.perf_counter()
         rt._cmd_randomize_scene(scene_id=sid, **kw)
         return time.perf_counter() - t
 
-    # 1. determinism: the same seed twice gives the same layout and the same record
-    randomize(seed=123)
-    a = {b: local_xy(rt, b) for b in blocks}
-    rec_a = json.loads(sim._scene_manager.get_last_record_json(sid))
-    randomize(seed=777)  # disturb
-    randomize(seed=123)
-    b = {p: local_xy(rt, p) for p in blocks}
-    rec_b = json.loads(sim._scene_manager.get_last_record_json(sid))
-    deterministic = bool(all(np.allclose(a[p], b[p], atol=1e-6) for p in blocks))
-    same_record = rec_a.get("record") == rec_b.get("record")
+    def layout(sid):
+        return {p: physx_local(p) for p in blocks[sid]}
 
-    # 2. independence: four blocks, four distinct positions
-    pts = np.array([a[p][:2] for p in blocks])
-    dists = [np.linalg.norm(pts[i] - pts[j]) for i in range(4) for j in range(i + 1, 4)]
-    independent = bool(min(dists) > 1e-3)
+    def inside(xy, low, high):
+        return bool(np.all(xy >= low[:2] - 1e-3) and np.all(xy <= high[:2] + 1e-3))
 
-    # 3. cost per episode (free draws)
-    times = [randomize() for _ in range(args.episodes)]
+    def rtf(frames: int = 120) -> float:
+        """Sim seconds per wall second while the app updates freely (physics at step_freq)."""
+        hz = float(cfg.get("startup", {}).get("step_freq", 60.0))
+        t = time.perf_counter()
+        rt.update(frames)
+        return round((frames / hz) / (time.perf_counter() - t), 3)
 
-    # 4. zones: the target block lands in its cell (local xy inside cell bounds)
-    zone_ok = {}
-    grid = getattr(scene, "_grid", None)
-    for z in (0, 7, 19):
-        randomize(use_zone=True, zone=z)
-        target = scene.zone_target()
-        low, high = grid.cell_bounds(z)
-        xy = local_xy(rt, target)[:2]
-        zone_ok[z] = bool(np.all(xy >= low[:2] - 1e-3) and np.all(xy <= high[:2] + 1e-3))
+    report = {"dialect": dialect, "scenes": args.scenes, "register_s": t_register, "rtf_idle": rtf()}
+    scale_before = {sid: local_scale(blocks[sid][0]) for sid in sids}
 
-    # 5. write-back: poses read straight after the call sit inside the region
-    randomize()
-    region_lo, region_hi = (grid.low, grid.high) if grid is not None else (None, None)
-    inside = (
-        bool(all(
-            np.all(local_xy(rt, p)[:2] >= region_lo[:2] - 1e-3) and np.all(local_xy(rt, p)[:2] <= region_hi[:2] + 1e-3)
-            for p in blocks
-        ))
-        if grid is not None
-        else None
-    )
+    for sid in sids:
+        grid = scenes[sid]._grid
+        # determinism: the same seed twice gives the same layout and the same record
+        randomize(sid, seed=123)
+        a = layout(sid)
+        rec_a = json.loads(sim._scene_manager.get_last_record_json(sid))
+        randomize(sid, seed=777)
+        randomize(sid, seed=123)
+        b = layout(sid)
+        rec_b = json.loads(sim._scene_manager.get_last_record_json(sid))
+        # a different seed moves things; four blocks land at four places
+        randomize(sid, seed=1)
+        c = layout(sid)
+        pts = np.array([a[p][:2] for p in blocks[sid]])
+        dists = [np.linalg.norm(pts[i] - pts[j]) for i in range(4) for j in range(i + 1, 4)]
+        # cost
+        times = [randomize(sid) for _ in range(args.episodes)]
+        # zones
+        zone_ok = {}
+        for z in (0, 7, 19):
+            randomize(sid, use_zone=True, zone=z)
+            low, high = grid.cell_bounds(z)
+            zone_ok[z] = inside(physx_local(scenes[sid].zone_target())[:2], low, high)
+        # region + scale after a free draw
+        randomize(sid)
+        report[f"scene_{sid}"] = {
+            "deterministic_same_seed": bool(all(np.allclose(a[p], b[p], atol=1e-3) for p in blocks[sid])),
+            "record_identical": rec_a.get("record") == rec_b.get("record"),
+            "layout_changes_with_seed": bool(any(not np.allclose(a[p], c[p], atol=1e-3) for p in blocks[sid])),
+            "per_prim_independent": bool(min(dists) > 1e-3),
+            "randomize_ms_mean": round(1000 * float(np.mean(times)), 1),
+            "randomize_ms_p95": round(1000 * float(np.percentile(times, 95)), 1),
+            "zone_target_in_cell": zone_ok,
+            "poses_inside_region_after_call": bool(all(inside(physx_local(p)[:2], grid.low, grid.high) for p in blocks[sid])),
+            "scale_preserved": bool(np.allclose(local_scale(blocks[sid][0]), scale_before[sid])),
+            "block_scale": np.round(local_scale(blocks[sid][0]), 4).tolist(),
+            "sample_record_keys": sorted(rec_a.get("record", {}).get("values", {}).keys())[:6],
+        }
 
-    report = {
-        "dialect": dialect,
-        "register_s": round(t_register, 2),
-        "deterministic_same_seed": deterministic,
-        "record_identical": same_record,
-        "per_prim_independent": independent,
-        "randomize_ms_mean": round(1000 * float(np.mean(times)), 1),
-        "randomize_ms_p95": round(1000 * float(np.percentile(times, 95)), 1),
-        "zone_target_in_cell": zone_ok,
-        "poses_inside_region_after_call": inside,
-        "sample_record_keys": sorted(rec_a.get("record", {}).get("values", {}).keys())[:8],
-    }
+    # RTF while randomizing every 60 frames (one call per sim second), all scenes
+    hz = float(cfg.get("startup", {}).get("step_freq", 60.0))
+    t = time.perf_counter()
+    for _ in range(5):
+        for sid in sids:
+            rt._cmd_randomize_scene(scene_id=sid)
+        rt.update(60)
+    report["rtf_randomizing_every_60_frames"] = round((5 * 60 / hz) / (time.perf_counter() - t), 3)
+
+    # cross-talk: randomizing one scene must not move another
+    if len(sids) > 1:
+        s0, s1 = sids[0], sids[1]
+        rt.update(60)  # let PhysX finish resolving any overlapping blocks from the last draw
+        before = layout(s1)
+        randomize(s0, seed=99)
+        after = layout(s1)
+        report["cross_talk_free"] = bool(all(np.allclose(before[p], after[p], atol=1e-3) for p in blocks[s1]))
+
     print(json.dumps(report, indent=1))
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=1))
