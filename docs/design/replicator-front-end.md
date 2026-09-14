@@ -1,74 +1,90 @@
 # Replicator YAML as the randomization front-end — spike findings
 
-Branch `spike/replicator-yaml` (throwaway). Measured on 2026-09-14 with Isaac Sim 6.0.1,
-`omni.replicator.core` 1.13.27, `omni.replicator.replicator_yaml` 2.0.12, headless, one
-scene, block_bin, 20 free episodes plus seeded and zoned ones. Script:
-`guide_core/scripts/spike_replicator.py`; results `spike_replicator.json` / `spike_legacy.json`.
+Branch `spike/replicator-yaml` (throwaway). Isaac Sim 6.0.1, `omni.replicator.core` 1.13.27,
+`omni.replicator.replicator_yaml` 2.0.12. Headless measurements via
+`guide_core/scripts/spike_replicator.py` (results: `spike_replicator.json`,
+`spike_replicator_2scenes.json`, `spike_legacy.json`); the window demo via
+`spike_show.py`; the trigger-latency probe via `spike_diag.py`. Measured 2026-09-14.
 
 ## What was built
 
 - `randomize.yaml` in Replicator YAML: native `distribution.uniform` for position (absolute
-  bounds) and Euler rotation, both *named*; prim groups inside the registered randomizers;
-  `trigger.on_custom_event`; one GUIDE key, `guide.grid`, declared after the trigger block.
-- `guide_core/types/randomization/replicator_guide.py`: attaches `rep.guide` (`grid`,
-  `axis_angle`), prefixes `path_pattern`s with `/Scene_<id>`, parses after the USD is on the
-  stage, builds one extra zone randomizer (a `get.prims` with `cache_result=False` plus a
-  uniform node), and per episode seeds Replicator, rewrites that randomizer's pattern and bounds
-  from `Grid.cell_bounds`, fires the event, steps one frame, reads the named samples into the
-  `RandomizationRecord`.
+  bounds, local to the prim's parent) and Euler rotation, both *named*; prim groups declared
+  inside their registered randomizers; `trigger.on_custom_event`; one GUIDE key,
+  `guide.zone`, written inside the trigger block after `randomizer.place_blocks`.
+- `guide_core/types/randomization/replicator_guide.py`: attaches `rep.guide` (`zone`,
+  `axis_angle`); prefixes `path_pattern`s with `/Scene_<id>` and suffixes `event_name`s with the
+  scene; parses after the scene's USD is on the stage (stopping a running orchestrator first);
+  per episode re-seeds Replicator, narrows the zone randomizer to the scene's target and its
+  cell, fires the scene's event and reads the named samples into the `RandomizationRecord`.
 - `SceneOrchestrator`: a `randomize.yaml` without `instructions:` takes this path; `reset.yaml`
   and `success.yaml` are untouched.
 
-## Results
+## Results (headless, block_bin, 20 free episodes + seeded + zoned)
 
-| Measurement | Replicator YAML | Instruction executor |
-|---|---|---|
-| Same seed twice → same poses and same record | yes | yes |
-| Four blocks → four independent positions | yes | yes |
-| `Randomize` call, mean / p95 | 72.7 ms / 82.7 ms | 12.3 ms / 14.7 ms |
-| Zone target inside its cell, zones 0 / 7 / 19 | yes / yes / yes | yes / yes / yes |
-| Poses applied when the call returns | yes | yes |
-| Record contents | `color`, `side`, `replicator/blocks_position`, `replicator/blocks_rotation` (per-prim sample lists) | `color`, `side`, one 7-vector per prim path |
-| Scene registration | 4.8 s | 4.5 s |
+| Measurement | Replicator, 1 scene | Replicator, 2 scenes | Executor, 1 scene |
+|---|---|---|---|
+| Same seed twice → same PhysX poses and same record | yes | yes / yes | yes |
+| Four blocks → four independent positions | yes | yes / yes | yes |
+| Zone target inside its cell (zones 0, 7, 19) | 3/3 | 3/3 and 3/3 | 3/3 |
+| Poses inside the region, in the `/blocks` frame, when the call returns | yes | yes / yes | yes |
+| Block scale unchanged (0.0515) | yes | yes / yes | yes |
+| Randomizing one scene leaves the other alone | — | yes | — |
+| `Randomize` call, mean / p95 | 198 / 204 ms | 337 / 346 ms | 10.5 / 10.7 ms |
+| RTF idle (app updating freely) | 0.256 | — | 0.250 |
+| RTF with one randomization per sim second | 0.239 | — | 0.247 |
 
-The 60 ms difference is one orchestrator step (an app frame) per episode; against an episode
-of many seconds it is noise.
+A Replicator randomization costs three app frames — one so the seed reset lands, one to
+deliver the event, one to run the randomizers — which is where its ~200 ms per call comes from
+(the executor advances no frames). At one call per sim second that is a 3 % RTF cost; per
+episode it is noise.
 
-## What the spike settled
+**Reaction speed:** the custom event is consumed on the *next* graph evaluation, and the
+randomizers run on the one after — the new layout is in PhysX two frames after the event
+(33 ms of sim time at 60 Hz; 130 ms wall with one scene, 220 ms with two).
 
-- **Custom keys work as a `rep.guide` namespace.** The parser resolves anything reachable from
-  `omni.replicator.core` by attribute, so a module attached as `rep.guide` is a first-class
-  key; `guide.grid` read the named node's bounds and built the existing `Grid`.
-- **Zones need no custom OmniGraph node.** Rewriting `inputs:pathPattern` and
-  `inputs:lower/upper` between triggers works, provided the prim node is created with
-  `cache_result=False`.
-- **Determinism** under `rep.utils.rng.set_global_seed` per episode holds for the same seed,
-  including the record read back from the named nodes.
-- **Recording** the drawn values is native: `name:` on a distribution, then
-  `outputs:samples` after the step.
-- **Timing**: `rep.orchestrator.step()` from inside the runtime's command handler is safe (same
-  thread as the loop, no re-entrant callback).
+## What the spike settled — including the wrong turns
 
-## What it did not settle / gaps
+- `modify.pose` writes to **Fabric** by default; PhysX never sees it. `write_to_usd: true` is
+  required for rigid bodies to teleport (the first demo showed unmoved blocks while the
+  read-back said "moved" — it was reading Fabric).
+- Do **not** use `relative_to`: it switches `modify.pose` from `UPDATE_*` tokens (update the
+  local transform in place — parent-relative, scale-preserving, exactly `set_local_poses`) to
+  composing from identity, which drops the prims' scale (the giant cubes).
+- `get.prims(path_pattern=…)` is a regex *search*: `/bin_0` also matched the bin's `Visuals`
+  and shader prims. Anchor with `$`; use `[^/]+$` for direct children.
+- `/Scene/blocks` carries a `rotateZYX (0,0,−90)`: the yaml region is in the `/blocks` frame,
+  as the executor's local poses always were. A world-minus-origin read-back is wrong.
+- Custom events are consumed one evaluation late; a randomizer written on a *second* trigger
+  node under the same event has no ordering guarantee against the first, so the zone re-draw
+  must be declared in the YAML's own trigger block after the group.
+- The orchestrator must be **started once and kept running**: a stopped orchestrator
+  re-initialises on every `step()` and evaluates every trigger (all scenes fire, RNG state
+  burns). Its graph must not be edited while running — stop it around a later scene's parse.
+  `orchestrator.step()` stalled ~6 s every other call; plain app updates do not.
+- A global-seed change resets every sampler from `(seed, node id)` through a settings
+  subscription that lands on the next app update; pump one before firing the event. The seed
+  slot is 32-bit.
+- `yaml.safe_dump` sorts keys by default; evaluation order is file order, so `sort_keys=False`.
+- Several scenes share one task file: events get a scene suffix, and each scene keeps the
+  handles of its own named nodes (the registry is global and names repeat).
+- The ROS 2 camera topics (`/Sim_0/Scene_N/cam_{top,base,wrist}`, `camera_info`,
+  `franka/joint_states`, `tf`) publish for every scene during the runs.
 
-- **Injection** (reproducing a stored layout by feeding recorded values back) has no Replicator
-  path; it would need a node that emits given values instead of sampling.
-- **Arbitrary axis-angle rotation** is not expressible with native nodes; `guide.axis_angle`
-  covers principal axes only.
-- **Sample order**: `outputs:samples` is one list per named node in the order the prim group
-  matched; the record does not carry the prim paths next to the values. A `zip` with the
-  group's resolved prims is needed before it is as self-describing as today's record.
-- **`scene_num_zones()`** in `block_bin/solve_task.py` still reads the grid from the
-  instruction dialect; with this file it returns 1, so `zones: [-1]` collapses to one free
-  episode. The scene's `_grid` is correct; the solver-side helper would need to ask the scene.
-- Pre-existing, seen in both dialects: `/blocks/*` (and `/blocks/.*`) also matches the
-  `/blocks/properties` Xform, which is randomized like a block.
-- Not measured: multi-scene registration (one graph per scene), and behaviour with cameras
-  publishing, which adds render load to the orchestrator step.
+## Gaps
+
+- Injecting recorded values to reproduce a layout has no native path (custom node).
+- `guide.axis_angle` covers principal axes only.
+- Samples are recorded per named node in prim-match order without the prim paths.
+- `scene_num_zones()` in `block_bin/solve_task.py` still reads the instruction dialect.
+- Pre-existing, both dialects: `/blocks/*` also matches `/blocks/properties`; a second scene
+  logs "Failed to add robot /Scene_1/fr3 … name is not unique"; `add_scene`'s filesystem branch
+  expects the flat `dummy_scene` layout; a headless `SimulationApp.close()` sometimes leaves
+  the interpreter alive.
 
 ## Recommendation
 
-Adopt Replicator YAML for the *randomize* file as an additive dialect, native-first as built
-here, keeping the instruction executor for reset and success. Before it leaves the spike:
-carry prim paths in the record, teach `scene_num_zones()` to read the scene's grid, and decide
-whether value injection is still required (it is the one feature that needs a custom node).
+Adopt Replicator YAML for the *randomize* file, native-first as built here, keeping the
+instruction executor for reset and success. Before it leaves the spike: carry prim paths in
+the record, teach `scene_num_zones()` to ask the scene, and decide whether value injection is
+still required.
