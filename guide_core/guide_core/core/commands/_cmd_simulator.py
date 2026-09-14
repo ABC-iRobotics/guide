@@ -129,4 +129,8 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 path=f'{scene_path}/Graph{camera.get("path", "/cam")}_tf_graph',
             )
 
+    scene = simulator._scene_manager._scenes[id]
+    if getattr(scene, "replicator_yaml", None) is not None:
+        scene.build_replicator()
+
     return id, offset

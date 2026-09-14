@@ -1,62 +1,54 @@
-# block_bin: the color-selected cube is placed in the requested zone; the other
-# blocks are free disturbances; the bins are FIXED (not randomized).
-# Grid: region [-0.25, 0.0] .. [0.25, 0.4] (in front of the robot), 0.1 m cells
-# -> 5 columns x 4 rows = 20 zones (row-major, 0-indexed from the min corner).
-#
-# The grid is INERT for free demos: draw_instructions only consults it when the
-# Randomize request sets use_zone=true, so unzoned generation draws uniformly
-# over the whole region exactly as before.
-instructions:
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/blocks/*'
-      pose:
-        position:
-          value: [0.0, 0.0, 0.025]
-          random:
-            low: [-0.25, 0.0, 0.0]
-            high: [0.25, 0.4, 0.0]
-          grid:
-            enabled: true
-            resolution: 0.1
-        orientation:
-          random:
-            axis: [0.0, 0.0, 1.0]
-            angle: 180
-    parallel: false
+# block_bin randomization in Replicator YAML (spike). Every key is <module>.<function> under
+# omni.replicator.core; `guide.*` is GUIDE's namespace. Paths are scene-relative: GUIDE prefixes
+# /Scene_<id> before parsing. The bins are fixed; the blocks are drawn independently, one draw
+# per prim, and the colour-selected block is re-placed in the requested zone by GUIDE after
+# this group (see replicator_guide.draw). Groups a randomizer uses are declared inside it: the
+# parser evaluates a registered body when the randomizer is called, not where it is written.
 
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/bin_0'
-      pose:
-        position:
-          value: [0.25, -0.4, 0.09]
-          # Bin randomization, disabled for zoned generation: a moving bin makes the
-          # place target vary independently of the cube's zone, which muddies the
-          # zone -> success correlation the stratified dataset is meant to measure.
-          # Uncomment (both bins) to restore the original free-bin task.
-          # random:
-          #   low: [-0.05, -0.05, 0.0]
-          #   high: [0.05, 0.05, 0.0]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-          # random:
-          #   axis: [0.0, 0.0, 1.0]
-          #   angle: 180
-    parallel: false
+place_blocks:
+  randomizer.register:
+    place_blocks:
+      blocks:
+        get.prims:
+          path_pattern: '/blocks/.*'
+      with.blocks:
+        modify.pose:
+          position:
+            distribution.uniform:                # absolute bounds, metres
+              lower: [-0.25, 0.0, 0.025]
+              upper: [ 0.25, 0.4, 0.025]
+              name: blocks_position              # named: samples are recorded per episode
+          rotation:
+            distribution.uniform:                # Euler XYZ, degrees
+              lower: [0, 0, -180]
+              upper: [0, 0,  180]
+              name: blocks_rotation
+          # equivalent axis-angle form for the same slot:
+          # rotation:
+          #   guide.axis_angle: { axis: [0, 0, 1], angle: [-180, 180] }
 
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/bin_1'
-      pose:
-        position:
-          value: [0.25, 0.4, 0.09]
-          # random:
-          #   low: [-0.05, -0.05, 0.0]
-          #   high: [0.05, 0.05, 0.0]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-          # random:
-          #   axis: [0.0, 0.0, 1.0]
-          #   angle: 180
-    parallel: false
+place_bins:
+  randomizer.register:
+    place_bins:
+      bin_0:
+        get.prims: { path_pattern: '/bin_0' }
+      bin_1:
+        get.prims: { path_pattern: '/bin_1' }
+      with.bin_0:
+        modify.pose: { position: [0.25, -0.4, 0.09], rotation: [0, 0, 0] }
+      with.bin_1:
+        modify.pose: { position: [0.25,  0.4, 0.09], rotation: [0, 0, 0] }
+
+episode:
+  trigger.on_custom_event:
+    event_name: guide_randomize                  # fired once per Randomize call
+
+with_episode:
+  with.episode:
+    randomizer.place_blocks: null
+    randomizer.place_bins: null
+
+zones:                                           # after with_episode: the named node exists now
+  guide.grid:
+    distribution: blocks_position                # region = that node's lower/upper
+    resolution: 0.1                              # 5 x 4 = 20 cells, row-major from the min corner

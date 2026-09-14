@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 
 from guide_core.scene.scene_recorder import SceneRecorder
 from guide_core.types.geometry import Point, Pose, Rotation
+from guide_core.types.randomization import replicator_guide
 from guide_core.types.randomization import (
     RandomizationRecord,
     Randomizer,
@@ -90,8 +91,14 @@ class SceneOrchestrator(ABC):
         # Getting reset.yaml
         self.reset_instructions = self.parse_instruction(Path(f"{path}/{reset_path}"))
 
-        # Getting randomize.yaml
-        self.randomize_instructions = self.parse_instruction(Path(f"{path}/{randomize_path}"))
+        # Getting randomize.yaml -- either the instruction list or the Replicator dialect
+        # (spike: see types/randomization/replicator_guide.py).
+        randomize_file = Path(f"{path}/{randomize_path}")
+        self.replicator_yaml = randomize_file if replicator_guide.is_replicator_yaml(randomize_file) else None
+        self._replicator_state = None
+        self.randomize_instructions = (
+            [] if self.replicator_yaml else self.parse_instruction(randomize_file)
+        )
 
         # At most one grid-enabled instruction per scene (raises on a second).
         self._grid = single_grid(self.randomize_instructions)
@@ -347,6 +354,10 @@ class SceneOrchestrator(ABC):
             zone_target=self.zone_target(),
         )
 
+        if self.replicator_yaml is not None:
+            samples = replicator_guide.draw(self._replicator_state, used, zone, self.zone_target())
+            record.values.update({f"replicator/{k}": v for k, v in samples.items()})
+
         self._last_context = SceneContext(
             scene_id=self._scene_id,
             episode_index=self._episode_index,
@@ -355,6 +366,11 @@ class SceneOrchestrator(ABC):
         )
         self._episode_index += 1
         return self._last_context
+
+    def build_replicator(self) -> None:
+        """Parse the Replicator dialect once the scene's USD is on the stage."""
+        self._replicator_state = replicator_guide.build(self.replicator_yaml, f"/Scene_{self._scene_id}")
+        self._grid = self._replicator_state.get("grid")
 
     @staticmethod
     def _pose_from_vec7(vec) -> Pose:
