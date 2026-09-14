@@ -37,14 +37,14 @@ import omni.replicator.core as rep  # noqa: E402
 from guide_core.types.randomization import replicator_guide as rg  # noqa: E402
 
 scenes = {sid: sim._scene_manager._scenes[sid] for sid in sids}
-print("[diag] events:", {sid: scenes[sid]._replicator_state["event"] for sid in sids}, flush=True)
+print("[diag] events:", {sid: scenes[sid].replicator["randomize"]["event"] for sid in sids}, flush=True)
 graph = rep.utils.get_graph()
 for node in graph.get_nodes():
     if "OnCustomEvent" in node.get_type_name():
         print("[diag] trigger node", node.get_prim_path(), "eventName =", og.AttributeValueHelper(node.get_attribute("inputs:eventName")).get(), flush=True)
 
 def samples(sid):
-    st = scenes[sid]._replicator_state
+    st = scenes[sid].replicator["randomize"]
     return {k: np.asarray(rg._get(v, "outputs:samples")).ravel()[:3].round(3).tolist() for k, v in st["named"].items()}
 
 if not rep.orchestrator.get_is_started():
@@ -52,7 +52,7 @@ if not rep.orchestrator.get_is_started():
 rep.orchestrator.step(rt_subframes=1, pause_timeline=False, wait_for_render=False)
 print("[diag] before:", {sid: samples(sid) for sid in sids}, flush=True)
 t = time.perf_counter()
-rep.utils.send_og_event(scenes[sids[0]]._replicator_state["event"])
+rep.utils.send_og_event(scenes[sids[0]].replicator["randomize"]["event"])
 rep.orchestrator.step(rt_subframes=1, pause_timeline=False, wait_for_render=False)
 print(f"[diag] step took {time.perf_counter() - t:.2f}s", flush=True)
 print("[diag] after scene0 event:", {sid: samples(sid) for sid in sids}, flush=True)

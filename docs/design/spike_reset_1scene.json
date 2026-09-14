@@ -1,0 +1,56 @@
+{
+ "dialect": "replicator",
+ "scenes": 1,
+ "register_s": [
+  6.41
+ ],
+ "rtf_idle": 0.253,
+ "scene_0": {
+  "deterministic_same_seed": true,
+  "record_identical": true,
+  "layout_changes_with_seed": true,
+  "per_prim_independent": true,
+  "randomize_ms_mean": 199.7,
+  "randomize_ms_p95": 203.4,
+  "zone_target_in_cell": {
+   "0": true,
+   "7": true,
+   "19": true
+  },
+  "poses_inside_region_after_call": true,
+  "scale_preserved": true,
+  "block_scale": [
+   0.0515,
+   0.0515,
+   0.0515
+  ],
+  "sample_record_keys": [
+   "color",
+   "replicator/blocks_position",
+   "replicator/blocks_rotation",
+   "side"
+  ]
+ },
+ "rtf_randomizing_every_60_frames": 0.238,
+ "reset_scene_0": {
+  "poses_at_home": {
+   "/Scene_0/blocks/red_block": true,
+   "/Scene_0/blocks/yellow_block": true,
+   "/Scene_0/blocks/green_block": true,
+   "/Scene_0/blocks/blue_block": true,
+   "/Scene_0/bin_0": true,
+   "/Scene_0/bin_1": true
+  },
+  "still_at_home_after_30_frames": {
+   "/Scene_0/blocks/red_block": true,
+   "/Scene_0/blocks/yellow_block": true,
+   "/Scene_0/blocks/green_block": true,
+   "/Scene_0/blocks/blue_block": true,
+   "/Scene_0/bin_0": true,
+   "/Scene_0/bin_1": true
+  },
+  "arm_frames_to_home_1deg": 34,
+  "idempotent": true,
+  "reset_ms": 168.9
+ }
+}

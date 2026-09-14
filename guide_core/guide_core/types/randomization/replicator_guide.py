@@ -32,7 +32,7 @@ _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the 
 # pure helpers
 # --------------------------------------------------------------------------- #
 def is_replicator_yaml(path: Path) -> bool:
-    """A randomize file without an ``instructions`` key is the Replicator dialect."""
+    """An instruction file without an ``instructions`` key is the Replicator dialect."""
     doc = yaml.safe_load(path.read_text()) or {}
     return isinstance(doc, dict) and bool(doc) and "instructions" not in doc
 
@@ -174,20 +174,26 @@ def _get(node, attr: str):
     return og.AttributeValueHelper(node.get_attribute(attr)).get()
 
 
-def draw(state: dict[str, Any], seed: int, zone: int | None, zone_target: str | None) -> dict:
-    """Seed, zone, fire the trigger, step one frame; return the named samples."""
-    import omni.replicator.core as rep
-    from omni.replicator.core.utils import rng
-
+def fire(
+    state: dict[str, Any],
+    seed: int | None = None,
+    zone: int | None = None,
+    zone_target: str | None = None,
+) -> dict:
+    """Seed (if given), aim the zone randomizer, fire the file's trigger, let it run; return
+    the named samples. Used for randomize (seeded, zoned) and reset (neither)."""
     import time
 
     import omni.kit.app
+    import omni.replicator.core as rep
+    from omni.replicator.core.utils import rng
 
     t0 = time.perf_counter()
-    # A global-seed *change* resets every sampler from (seed, node id) -- through a settings
-    # subscription that runs on the next app update, so pump one before firing the event.
-    rng.set_global_seed(int(seed) % (2**31 - 1))  # the graph's seed slot is 32-bit
-    omni.kit.app.get_app().update()
+    if seed is not None:
+        # A global-seed *change* resets every sampler from (seed, node id) -- through a
+        # settings subscription that runs on the next app update, so pump one before firing.
+        rng.set_global_seed(int(seed) % (2**31 - 1))  # the graph's seed slot is 32-bit
+        omni.kit.app.get_app().update()
     t1 = time.perf_counter()
 
     g: Grid | None = state.get("grid")
@@ -210,7 +216,7 @@ def draw(state: dict[str, Any], seed: int, zone: int | None, zone_target: str | 
     for _ in range(2):
         omni.kit.app.get_app().update()
     t2 = time.perf_counter()
-    print(f"[replicator_guide] seed {t1 - t0:.3f}s  event+2 steps {t2 - t1:.3f}s", flush=True)
+    print(f"[replicator_guide] {state['event']}: seed {t1 - t0:.3f}s  event+2 updates {t2 - t1:.3f}s", flush=True)
 
     samples = {}
     for name, node in state["named"].items():

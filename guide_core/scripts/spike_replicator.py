@@ -30,7 +30,11 @@ def physx_local(prim: str) -> np.ndarray:
     from isaacsim.core.prims import RigidPrim, XFormPrim
     from scipy.spatial.transform import Rotation as R
 
-    world = np.asarray(RigidPrim(prim_paths_expr=prim).get_world_poses()[0], dtype=float).reshape(-1)[:3]
+    try:
+        view = RigidPrim(prim_paths_expr=prim)
+    except Exception:  # not a rigid body (the bins): the xform is all there is
+        view = XFormPrim(prim_paths_expr=prim)
+    world = np.asarray(view.get_world_poses()[0], dtype=float).reshape(-1)[:3]
     parent = XFormPrim(prim_paths_expr=prim.rsplit("/", 1)[0])
     p_pos, p_quat = parent.get_world_poses()
     p_pos = np.asarray(p_pos, dtype=float).reshape(-1)[:3]
@@ -44,7 +48,7 @@ def local_scale(prim: str) -> np.ndarray:
     return np.asarray(XFormPrim(prim_paths_expr=prim).get_local_scales(), dtype=float).reshape(-1)[:3]
 
 
-def stage_task(src: Path, legacy: str | None) -> Path:
+def stage_task(src: Path, legacy: str | None, legacy_reset: str | None = None) -> Path:
     """SceneManager.add_scene's filesystem branch wants scene.py beside config/ and assets/."""
     task = Path(tempfile.mkdtemp()) / src.name
     task.mkdir()
@@ -53,6 +57,8 @@ def stage_task(src: Path, legacy: str | None) -> Path:
     shutil.copytree(src / "assets", task / "assets")
     if legacy:
         shutil.copy(legacy, task / "config" / "randomize.yaml")
+    if legacy_reset:
+        shutil.copy(legacy_reset, task / "config" / "reset.yaml")
     return task
 
 
@@ -60,8 +66,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True)
     ap.add_argument("--legacy", default=None, help="instruction-dialect randomize.yaml to test instead")
+    ap.add_argument("--legacy-reset", default=None, help="instruction-dialect reset.yaml to test instead")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--scenes", type=int, default=1)
+    ap.add_argument("--reset", action="store_true", help="also measure the reset file")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -76,7 +84,7 @@ def main() -> None:
     sim.init_scene_manager()
     rt = sim._runtime
 
-    task = stage_task(Path(args.task).resolve(), args.legacy)
+    task = stage_task(Path(args.task).resolve(), args.legacy, args.legacy_reset)
     sids, t_register = [], []
     for _ in range(args.scenes):
         t0 = time.perf_counter()
@@ -87,7 +95,7 @@ def main() -> None:
     rt.update(5)
 
     scenes = {sid: sim._scene_manager._scenes[sid] for sid in sids}
-    dialect = "replicator" if getattr(scenes[sids[0]], "replicator_yaml", None) else "instructions"
+    dialect = "replicator" if scenes[sids[0]].replicator_files else "instructions"
     blocks = {sid: [f"/Scene_{sid}/blocks/{c}_block" for c in COLORS] for sid in sids}
 
     def randomize(sid, **kw):
@@ -158,6 +166,80 @@ def main() -> None:
             rt._cmd_randomize_scene(scene_id=sid)
         rt.update(60)
     report["rtf_randomizing_every_60_frames"] = round((5 * 60 / hz) / (time.perf_counter() - t), 3)
+
+    if args.reset:
+        import re as _re
+
+        home = yaml.safe_load((task / "config" / "reset.yaml").read_text())
+        rt.update(30)
+        for sid in sids:
+            want = {}
+            if "instructions" in home:
+                for ins in home["instructions"]:
+                    kw = ins.get("kwargs", {})
+                    if ins["cmd"] == "set_local_poses":
+                        want[f"/Scene_{sid}{kw['prim_path']}"] = np.asarray(kw["pose"]["position"]["value"], dtype=float)
+            else:  # every registered body: with.<group> -> modify.pose constants
+                for group in home.values():
+                    for body in (group.get("randomizer.register") or {}).values():
+                        for key, entry in body.items():
+                            m = _re.match(r"with\.(\w+)$", key)
+                            if m and isinstance(entry, dict) and "modify.pose" in entry:
+                                pat = body[m.group(1)]["get.prims"]["path_pattern"].rstrip("$")
+                                want[f"/Scene_{sid}{pat}"] = np.asarray(entry["modify.pose"]["position"], dtype=float)
+            robot = rt._robots[f"/Scene_{sid}/fr3"]
+            try:  # Isaac 6.0 Robot has no is_initialized; initialize() is idempotent enough
+                robot.initialize()
+            except Exception as e:  # noqa: BLE001
+                print(f"[spike] robot.initialize: {e}", flush=True)
+            print(f"[spike] dof_names Scene_{sid}: {list(robot.dof_names)}", flush=True)
+            # disturb: a free randomize, then move the arm off home
+            randomize(sid)
+            rt.update(30)
+            t = time.perf_counter()
+            rt._cmd_reset_scene(scene_id=sid)
+            ms = 1000 * (time.perf_counter() - t)
+            rt.update(2)
+            def at_home(p):
+                # reset.yaml parks bin_1 on the block row, so PhysX pushes the blocks 1-3 cm
+                # aside on either dialect; a block written at z=0.025 rests at 0.041.
+                got = physx_local(p)
+                return bool(np.allclose(got[:2], want[p][:2], atol=0.05) and abs(got[2] - want[p][2]) < 0.03)
+
+            pose_ok = {p: at_home(p) for p in want}
+            print(f"[spike] after reset: " + "; ".join(f"{p.split('/')[-1]} got {physx_local(p).round(3).tolist()} want {want[p].tolist()}" for p in want), flush=True)
+            rt.update(30)  # still at home after half a second: no residual motion
+            settled = {p: at_home(p) for p in want}
+            # arm: frames until every DOF is within 1 degree of the reset targets
+            targets = np.deg2rad([0.0, -45.0, 0.0, -135.0, 0.0, 90.0, 45.0])
+            frames = None
+            for f in range(600):
+                q = np.asarray(robot.get_joint_positions(), dtype=float).ravel()[:7]
+                if np.all(np.abs(q - targets) < np.deg2rad(1.0)):
+                    frames = f
+                    break
+                rt.update(1)
+            # idempotence: reset -> randomize -> reset lands on the same poses
+            randomize(sid)
+            rt._cmd_reset_scene(scene_id=sid)
+            rt.update(2)
+            again = {p: at_home(p) for p in want}
+            report[f"reset_scene_{sid}"] = {
+                "poses_at_home": pose_ok,
+                "still_at_home_after_30_frames": settled,
+                "arm_frames_to_home_1deg": frames,
+                "idempotent": all(again.values()),
+                "reset_ms": round(ms, 1),
+            }
+        if len(sids) > 1:
+            s0, s1 = sids[0], sids[1]
+            randomize(s1)
+            rt.update(60)
+            before = layout(s1)
+            rt._cmd_reset_scene(scene_id=s0)
+            rt.update(2)
+            after = layout(s1)
+            report["reset_cross_talk_free"] = bool(all(np.allclose(before[p], after[p], atol=1e-3) for p in blocks[s1]))
 
     # cross-talk: randomizing one scene must not move another
     if len(sids) > 1:

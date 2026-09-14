@@ -1,68 +1,71 @@
-instructions:
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/blocks/red_block'
-      pose:
-        position:
-          value: [0.25, -0.4, 0.025]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
+# block_bin reset in Replicator YAML (spike). Runs on the /Sim_*/Reset service. Native nodes
+# only: fixed poses via modify.pose (written to USD so PhysX teleports the bodies) and joint
+# drive targets via modify.attribute (revolute drives take degrees, prismatic metres).
+#
+# Two Replicator limits shape this file:
+#  * a per-prim list of constants cannot feed one node (distribution.sequence has no
+#    numSamples; a scalar fans out to every matched prim), so each distinct value is its own
+#    prim group + modify node;
+#  * Replicator walks a trigger's downstream graph without a visited set when it attaches
+#    each new node, so registration time grows exponentially with the number of `with`
+#    blocks under ONE trigger (9 blocks: 9 s; 15: never returns). The work is therefore split
+#    over three triggers that listen to the same event.
+# physics.rigid_body is NOT used: re-applying the rigid-body API to simulated bodies
+# invalidates their physics views. joint_efforts had no target equivalent and was all zeros;
+# drive targetVelocity stays at its default 0.
 
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/blocks/yellow_block'
-      pose:
-        position:
-          value: [0.35, -0.4, 0.025]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
+home_objects:
+  randomizer.register:
+    home_objects:
+      red:    { get.prims: { path_pattern: '/blocks/red_block$' } }
+      yellow: { get.prims: { path_pattern: '/blocks/yellow_block$' } }
+      green:  { get.prims: { path_pattern: '/blocks/green_block$' } }
+      blue:   { get.prims: { path_pattern: '/blocks/blue_block$' } }
+      bin_0:  { get.prims: { path_pattern: '/bin_0$' } }
+      bin_1:  { get.prims: { path_pattern: '/bin_1$' } }
+      with.red:    { modify.pose: { position: [0.25, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
+      with.yellow: { modify.pose: { position: [0.35, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
+      with.green:  { modify.pose: { position: [0.45, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
+      with.blue:   { modify.pose: { position: [0.55, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
+      with.bin_0:  { modify.pose: { position: [0.4,   0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
+      with.bin_1:  { modify.pose: { position: [0.4,  -0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
 
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/blocks/green_block'
-      pose:
-        position:
-          value: [0.45, -0.4, 0.025]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
+home_arm:
+  randomizer.register:
+    home_arm:
+      j1: { get.prims: { path_pattern: '/fr3/.*/fr3_joint1$' } }
+      j2: { get.prims: { path_pattern: '/fr3/.*/fr3_joint2$' } }
+      j3: { get.prims: { path_pattern: '/fr3/.*/fr3_joint3$' } }
+      j4: { get.prims: { path_pattern: '/fr3/.*/fr3_joint4$' } }
+      j5: { get.prims: { path_pattern: '/fr3/.*/fr3_joint5$' } }
+      j6: { get.prims: { path_pattern: '/fr3/.*/fr3_joint6$' } }
+      j7: { get.prims: { path_pattern: '/fr3/.*/fr3_joint7$' } }
+      with.j1: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 0.0 } }     # degrees
+      with.j2: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: -45.0 } }
+      with.j3: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 0.0 } }
+      with.j4: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: -135.0 } }
+      with.j5: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 0.0 } }
+      with.j6: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 90.0 } }
+      with.j7: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 45.0 } }
 
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/blocks/blue_block'
-      pose:
-        position:
-          value: [0.55, -0.4, 0.025]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
+home_fingers:
+  randomizer.register:
+    home_fingers:
+      f1: { get.prims: { path_pattern: '/fr3/.*/fr3_finger_joint1$' } }
+      f2: { get.prims: { path_pattern: '/fr3/.*/fr3_finger_joint2$' } }
+      with.f1: { modify.attribute: { name: 'drive:linear:physics:targetPosition', attribute_type: float, value: 0.0 } }   # metres
+      with.f2: { modify.attribute: { name: 'drive:linear:physics:targetPosition', attribute_type: float, value: 0.0 } }
 
-  - cmd: 'set_joint'
-    kwargs:
-      articulation_root: '/fr3'
-      joint_positions: [0.0, -0.7854, 0.0, -2.3562, 0.0, 1.5708, 0.7854, 0.0, 0.0]
-      joint_velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-      joint_efforts: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    parallel: true
-
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/bin_0'
-      pose:
-        position:
-          value: [0.4, 0.4, 0.09]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
-
-  - cmd: 'set_local_poses'
-    kwargs:
-      prim_path: '/bin_1'
-      pose:
-        position:
-          value: [0.4, -0.4, 0.09]
-        orientation:
-          value: [0.0, 0.0, 0.0]
-    parallel: true
+# Three triggers on one event, so each downstream chain stays short (see the note above).
+on_reset_objects:
+  trigger.on_custom_event: { event_name: guide_reset }
+on_reset_arm:
+  trigger.on_custom_event: { event_name: guide_reset }
+on_reset_fingers:
+  trigger.on_custom_event: { event_name: guide_reset }
+with_reset_objects:
+  with.on_reset_objects: { randomizer.home_objects: null }
+with_reset_arm:
+  with.on_reset_arm: { randomizer.home_arm: null }
+with_reset_fingers:
+  with.on_reset_fingers: { randomizer.home_fingers: null }
