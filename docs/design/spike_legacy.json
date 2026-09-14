@@ -1,0 +1,25 @@
+{
+ "dialect": "instructions",
+ "register_s": 4.45,
+ "deterministic_same_seed": true,
+ "record_identical": true,
+ "per_prim_independent": true,
+ "randomize_ms_mean": 12.3,
+ "randomize_ms_p95": 14.7,
+ "zone_target_in_cell": {
+  "0": true,
+  "7": true,
+  "19": true
+ },
+ "poses_inside_region_after_call": true,
+ "sample_record_keys": [
+  "/Scene_0/bin_0",
+  "/Scene_0/bin_1",
+  "/Scene_0/blocks/blue_block",
+  "/Scene_0/blocks/green_block",
+  "/Scene_0/blocks/properties",
+  "/Scene_0/blocks/red_block",
+  "/Scene_0/blocks/yellow_block",
+  "color"
+ ]
+}

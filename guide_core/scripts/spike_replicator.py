@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import shutil
 import tempfile
 import time
@@ -36,20 +37,25 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    task = Path(args.task).resolve()
+    src = Path(args.task).resolve()
+    # SceneManager.add_scene's filesystem branch wants the flat layout (scene.py beside
+    # config/ and assets/, like guide_core/dummy_scene), so stage the task that way.
+    task = Path(tempfile.mkdtemp()) / src.name
+    task.mkdir()
+    shutil.copy(src / src.name / "scene.py", task / "scene.py")
+    shutil.copytree(src / "config", task / "config")
+    shutil.copytree(src / "assets", task / "assets")
     if args.legacy:
-        tmp = Path(tempfile.mkdtemp()) / task.name
-        shutil.copytree(task, tmp, ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
-        shutil.copy(args.legacy, tmp / "config" / "randomize.yaml")
-        task = tmp
+        shutil.copy(args.legacy, task / "config" / "randomize.yaml")
 
     cfg = yaml.safe_load((Path(__file__).resolve().parents[1] / "config" / "init.yaml").read_text())
     cfg.setdefault("startup", {})["headless"] = True
 
     from guide_core.core.guide_simulator import GUIDESimulator
 
+    logging.basicConfig(level=logging.INFO)
     sim = GUIDESimulator(sim_id=0, namespace="Sim_0")
-    sim.init_runtime(config=cfg)
+    sim.init_runtime(config=cfg, logger=logging.getLogger("spike"))
     sim.init_scene_manager()
     rt = sim._runtime
 
@@ -75,13 +81,13 @@ def main() -> None:
     randomize(seed=123)
     b = {p: local_xy(rt, p) for p in blocks}
     rec_b = json.loads(sim._scene_manager.get_last_record_json(sid))
-    deterministic = all(np.allclose(a[p], b[p], atol=1e-6) for p in blocks)
+    deterministic = bool(all(np.allclose(a[p], b[p], atol=1e-6) for p in blocks))
     same_record = rec_a.get("record") == rec_b.get("record")
 
     # 2. independence: four blocks, four distinct positions
     pts = np.array([a[p][:2] for p in blocks])
     dists = [np.linalg.norm(pts[i] - pts[j]) for i in range(4) for j in range(i + 1, 4)]
-    independent = min(dists) > 1e-3
+    independent = bool(min(dists) > 1e-3)
 
     # 3. cost per episode (free draws)
     times = [randomize() for _ in range(args.episodes)]
@@ -100,10 +106,10 @@ def main() -> None:
     randomize()
     region_lo, region_hi = (grid.low, grid.high) if grid is not None else (None, None)
     inside = (
-        all(
+        bool(all(
             np.all(local_xy(rt, p)[:2] >= region_lo[:2] - 1e-3) and np.all(local_xy(rt, p)[:2] <= region_hi[:2] + 1e-3)
             for p in blocks
-        )
+        ))
         if grid is not None
         else None
     )

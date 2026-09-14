@@ -1,0 +1,21 @@
+{
+ "dialect": "replicator",
+ "register_s": 4.77,
+ "deterministic_same_seed": true,
+ "record_identical": true,
+ "per_prim_independent": true,
+ "randomize_ms_mean": 72.7,
+ "randomize_ms_p95": 82.7,
+ "zone_target_in_cell": {
+  "0": true,
+  "7": true,
+  "19": true
+ },
+ "poses_inside_region_after_call": true,
+ "sample_record_keys": [
+  "color",
+  "replicator/blocks_position",
+  "replicator/blocks_rotation",
+  "side"
+ ]
+}
