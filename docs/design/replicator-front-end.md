@@ -88,3 +88,61 @@ Adopt Replicator YAML for the *randomize* file, native-first as built here, keep
 instruction executor for reset and success. Before it leaves the spike: carry prim paths in
 the record, teach `scene_num_zones()` to ask the scene, and decide whether value injection is
 still required.
+
+
+## Part 2 — `reset.yaml` on Replicator (2026-09-15)
+
+`reset.yaml` is now a Replicator file too, **native nodes only**: `modify.pose` constants with
+`write_to_usd` for the six objects, `modify.attribute` on `drive:angular|linear:physics:
+targetPosition` for the nine joints — the function Replicator's own docstring names for
+anything on a joint beyond stiffness/damping. Its `guide_reset` trigger is fired by
+`_cmd_reset_scene` through the same `fire()`; the loader detects the dialect per file
+(`reset`, `randomize`; `success` stays on the executor). Results: `spike_reset_1scene.json`,
+`spike_reset_2scenes.json`, `spike_legacy_reset.json`.
+
+| Measurement | Replicator, 1 scene | Replicator, 2 scenes | Executor, 1 scene |
+|---|---|---|---|
+| Six objects at their reset pose after the call, and still after 30 frames | yes | yes / yes | yes |
+| Arm within 1° of home (frames after the call) | 34 | 34 / 34 | 34 |
+| reset → randomize → reset lands on the same poses | yes | yes / yes | yes |
+| Resetting one scene leaves the other alone | — | yes | — |
+| `Reset` call, ms | 169 | 354 / 294 | 12 |
+| Scene registration, s (both files parse) | 6.4 | 8.0 / 4.4 | 4.5 |
+
+The joint drives track the written targets exactly as `ArticulationAction` does; 34 frames to
+home is the drive's own dynamics, identical on both paths. Reset costs two app frames like a
+randomization (no seed frame).
+
+### What this part settled
+
+- **`modify.attribute` reaches PhysX** under the Fabric Scene Delegate: the written target
+  shows in USD and Fabric alike and the joint moves. The earlier "no effect" was batching, not
+  Fabric.
+- **Per-prim constants need one node each.** `distribution.sequence` has no `numSamples`, so
+  it yields one value per evaluation; a scalar fans out to every matched prim, a list does not
+  (`cannot reshape array of size 1 into shape (7, …)`). Hence one `get.prims` + `modify.*` per
+  distinct value — 15 blocks for this file.
+- **Registration time is exponential in the `with` blocks under one trigger.** Replicator's
+  `_get_last_exec_attrs` walks the trigger's downstream graph with no visited set on every
+  node attach: 9 blocks under one trigger → 9 s registration, 15 → never returns. Splitting the
+  file over three triggers on the same event (6 + 7 + 2 blocks) brings it to 6.4 s. This is
+  the one real scaling limit found; a task with many fixed objects should group them per
+  trigger.
+- **`physics.rigid_body` must not be used on simulated bodies**: it re-applies the rigid-body
+  API and invalidates the physics views (`Failed to get rigid body velocities from backend`).
+  Residual motion after a teleport is negligible anyway.
+- **The executor's `set_joint` was broken on Isaac 6.0** (`Robot.is_initialized` no longer
+  exists; the flag is `handles_initialized`) — fixed here and to be carried to
+  `fix/quick-fixes`. So `reset.yaml`'s joint reset had not been working on `dev`.
+- **The file's layout conflicts with itself**: `bin_1` at `[0.4, −0.4]` sits on the block row at
+  `y = −0.4`, so PhysX pushes the blocks 1–3 cm aside on *either* dialect. The measurement
+  tolerates 5 cm for that reason; the content should move the bin.
+- Idle RTF with two scenes and their six cameras is 0.15 on this machine (0.25 with one), for
+  both dialects.
+
+### Gaps
+
+- `joint_efforts` and `joint_velocities` from the old file have no drive-target equivalent
+  (`targetVelocity` is left at its default 0).
+- The three-trigger split is a workaround for a Replicator scaling defect, not a design.
+- `success.yaml` remains on the executor; its options are in the plan (A–F).

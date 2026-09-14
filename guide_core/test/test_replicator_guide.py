@@ -30,3 +30,13 @@ def test_principal_axis():
     assert rg.principal_axis([-1, 0, 0]) == 0
     with pytest.raises(ValueError):
         rg.principal_axis([1, 1, 0])
+
+
+def test_event_name_and_scene_suffix():
+    doc = {"a": {"trigger.on_custom_event": {"event_name": "guide_reset"}},
+           "b": {"trigger.on_custom_event": {"event_name": "guide_reset"}}}
+    out = rg.prefixed(doc, "/Scene_2")
+    assert out["a"]["trigger.on_custom_event"]["event_name"] == "guide_reset_Scene_2"
+    assert rg._event_name(out) == "guide_reset_Scene_2"
+    with pytest.raises(ValueError):
+        rg._event_name({"x": {"get.prims": {}}})
