@@ -62,7 +62,7 @@ def test_uniform_vec_bounds_and_determinism():
 
 
 def test_axis_angle_is_unit_and_bounded():
-    dist = AxisAngle(axis=[0, 0, 1], max_angle=np.pi / 4)
+    dist = AxisAngle(axis=[0, 0, 1], angle=(-np.pi / 4, np.pi / 4))
     rng = np.random.default_rng(42)
     for _ in range(50):
         q = dist.sample(rng)
@@ -85,7 +85,7 @@ def test_categorical_preserves_native_type_and_is_seeded():
 
 
 def test_pose_dist_shape():
-    dist = PoseDist(UniformVec([-1, -1, 0], [1, 1, 0]), AxisAngle([0, 0, 1], 0.5))
+    dist = PoseDist(UniformVec([-1, -1, 0], [1, 1, 0]), AxisAngle([0, 0, 1], (-0.5, 0.5)))
     out = dist.sample(np.random.default_rng(1))
     assert out.shape == (7,)
     assert np.isclose(np.linalg.norm(out[3:]), 1.0)
@@ -95,9 +95,9 @@ def test_spec_roundtrip():
     dists = [
         Constant([1.0, 2.0, 3.0]),
         UniformVec([-1, -1, -1], [1, 1, 1]),
-        AxisAngle([0, 0, 1], 0.3),
+        AxisAngle([0, 0, 1], (-0.3, 0.3)),
         Categorical(("a", "b", "c")),
-        PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([1, 0, 0], 0.2)),
+        PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([1, 0, 0], (-0.2, 0.2))),
     ]
     for d in dists:
         rebuilt = from_spec(d.to_spec())
@@ -112,7 +112,7 @@ def test_pose_from_yaml_matches_block_bin_schema():
     spec = {
         "position": {"value": [0.25, -0.4, 0.09],
                      "random": [[-0.05, 0.05], [-0.05, 0.05], [0.0, 0.0]]},
-        "orientation": {"random": {"axis": [0.0, 0.0, 1.0], "angle": 180}},
+        "orientation": {"random": {"axis": [0.0, 0.0, 1.0], "angle": [-180, 180]}},
     }
     dist = pose_from_yaml(spec)
     out = dist.sample(np.random.default_rng(3))
@@ -128,7 +128,7 @@ def _scene_dists():
     return {
         "/blocks/red_block": PoseDist(
             UniformVec([-0.25, 0.0, 0.025], [0.25, 0.25, 0.025]),
-            AxisAngle([0, 0, 1], np.pi),
+            AxisAngle([0, 0, 1], (-np.pi, np.pi)),
         ),
         "color": Categorical(("red", "yellow", "green", "blue")),
         "side": Categorical(("left", "right")),
@@ -182,10 +182,24 @@ def test_quat_ordering_roundtrip():
     assert np.array_equal(_quat.wxyz_to_xyzw([1, 0, 0, 0]), [0, 0, 0, 1])
 
 
+def test_axis_angle_range_is_honoured():
+    from scipy.spatial.transform import Rotation as R
+
+    dist = pose_from_yaml({"orientation": {"random": {"axis": [0, 0, 1], "angle": [0, 90]}}}).orientation
+    rng = np.random.default_rng(7)
+    for _ in range(100):
+        z = R.from_quat(_quat.wxyz_to_xyzw(dist.sample(rng))).as_rotvec()[2]
+        assert -1e-9 <= z <= np.pi / 2 + 1e-9
+    with pytest.raises(ValueError):
+        pose_from_yaml({"orientation": {"random": {"axis": [0, 0, 1], "angle": 180}}})
+    with pytest.raises(ValueError):
+        AxisAngle([0, 0, 1], (1.0, 0.0))
+
+
 def test_axis_angle_against_scipy():
     from scipy.spatial.transform import Rotation as R
 
-    dist = AxisAngle(axis=[0, 0, 1], max_angle=np.pi)
+    dist = AxisAngle(axis=[0, 0, 1], angle=(-np.pi, np.pi))
     q_wxyz = dist.sample(np.random.default_rng(0))
     rotvec = R.from_quat(_quat.wxyz_to_xyzw(q_wxyz)).as_rotvec()
     assert abs(rotvec[0]) < 1e-9 and abs(rotvec[1]) < 1e-9
@@ -199,7 +213,7 @@ from guide_core.types.scene_context import SceneContext  # noqa: E402
 
 
 def _pose_dist():
-    return PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([0, 0, 1], 1.0))
+    return PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([0, 0, 1], (-1.0, 1.0)))
 
 
 def test_draw_instructions_capture_and_skip():

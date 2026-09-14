@@ -90,12 +90,12 @@ class UniformVec:
 class AxisAngle:
     """Random rotation: ``base`` composed with a delta about ``axis``.
 
-    The delta angle is uniform in ``[-max_angle, max_angle]`` (radians). Output
-    is a ``[w, x, y, z]`` quaternion. Rotation math uses SciPy.
+    The delta angle is uniform in ``angle = (min, max)`` (radians). Output is a
+    ``[w, x, y, z]`` quaternion. Rotation math uses SciPy.
     """
 
     axis: np.ndarray
-    max_angle: float
+    angle: np.ndarray
     base_quat: np.ndarray = None  # type: ignore[assignment]  # None -> identity
 
     def __post_init__(self) -> None:
@@ -103,19 +103,19 @@ class AxisAngle:
         norm = np.linalg.norm(axis)
         if norm == 0.0:
             raise ValueError("axis must be non-zero")
-        max_angle = float(self.max_angle)
-        if max_angle < 0.0:
-            raise ValueError("max_angle must be >= 0")
+        angle = _quat.as_vec(self.angle, 2)
+        if angle[0] > angle[1]:
+            raise ValueError("angle must be (min, max) with min <= max")
         if self.base_quat is None:
             base = _quat.IDENTITY_QUAT
         else:
             base = _quat.xyzw_to_wxyz(R.from_quat(_quat.wxyz_to_xyzw(self.base_quat)).as_quat())
         object.__setattr__(self, "axis", axis / norm)
-        object.__setattr__(self, "max_angle", max_angle)
+        object.__setattr__(self, "angle", angle)
         object.__setattr__(self, "base_quat", base)
 
     def sample(self, rng: np.random.Generator) -> np.ndarray:
-        angle = float(rng.uniform(-self.max_angle, self.max_angle))
+        angle = float(rng.uniform(self.angle[0], self.angle[1]))
         delta = R.from_rotvec(self.axis * angle)
         base = R.from_quat(_quat.wxyz_to_xyzw(self.base_quat))
         return _quat.xyzw_to_wxyz((base * delta).as_quat())
@@ -124,7 +124,7 @@ class AxisAngle:
         return {
             "type": "axis_angle",
             "axis": self.axis.tolist(),
-            "max_angle": self.max_angle,
+            "angle": self.angle.tolist(),
             "base_quat": self.base_quat.tolist(),
         }
 
@@ -189,7 +189,7 @@ class PoseDist:
 _REGISTRY = {
     "constant": lambda s: Constant(s["value"]),
     "uniform_vec": lambda s: UniformVec(s["low"], s["high"]),
-    "axis_angle": lambda s: AxisAngle(s["axis"], s["max_angle"], s.get("base_quat")),
+    "axis_angle": lambda s: AxisAngle(s["axis"], s["angle"], s.get("base_quat")),
     "categorical": lambda s: Categorical(tuple(s["options"])),
     "pose": lambda s: PoseDist(from_spec(s["position"]), from_spec(s["orientation"])),
 }
@@ -216,7 +216,7 @@ def pose_from_yaml(pose_spec: dict) -> PoseDist:
     ``random`` block. Position randomization is a uniform range given as a 3x2
     ``[[min, max], ...]`` matrix of offsets from ``value``; orientation is a base
     Euler (XYZ, degrees) composed
-    with a uniform rotation about ``axis`` up to ``angle`` degrees.
+    with a uniform rotation about ``axis`` of ``angle = [min, max]`` degrees.
     """
     pose_spec = pose_spec or {}
 
@@ -236,8 +236,9 @@ def pose_from_yaml(pose_spec: dict) -> PoseDist:
     ori_rand = ori_spec.get("random")
     if ori_rand is not None:
         axis = ori_rand.get("axis", [0.0, 0.0, 1.0])
-        max_angle = float(np.deg2rad(ori_rand.get("angle", 0.0)))
-        orientation: Distribution = AxisAngle(axis, max_angle, base_quat)
+        # angle: [min, max] degrees about axis
+        angle = np.deg2rad(_quat.as_vec(ori_rand.get("angle", [0.0, 0.0]), 2))
+        orientation: Distribution = AxisAngle(axis, angle, base_quat)
     else:
         orientation = Constant(base_quat)
 

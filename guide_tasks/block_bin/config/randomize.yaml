@@ -23,7 +23,7 @@ instructions:
         orientation:
           random:
             axis: [0.0, 0.0, 1.0]
-            angle: 180
+            angle: [-180, 180]   # [min, max] degrees about axis
     parallel: false
 
   - cmd: 'set_local_poses'
@@ -44,7 +44,7 @@ instructions:
           value: [0.0, 0.0, 0.0]
           # random:
           #   axis: [0.0, 0.0, 1.0]
-          #   angle: 180
+          #   angle: [-180, 180]
     parallel: false
 
   - cmd: 'set_local_poses'
@@ -61,5 +61,5 @@ instructions:
           value: [0.0, 0.0, 0.0]
           # random:
           #   axis: [0.0, 0.0, 1.0]
-          #   angle: 180
+          #   angle: [-180, 180]
     parallel: false
