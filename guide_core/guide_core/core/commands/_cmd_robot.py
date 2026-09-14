@@ -224,7 +224,7 @@ def _cmd_set_joint(
     else:
         robot = self._robots[articulation_root]
 
-    if not robot.is_initialized:
+    if not getattr(robot, "handles_initialized", False):  # Isaac 6.0: no is_initialized
         try:
             robot.initialize()
         except Exception as e:
