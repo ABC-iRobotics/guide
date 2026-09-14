@@ -80,7 +80,8 @@ def _cmd_create_robot_control(
 
     if articulation_root not in self._robots:
         try:
-            robot = Robot(prim_path=articulation_root)
+            # World.scene names objects; the default "robot" collides on the second scene.
+            robot = Robot(prim_path=articulation_root, name=articulation_root.strip("/").replace("/", "_"))
             self._world.scene.add(robot)
             self._robots[articulation_root] = robot
         except Exception as e:
@@ -217,7 +218,7 @@ def _cmd_set_joint(
         self._robots = {}
 
     if articulation_root not in self._robots:
-        robot = Robot(prim_path=articulation_root)
+        robot = Robot(prim_path=articulation_root, name=articulation_root.strip("/").replace("/", "_"))
         self._world.scene.add(robot)
         self._robots[articulation_root] = robot
     else:

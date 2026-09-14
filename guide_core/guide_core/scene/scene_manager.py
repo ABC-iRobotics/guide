@@ -57,8 +57,17 @@ class SceneManager:
 
             path_obj = Path(package_name)
             if path_obj.is_absolute() or path_obj.exists():
-                # 1. Filesystem Path
-                if path_obj.is_dir() and not (path_obj / "scene.py").exists():
+                # 1. Filesystem path. Two layouts, both with config/ and assets/ beside
+                #    the returned scene_path: the source package (<dir>/<dir>/scene.py,
+                #    the same shape as the installed share dir) and the flat one
+                #    (<dir>/scene.py, like guide_core/dummy_scene).
+                pkg_scene = path_obj / path_obj.name / "scene.py"
+                if path_obj.is_dir() and pkg_scene.exists():
+                    scene_class = self.import_class_from_path(
+                        str(pkg_scene.parent), "scene.py", "Scene"
+                    )
+                    scene_path = str(path_obj)
+                elif path_obj.is_dir() and not (path_obj / "scene.py").exists():
                     found_scenes = list(path_obj.rglob("scene.py"))
                     if found_scenes:
                         scene_file = found_scenes[0]
