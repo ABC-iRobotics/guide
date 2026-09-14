@@ -25,8 +25,6 @@ from guide_core.types.randomization import _quat
 from guide_core.types.randomization.grid import Grid
 
 EVENT = "guide_randomize"
-ZONE_POSITION = "guide_zone_position"  # the per-target uniform node's name
-ZONE_PRIMS = "guide_zone_prims"  # the per-target get.prims node's name
 
 _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the scene
 
@@ -124,13 +122,12 @@ def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
         # One extra randomizer for the zone target: its prim pattern and bounds are rewritten
         # every episode; it runs after the group under the same trigger so the target wins.
         with rep.trigger.on_custom_event(event_name=EVENT):
-            prims = rep.get.prims(path_pattern="__none__", name=ZONE_PRIMS, cache_result=False)
+            prims = rep.get.prims(path_pattern="__none__", cache_result=False)
             with prims:
-                rep.modify.pose(
-                    position=rep.distribution.uniform(
-                        lower=[0.0, 0.0, 0.0], upper=[0.0, 0.0, 0.0], name=ZONE_POSITION
-                    )
-                )
+                position = rep.distribution.uniform(lower=[0.0, 0.0, 0.0], upper=[0.0, 0.0, 0.0])
+                rep.modify.pose(position=position)
+        state["zone_prims"] = prims.node
+        state["zone_position"] = position.node
     rep.orchestrator.run()
     return state
 
@@ -164,11 +161,11 @@ def draw(state: dict[str, Any], seed: int, zone: int | None, zone_target: str | 
     if g is not None:
         if zone is not None and zone >= 0 and zone_target:
             low, high = g.cell_bounds(int(zone))
-            _set(_named(ZONE_PRIMS), "inputs:pathPattern", re.escape(zone_target))
-            _set(_named(ZONE_POSITION), "inputs:lower", low.tolist())
-            _set(_named(ZONE_POSITION), "inputs:upper", high.tolist())
+            _set(state["zone_prims"], "inputs:pathPattern", re.escape(zone_target))
+            _set(state["zone_position"], "inputs:lower", low.tolist())
+            _set(state["zone_position"], "inputs:upper", high.tolist())
         else:
-            _set(_named(ZONE_PRIMS), "inputs:pathPattern", "__none__")
+            _set(state["zone_prims"], "inputs:pathPattern", "__none__")
 
     rep.utils.send_og_event(EVENT)
     rep.orchestrator.step(rt_subframes=1, pause_timeline=False, wait_for_render=False)
