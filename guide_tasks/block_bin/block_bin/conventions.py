@@ -93,6 +93,11 @@ def canonical_rotvec(rotvec) -> np.ndarray:
     return -rotvec if rotvec[0] < 0 else rotvec
 
 
+def joint_state(observation: dict, joints: list[str]) -> np.ndarray:
+    """The joint-space state layout, for a policy trained with delta actions only."""
+    return np.array([observation[f"{j}.pos"] for j in joints], dtype=np.float32)
+
+
 def state_for(convention: str, position, rotvec, grip: float) -> np.ndarray:
     """The 8-dim state, in the convention the checkpoint was trained on."""
     if convention == "libero":

@@ -28,33 +28,11 @@ def test_command_rejects_a_dimension_mismatch():
         ep.command_from_action(np.zeros((1, 3)), JOINTS)
 
 
-def test_frame_follows_the_dataset_state_order():
-    image = np.zeros((480, 640, 3), np.uint8)
-    observation = {
-        **{f"j{i}.pos": float(i) for i in range(1, 8)},
-        "fr3_finger_joint1.pos": 0.03,
-        "top": image,
-        "base": image,
-        "wrist": image,
-    }
-
-    frame = ep.build_frame(observation, JOINTS)
-
-    assert frame["observation.state"].dtype == np.float32
-    assert frame["observation.state"].tolist() == pytest.approx([1, 2, 3, 4, 5, 6, 7, 0.03])
-    assert sorted(frame) == [
-        "observation.images.base",
-        "observation.images.top",
-        "observation.images.wrist",
-        "observation.state",
-    ]
-
-
 def test_frame_names_the_camera_that_stopped_publishing():
     observation = {f"j{i}.pos": 0.0 for i in range(1, 8)} | {"fr3_finger_joint1.pos": 0.0}
 
     with pytest.raises(RuntimeError, match="cam_top.*stopped publishing"):
-        ep.build_frame(observation, JOINTS)
+        ep.images_from(observation)
 
 
 def test_plan_is_unrestricted_without_a_zone_flag():

@@ -1,53 +1,17 @@
-"""Roll out a trained LeRobot policy (SmolVLA) on the block_bin scene and score it.
+"""Shared core of the block_bin policy evaluation: what ``eval_policy_pink`` builds on.
 
-Validation counterpart of ``solve_task.py``: instead of the GUIDE-EX node tree
-producing the motion, the fine-tuned policy is queried every control step and its
-joint targets are published straight onto the scene's ``joint_command`` topic --
-the very topic the dataset's ``action`` was recorded from (see ``config/init.yaml``:
-``action: joint_command.fr3_joint*.pos``), so inference replays the training
-action space exactly.
-
-Per episode: home the arm -> Randomize (gives the language instruction) ->
-closed-loop rollout -> IsSuccess. Prints a success rate at the end.
-
-A rollout that has clearly missed can be cut short without waiting out the timeout:
-
-    ros2 service call <namespace>/stop_episode std_srvs/srv/SetBool "{data: false}"
-
-`data: false` aborts the episode and moves on, `data: true` also ends the run. An
-aborted episode is still scored, so it counts as the failure it is.
-
-Before running
---------------
-* Isaac needs the camera topics, which are OFF by default because demonstration
-  generation does not read them. Ask for them at launch rather than editing the
-  task's ``config/init.yaml`` (that would turn them on for dataset generation
-  too, where they cost a render product per camera and ~166 MB/s of DDS)::
-
-      ros2 launch guide_core bringup.launch.py camera_topics:=true
-
-  Without them the run stops at start-up with the command to fix it.
-* Nothing else may write ``<ns>/franka/joint_command``. topic_based_ros2_control
-  re-publishes its own (now stale) command as soon as the sim drifts away from it,
-  which fights the policy, so run the simulator WITHOUT the MoveIt bring-up
-  (``bringup.launch.py``) while evaluating.
-
-Example
--------
-    ~/ros2_ws/.venv/bin/python -m block_bin.eval_policy \
-        --namespace /Sim_0/Scene_0 \
-        --policy ~/models/smolvla_fr3/checkpoints/last/pretrained_model \
-        --episodes 20
+Policy loading, the action-chunk stream (with opt-in real-time chunking), robot and
+camera connection, the joint_command publisher, success checks, the stop service and
+the episode/zone plan. The joint-space rollout that used to live here, and the MoveIt
+Servo sibling, were discontinued; ``eval_policy_pink`` is the evaluation entry point.
 """
 
-import argparse
 import dataclasses
 import json
-import re
 import tempfile
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from pathlib import Path
@@ -57,15 +21,12 @@ import lerobot.policies  # noqa: F401  -- registers the policy configs (smolvla,
 import numpy as np
 import torch
 from draccus.utils import DecodingError
-from irob_lerobot_ros.config import ActionType, FR3RobotConfig, ROS2CameraConfig
-from irob_lerobot_ros.ros2robot import ROS2Robot
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.policies.factory import get_policy_class, make_pre_post_processors
 from lerobot.policies.utils import prepare_observation_for_inference
 from rclpy.duration import Duration
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
-from std_srvs.srv import SetBool
 
 try:  # moved out of lerobot.utils.utils in lerobot 0.6.0
     from lerobot.utils.device_utils import get_safe_torch_device
@@ -74,7 +35,7 @@ except ImportError:  # pragma: no cover -- lerobot <= 0.4.x
 
 from block_bin.solve_task import scene_num_zones
 from guide_core.types.randomization import zone_plan
-from guide_msgs.srv import CheckSuccess, Randomize
+from guide_msgs.srv import CheckSuccess
 
 # Dataset image keys (init.yaml `dataset.images`) -> the /cam_* topic each one was
 # rendered from. Camera names double as the policy's `observation.images.<name>`.
@@ -151,12 +112,6 @@ def images_from(observation: dict, mapping: dict | None = None) -> dict:
             )
         frame[f"observation.images.{key}"] = image
     return frame
-
-
-def build_frame(observation: dict, joints: list[str]) -> dict:
-    """Robot observation -> the dataset-shaped frame `predict_action` expects."""
-    state = np.array([observation[f"{j}.pos"] for j in joints], dtype=np.float32)
-    return {"observation.state": state, **images_from(observation)}
 
 
 def connect_robot(robot, timeout: float = 20.0) -> None:
@@ -256,43 +211,6 @@ def add_interpolation_arguments(parser) -> None:
         "Default 2: measured free, 1 to 12 setpoints spans 31.7-32.2 ms/step with RTF "
         "flat at 0.52, so the only reason not to smooth is if it hurts the policy.",
     )
-
-
-def pace_and_ramp(
-    robot, clock, deadline, names, previous, target, sub_steps: int, poll: float = 0.002
-) -> None:
-    """Hold the control cadence, publishing ``sub_steps`` setpoints along the way.
-
-    The arm is otherwise handed one position target per period and nothing for the
-    remaining ~200 ms: Isaac's controller drives hard to it and then idles, which is
-    the staircase that reads as jitter. Ramping in JOINT space, after IK, leaves every
-    decision point identical -- the policy's delta at each control step is exactly what
-    it was, only the path between two of them changes.
-
-    The gripper (last element) is NOT ramped. It is close to a binary command and
-    stretching it across a period would move the moment the fingers close, which is
-    the one thing in this task that must not drift.
-
-    Falls back to a plain wait when interpolation is off, when there is no previous
-    command to ramp from (first step of an episode), or when the step already overran
-    its slot -- a late step publishing a burst of catch-up setpoints is precisely the
-    behaviour the caller's deadline logic exists to prevent.
-    """
-    remaining = (deadline - clock.now()).nanoseconds / 1e9
-    if sub_steps <= 1 or previous is None or target is None or remaining <= 0:
-        while clock.now() < deadline:
-            time.sleep(poll)
-        return
-
-    started = clock.now()
-    for k in range(1, sub_steps + 1):
-        fraction = k / sub_steps
-        blend = [a + (b - a) * fraction for a, b in zip(previous[:-1], target[:-1])]
-        blend.append(target[-1])  # gripper steps, see above
-        publish_command(robot, names, blend)
-        sub_deadline = started + Duration(seconds=remaining * fraction)
-        while clock.now() < sub_deadline:
-            time.sleep(poll)
 
 
 def is_success(robot, scene_id: int) -> bool:
@@ -597,100 +515,6 @@ def sleep_sim(robot, seconds: float, stall_timeout: float = 30.0) -> None:
         time.sleep(0.002)
 
 
-def run_episode(robot, scene_id, zone, policy, processors, device, control, args) -> bool:
-    """Home + randomize the scene, then let the policy drive until it succeeds or times out."""
-    joints = state_names(robot)
-
-    # Home through the same joint_command channel the policy uses, NOT the Reset
-    # service: Reset's `set_joint` wraps the live scene in a second articulation and
-    # initialises it mid-run, which takes Isaac down (nothing else calls Reset --
-    # solve_task homes via MoveIt, so the path was never exercised). Randomize
-    # re-places every block and both bins regardless, so Reset would only have added
-    # the arm pose, and its `set_joint` is an apply_action -- a position target,
-    # exactly what publishing here does.
-    publish_command(robot, *command_from_action(HOME_POSITION + [GRIPPER_OPEN], joints))
-
-    response = robot.callService(
-        robot.randomize,
-        Randomize.Request(id=scene_id, use_zone=zone is not None, zone=zone or 0),
-    )
-    scene_task = json.loads(response.message)["task"]
-    task = args.task or scene_task
-    if args.task and args.task != scene_task:
-        # --task changes what the POLICY is told and nothing else. The success
-        # criterion is rebuilt from the scene's own draw every episode
-        # (Scene.is_success_preprocess picks the colour and bin from self.c/self.s),
-        # so an override that names a different block or bin grades a task nobody
-        # asked the policy to do, and a perfectly executed rollout scores as a miss.
-        robot.node.get_logger().warn(
-            f"--task tells the policy {args.task!r} but IsSuccess still grades the "
-            f"scene's own draw, {scene_task!r}. These disagree, so this episode "
-            f"cannot pass however well it is executed."
-        )
-    robot.node.get_logger().info(f'Rolling out: "{task}"')
-
-    sleep_sim(robot, 5.0)  # let the randomized scene settle, as solve_task does
-
-    preprocessor, postprocessor = processors
-    policy.reset()
-    preprocessor.reset()
-    postprocessor.reset()
-    control.abort_episode.clear()
-    stream = ChunkStream(
-        policy,
-        preprocessor,
-        postprocessor,
-        device,
-        task,
-        robot.name,
-        args.lead,
-        rtc=rtc_config_from_args(args),
-    )
-
-    period = 1.0 / args.fps
-    steps = int(args.seconds * args.fps)
-    check_interval = max(1, int(args.fps))  # poll the success service ~once a second
-    gripper_joint = joints[-1]
-    step_times, grips = [], []
-    succeeded = False
-
-    clock = robot.node.get_clock()
-    next_deadline = clock.now()
-
-    for step in range(steps):
-        started = time.perf_counter()
-
-        observation = robot.get_observation()
-        action = stream.next_action(build_frame(observation, joints), step)
-        names, positions = command_from_action(action, joints)
-        publish_command(robot, names, positions)
-        grips.append((positions[-1], observation[f"{gripper_joint}.pos"]))
-
-        step_times.append(time.perf_counter() - started)
-
-        if control.abort_episode.is_set():
-            robot.node.get_logger().warn(f"Episode aborted after {step + 1} steps.")
-            break
-
-        if step % check_interval == check_interval - 1 and is_success(robot, scene_id):
-            succeeded = True
-            break
-
-        # Hold the cadence in SIM time. Deadlines accumulate so jitter does not drift
-        # the trajectory, but an overrun DROPS its slot rather than being made up:
-        # catching up would fire several queued setpoints back to back, and a burst
-        # like that landing on the approach is how a grasp turns into a swipe.
-        next_deadline = next_deadline + Duration(seconds=period)
-        if clock.now() > next_deadline:
-            next_deadline = clock.now()
-        while clock.now() < next_deadline:
-            time.sleep(0.002)
-
-    stream.close()
-    report_rollout(robot, args, policy, step_times, grips, stream.replans)
-    return succeeded or final_success(robot, scene_id)
-
-
 def report_rollout(robot, args, policy, step_times, grips, replans) -> None:
     """Loop timing and grasp telemetry for the episode just finished.
 
@@ -935,153 +759,3 @@ def parse_evaluation_args(parser):
             f"See --help for what this script takes."
         )
     return args
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--namespace", type=str, default="")
-    parser.add_argument("--policy", type=str, required=True, help="Checkpoint dir or HF repo id.")
-    parser.add_argument("--episodes", type=int, default=10)
-    parser.add_argument("--seconds", type=float, default=60.0, help="Rollout timeout per episode.")
-    # Demonstrations were captured at step_freq / record_interval = 60 / 12 Hz, so
-    # the actions are spaced ~0.2 s apart. The 30 fps in the dataset's info.json is
-    # nominal (video metadata), not the rate the arm was actually commanded at --
-    # tune this if the policy's motion comes out too fast or too sluggish.
-    parser.add_argument("--fps", type=float, default=5.0, help="Control rate, Hz of SIM time.")
-    # The checkpoint's chunk_size is 50: one observation would otherwise drive 50
-    # blind steps -- 10 s at 5 Hz -- so the grasp happens on a view of the block
-    # that is ten seconds stale. Consuming a shorter slice of each chunk makes the
-    # policy look again before it closes the gripper. Raise towards chunk_size for
-    # smoother but blinder motion, lower for tighter feedback at more re-plans.
-    parser.add_argument(
-        "--n-action-steps",
-        type=int,
-        default=10,
-        help="Actions used per policy call (<= the checkpoint's chunk_size).",
-    )
-    # A chunk takes 2-3 control periods to predict, so the next one has to be started
-    # with at least that many actions still queued or the arm stalls waiting for it.
-    parser.add_argument(
-        "--lead",
-        type=int,
-        default=3,
-        help="Start predicting the next chunk with this many actions left. 0 blocks.",
-    )
-    parser.add_argument(
-        "--zone",
-        type=str,
-        default="",
-        help="Cube placement: blank = anywhere, 'all' = every zone, '2,16' = those "
-        "zones, '2:4,16:10' = per-zone counts. --episodes is per zone.",
-    )
-    parser.add_argument("--task", type=str, default="", help="Override the scene's instruction.")
-    parser.add_argument("--device", type=str, default=None, help="cuda, cpu (default: policy's)")
-    add_rtc_arguments(parser)
-    add_interpolation_arguments(parser)
-    args = parse_evaluation_args(parser)
-
-    namespace_base = args.namespace or ""
-    match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
-    scene_id = int(match.group()) if match else 0
-    sim_namespace = "/" + namespace_base.split("/")[1] if namespace_base else ""
-
-    # Built before the policy loads so a bad --zone fails in a second rather than
-    # after 450M parameters have been read off disk.
-    plan = episode_plan(args.zone, args.episodes)
-    print(f"Evaluating {len(plan)} episodes: {args.zone or 'unrestricted placement'}")
-
-    policy, preprocessor, postprocessor = load_policy(args.policy, args.device)
-    device = get_safe_torch_device(policy.config.device)
-
-    chunk_size = policy.config.chunk_size
-    if not 1 <= args.n_action_steps <= chunk_size:
-        raise SystemExit(f"--n-action-steps must be within 1..{chunk_size} (the trained chunk).")
-    if args.n_action_steps != policy.config.n_action_steps:
-        print(
-            f"Action horizon: {args.n_action_steps} of {chunk_size} predicted steps "
-            f"({args.n_action_steps / args.fps:.1f}s open-loop, was "
-            f"{policy.config.n_action_steps / args.fps:.1f}s)"
-        )
-        policy.config.n_action_steps = args.n_action_steps
-
-    config = FR3RobotConfig(
-        frame_id=namespace_base.split("/")[-1] if namespace_base else "world",
-        namespace=f"{namespace_base}/franka",
-        # Joint targets go straight onto joint_command: MoveIt planning per control
-        # step could never keep up, and the recorded actions are raw joint targets.
-        arm_action_type=ActionType.JOINT_POSITION,
-        gripper_action_type=ActionType.JOINT_POSITION,
-        directly_publish=True,
-    )
-    config.cameras = {
-        name: ROS2CameraConfig(
-            namespace=namespace_base, frame_id=name, topic=topic, width=640, height=480
-        )
-        for name, topic in CAMERAS.items()
-    }
-
-    robot = ROS2Robot(config=config)
-    connect_robot(robot)
-
-    robot.randomize = robot.node.create_client(
-        srv_type=Randomize,
-        srv_name=f"{sim_namespace}/Randomize",
-        callback_group=robot._reentrant_callback_group,
-    )
-    robot.is_success_client = robot.node.create_client(
-        srv_type=CheckSuccess,
-        srv_name=f"{sim_namespace}/IsSuccess",
-        callback_group=robot._reentrant_callback_group,
-    )
-
-    control = RunControl()
-    stop_service_name = f"{namespace_base}/stop_episode"
-    robot.stop_service = robot.node.create_service(
-        srv_type=SetBool,
-        srv_name=stop_service_name,
-        callback=lambda request, response: handle_stop(
-            request, response, control, robot.node.get_logger()
-        ),
-        callback_group=robot._reentrant_callback_group,
-    )
-    print(
-        "Abort a rollout that has clearly missed with:\n"
-        f'  ros2 service call {stop_service_name} std_srvs/srv/SetBool "{{data: false}}"\n'
-        "  (data: true also ends the whole evaluation)"
-    )
-
-    successes = 0
-    attempted = 0
-    per_zone = defaultdict(lambda: [0, 0])  # zone -> [successes, attempts]
-    try:
-        for episode, zone in enumerate(plan):
-            label = "anywhere" if zone is None else f"zone {zone}"
-            robot.node.get_logger().info(f"--- Episode {episode + 1}/{len(plan)} ({label}) ---")
-            success = run_episode(
-                robot, scene_id, zone, policy, (preprocessor, postprocessor), device, control, args
-            )
-            attempted += 1
-            successes += bool(success)
-            per_zone[zone][0] += bool(success)
-            per_zone[zone][1] += 1
-            colour, verdict = ("\033[92m", "SUCCESS") if success else ("\033[91m", "FAILURE")
-            robot.node.get_logger().info(
-                f"{colour}[{verdict}] Episode {episode + 1}: "
-                f"{successes}/{attempted} so far\033[0m"
-            )
-            if control.stop_run.is_set():
-                robot.node.get_logger().warn("Evaluation ended early on request.")
-                break
-    except KeyboardInterrupt:
-        robot.node.get_logger().info("Keyboard interrupt received. Exiting...")
-    finally:
-        print(f"Success rate: {successes}/{attempted}")
-        if args.zone:
-            for zone in sorted(per_zone, key=lambda z: -1 if z is None else z):
-                hits, tries = per_zone[zone]
-                print(f"  zone {zone}: {hits}/{tries}")
-        robot.disconnect()
-
-
-if __name__ == "__main__":
-    main()

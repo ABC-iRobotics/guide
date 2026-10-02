@@ -1,7 +1,8 @@
 """Roll out a LIBERO-style policy on block_bin through Pink differential IK.
 
-Third sibling of ``eval_policy.py`` and ``eval_policy_servo.py``, and it takes one
-half from each. The action space is ``eval_policy_servo``'s -- a dataset built with
+Third sibling of ``eval_policy.py`` and ``eval_policy_servo.py`` (both since
+discontinued; ``eval_policy.py`` keeps only the shared core), and it took one half
+from each. The action space is ``eval_policy_servo``'s -- a dataset built with
 ``guide_dataset_build --eef-delta-action [--libero-state]``::
 
     action            = [dx, dy, dz, dwx, dwy, dwz, gripper]   (7)
@@ -158,10 +159,10 @@ from block_bin.conventions import (
     LIBERO_POSITION_SCALE,
     LIBERO_ROTATION_SCALE,
     delta_for,
+    joint_state,
     parse_camera_map,
     state_for,
 )
-from block_bin.eval_policy_servo import DELTA_DIMS, joint_state
 from block_bin.rollout_trace import RolloutTrace
 from guide_msgs.srv import CheckSuccess, Collision, Pose as PoseSrv, Randomize
 
