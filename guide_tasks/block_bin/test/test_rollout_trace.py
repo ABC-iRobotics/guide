@@ -385,9 +385,10 @@ def test_both_trials_get_their_own_camera_row(tmp_path):
     matplotlib.use("Agg")
     replay = rr.Replay(a_run(tmp_path, seeds=(0,)), "left")
 
-    rows = {name for name, _camera, _axes, _artist in replay.camera_axes}
+    # Rows are keyed by position in the pair, not trial name (see Replay.__init__).
+    rows = {slot for slot, _camera, _axes, _artist in replay.camera_axes}
 
-    assert rows == {"left", "right"}
+    assert rows == {0, 1}
     assert len(replay.camera_axes) == 2 * len(replay.cameras)
 
 
@@ -399,7 +400,7 @@ def test_a_single_trial_trace_gets_one_row(tmp_path):
 
     replay = rr.Replay([tmp_path / "solo"], "solo")
 
-    assert {name for name, *_ in replay.camera_axes} == {"solo"}
+    assert {slot for slot, *_ in replay.camera_axes} == {0}
 
 
 def test_the_info_panel_names_the_side_the_scene_drew(tmp_path):
