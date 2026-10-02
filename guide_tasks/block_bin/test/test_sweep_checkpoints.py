@@ -7,6 +7,10 @@ renders at all, which is the sort of thing that only fails after a two-hour swee
 """
 
 import json
+import signal
+import subprocess
+import threading
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -496,3 +500,352 @@ def test_a_single_zone_report_that_stopped_early_renders_too(tmp_path):
     )
 
     assert (tmp_path / "report.pdf").stat().st_size > 10_000
+
+
+def checkpoint_tree(tmp_path, names):
+    """A checkpoints directory the way LeRobot writes one."""
+    for name in names:
+        (tmp_path / name / sweep.CHECKPOINT_SUBDIR).mkdir(parents=True)
+    return sweep.discover_checkpoints(tmp_path)
+
+
+def test_no_selector_keeps_the_whole_run(tmp_path):
+    found = checkpoint_tree(tmp_path, ["005000", "010000"])
+
+    assert sweep.select_checkpoints(found, "") == found
+    assert sweep.select_checkpoints(found, "   ") == found
+
+
+def test_selector_ignores_the_trainers_zero_padding(tmp_path):
+    """'5000' has to find '005000'.
+
+    The padding is a formatting choice of the trainer, and a selector that demands it
+    back silently matches nothing -- which would look like a sweep that ran.
+    """
+    found = checkpoint_tree(tmp_path, ["005000", "010000", "015000"])
+
+    picked = sweep.select_checkpoints(found, "5000,15000")
+
+    assert [p.name for p in picked] == ["005000", "015000"]
+
+
+def test_selector_returns_training_order_whatever_order_it_was_given(tmp_path):
+    found = checkpoint_tree(tmp_path, ["005000", "010000", "015000"])
+
+    picked = sweep.select_checkpoints(found, "15000, 5000")
+
+    order = [p.name for p in picked]
+    assert order == ["005000", "015000"], "report order must not depend on --only"
+
+
+def test_selector_names_one_checkpoint_once(tmp_path):
+    # 5000 and 005000 are the same directory; evaluating it twice would plot it twice.
+    found = checkpoint_tree(tmp_path, ["005000", "010000"])
+
+    assert [p.name for p in sweep.select_checkpoints(found, "5000,005000")] == ["005000"]
+
+
+def test_an_unknown_checkpoint_stops_the_sweep(tmp_path):
+    """Skipping it silently would evaluate less than asked and still look complete."""
+    found = checkpoint_tree(tmp_path, ["005000", "010000"])
+
+    with pytest.raises(SystemExit, match="99999"):
+        sweep.select_checkpoints(found, "5000,99999")
+
+
+def test_nothing_recorded_is_not_a_report(tmp_path):
+    # A sweep stopped by hand can end before the first episode finishes; every
+    # aggregate downstream assumes at least one row.
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    assert sweep.recorded_episodes(raw) == 0
+    assert sweep.recorded_episodes(tmp_path / "absent") == 0
+
+    (raw / "005000.jsonl").write_text("\n")  # a child that wrote nothing
+    assert sweep.recorded_episodes(raw) == 0
+
+    (raw / "010000.jsonl").write_text(json.dumps(episode("010000")) + "\n")
+    assert sweep.recorded_episodes(raw) == 1
+
+
+class FakeChild:
+    """A child that never exits on its own, so the poll loop has to end it."""
+
+    def __init__(self):
+        self.signals = []
+        self.returncode = None
+
+    def wait(self, timeout=None):
+        if self.signals:
+            self.returncode = -2
+            return self.returncode
+        raise subprocess.TimeoutExpired("child", timeout)
+
+    def send_signal(self, sig):
+        self.signals.append(sig)
+
+    def kill(self):
+        self.signals.append(signal.SIGKILL)
+
+
+def sweep_args(tmp_path, timeout=600.0):
+    return SimpleNamespace(
+        namespace="/Sim_0/Scene_0",
+        episodes=1,
+        seconds=10.0,
+        seed_base=0,
+        zones="",
+        timeout=timeout,
+    )
+
+
+def run_with_fake_child(tmp_path, monkeypatch, stop, timeout=600.0):
+    child = FakeChild()
+    monkeypatch.setattr(sweep.subprocess, "Popen", lambda *a, **k: child)
+    status = sweep.run_checkpoint(
+        tmp_path / "005000",
+        tmp_path / "results.jsonl",
+        tmp_path / "log.txt",
+        sweep_args(tmp_path, timeout),
+        [],
+        stop,
+    )
+    return child, status
+
+
+def test_a_stop_request_interrupts_the_running_checkpoint(tmp_path, monkeypatch):
+    """The point of polling instead of subprocess.run(timeout=...).
+
+    Waiting for the child to finish would make the service useless on exactly the
+    run worth stopping -- a checkpoint with half an hour of episodes left. SIGINT is
+    the signal eval_policy_pink already unwinds cleanly on, and the episodes it
+    finished are on disk already.
+    """
+    stop = threading.Event()
+    stop.set()
+
+    child, status = run_with_fake_child(tmp_path, monkeypatch, stop)
+
+    assert status == "stopped on request"
+    assert child.signals == [signal.SIGINT], "a stop must not SIGKILL a child mid-write"
+
+
+def test_a_wedged_checkpoint_is_still_killed(tmp_path, monkeypatch):
+    # The timeout is a hang detector and has to survive the rewrite that added --stop.
+    child, status = run_with_fake_child(tmp_path, monkeypatch, threading.Event(), timeout=0.0)
+
+    assert status.startswith("TIMED OUT")
+    assert child.signals == [signal.SIGKILL]
+
+
+def test_a_checkpoint_nobody_stopped_is_left_alone(tmp_path, monkeypatch):
+    child = FakeChild()
+    child.returncode = 0
+    monkeypatch.setattr(sweep.subprocess, "Popen", lambda *a, **k: child)
+    monkeypatch.setattr(FakeChild, "wait", lambda self, timeout=None: 0)
+
+    status = sweep.run_checkpoint(
+        tmp_path / "005000",
+        tmp_path / "results.jsonl",
+        tmp_path / "log.txt",
+        sweep_args(tmp_path),
+        [],
+        threading.Event(),
+    )
+
+    assert status == "ok"
+    assert child.signals == []
+
+
+def test_last_selects_the_newest_checkpoint(tmp_path):
+    """`last` is LeRobot's symlink, and discovery resolves the name away.
+
+    It is still the selection people reach for most -- "score the one I would ship" --
+    so the selector offers it back rather than making them look the number up.
+    """
+    found = checkpoint_tree(tmp_path, ["005000", "010000", "015000"])
+
+    assert [p.name for p in sweep.select_checkpoints(found, "last")] == ["015000"]
+    picked = sweep.select_checkpoints(found, "5000,last")
+    assert [p.name for p in picked] == ["005000", "015000"]
+
+
+def test_a_hand_stopped_report_says_so_rather_than_blaming_the_model(tmp_path):
+    """"Scored 0 everywhere" is a verdict; "the operator stopped it" is not.
+
+    Both leave the earlier checkpoints unevaluated, so a cover that cannot tell them
+    apart invites reading an unfinished sweep as a finding about the policy.
+    """
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "010000.jsonl").write_text(
+        json.dumps(episode("/models/run/checkpoints/010000/pretrained_model")) + "\n"
+    )
+
+    sweep.build_outputs(
+        tmp_path,
+        {
+            "checkpoints_root": "x",
+            "namespace": "/Sim_0/Scene_0",
+            "zones": "3",
+            "episodes": 1,
+            "seconds": 60.0,
+            "extra": [],
+            "finished": "-",
+            "stopped_at": "010000",
+            "stopped_reason": "stop requested through /Sim_0/Scene_0/stop_sweep",
+        },
+    )
+
+    assert (tmp_path / "report.pdf").stat().st_size > 10_000
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert "stop requested" in summary["run"]["stopped_reason"]
+
+
+def sweep_over(tmp_path, monkeypatch, run_checkpoint, episodes=3):
+    """Drive main() over three empty checkpoints with a stubbed child, and count launches."""
+    checkpoints, output = tmp_path / "ckpt", tmp_path / "out"
+    (output / "raw").mkdir(parents=True)
+    for name in ("010000", "020000", "030000"):
+        (checkpoints / name / "pretrained_model").mkdir(parents=True)
+
+    launched = []
+
+    def launch(checkpoint, results, *a, **k):
+        launched.append(checkpoint.name)
+        return run_checkpoint(checkpoint, results)
+
+    monkeypatch.setattr(sweep, "run_checkpoint", launch)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["sweep", "--checkpoints", str(checkpoints), "--output", str(output),
+         "--zones", "3", "--episodes", str(episodes)],
+    )
+    sweep.main()
+    return launched, output
+
+
+def test_a_child_that_records_nothing_stops_the_sweep(tmp_path, monkeypatch):
+    """A misconfigured simulator greets every checkpoint identically -- one is enough.
+
+    This is the eval-without-camera-topics case: the child dies before its first
+    episode, so there is no score to read and no reason to think the next checkpoint
+    fares better. Without the guard the sweep pays a 450M-parameter load per
+    checkpoint to reprint the same traceback, then writes an empty report.
+    """
+    launched, _ = sweep_over(tmp_path, monkeypatch, lambda ckpt, results: "exited 1")
+
+    assert launched == ["030000"]
+
+
+def test_a_child_that_recorded_something_does_not_stop_the_sweep(tmp_path, monkeypatch):
+    """A timeout mid-checkpoint is not a setup failure: the episodes prove it ran."""
+
+    def half_a_checkpoint(checkpoint, results):
+        policy = f"{checkpoint}/pretrained_model"
+        results.write_text(json.dumps(episode(policy, success=True)) + "\n")
+        return "TIMED OUT after 600s"
+
+    launched, output = sweep_over(tmp_path, monkeypatch, half_a_checkpoint)
+
+    assert launched == ["030000", "020000", "010000"]
+    assert json.loads((output / "summary.json").read_text())["run"]["stopped_reason"] == ""
+
+
+def test_the_setup_failure_is_named_in_the_report(tmp_path, monkeypatch):
+    """One recorded episode elsewhere means the report renders and must explain itself."""
+
+    def barren_after_the_first(checkpoint, results):
+        if checkpoint.name == "030000":
+            results.write_text(json.dumps(episode(f"{checkpoint}/pretrained_model")) + "\n")
+            return "ok"
+        return "exited 1"
+
+    launched, output = sweep_over(tmp_path, monkeypatch, barren_after_the_first, episodes=1)
+
+    assert launched == ["030000", "020000"]
+    reason = json.loads((output / "summary.json").read_text())["run"]["stopped_reason"]
+    assert "setup" in reason and "exited 1" in reason
+
+
+def test_a_dead_context_does_not_take_the_report_with_it():
+    """Reproduces the failure that lost a finished 200-episode campaign's report:
+    rclpy.shutdown() raises RCLError when the context is already down, and it was
+    raising out of a context manager whose data was entirely intact."""
+    rclpy = pytest.importorskip("rclpy")
+
+    with sweep.stop_service("/test_teardown"):
+        rclpy.shutdown()  # something else tore the context down first
+
+    assert not rclpy.ok()
+
+
+def test_the_stop_service_still_signals_before_that():
+    rclpy = pytest.importorskip("rclpy")
+
+    with sweep.stop_service("/test_signal") as stop:
+        assert not stop.is_set()
+
+    if rclpy.ok():
+        rclpy.shutdown()
+
+
+def run_with_stall(tmp_path, monkeypatch, stall, results_grow=False):
+    """Drive the poll loop with a child that never exits, watching the stall guard."""
+    child = FakeChild()
+    monkeypatch.setattr(sweep.subprocess, "Popen", lambda *a, **k: child)
+    results = tmp_path / "results.jsonl"
+    args = sweep_args(tmp_path, timeout=600.0)
+    args.stall = stall
+
+    if results_grow:
+        # A slow but working child: one more episode lands on every poll.
+        calls = {"n": 0}
+
+        def growing(_path):
+            calls["n"] += 1
+            return (0, calls["n"])
+
+        monkeypatch.setattr(sweep, "checkpoint_score", growing)
+
+    status = sweep.run_checkpoint(
+        tmp_path / "005000", results, tmp_path / "log.txt", args, [], None)
+    return child, status
+
+
+def test_a_child_that_finishes_no_episodes_is_killed_as_stalled(tmp_path, monkeypatch):
+    """The guard that replaces guessing a per-episode cost."""
+    _child, status = run_with_stall(tmp_path, monkeypatch, stall=0.001)
+
+    assert "STALLED" in status
+
+
+def test_a_slow_child_that_keeps_finishing_episodes_is_left_alone(tmp_path, monkeypatch):
+    """Slow is not hung. Killing this is how the earlier campaigns lost episodes."""
+    child = FakeChild()
+    monkeypatch.setattr(sweep.subprocess, "Popen", lambda *a, **k: child)
+    calls = {"n": 0}
+
+    def growing(_path):
+        calls["n"] += 1
+        if calls["n"] > 3:
+            child.send_signal(signal.SIGTERM)      # let wait() return, ending the loop
+        return (0, calls["n"])
+
+    monkeypatch.setattr(sweep, "checkpoint_score", growing)
+    args = sweep_args(tmp_path, timeout=600.0)
+    args.stall = 0.001                              # would fire instantly without progress
+
+    status = sweep.run_checkpoint(
+        tmp_path / "005000", tmp_path / "results.jsonl", tmp_path / "log.txt",
+        args, [], None)
+
+    assert "STALLED" not in status
+
+
+def test_without_a_stall_setting_the_loop_behaves_as_before(tmp_path, monkeypatch):
+    """Callers that never heard of --stall still get the elapsed-time backstop."""
+    _child, status = run_with_fake_child(tmp_path, monkeypatch, threading.Event(),
+                                         timeout=0.0)
+
+    assert "TIMED OUT" in status

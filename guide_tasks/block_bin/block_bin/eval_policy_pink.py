@@ -75,7 +75,10 @@ exactly. The same file's stale ``min`` is never read under MEAN_STD.
 
 Running it
 ----------
-1. Isaac with the scene, ``publish_camera_topics: true`` in ``config/init.yaml``.
+1. Isaac with the scene, WITH the camera topics -- they are off by default::
+
+       ros2 launch guide_core bringup.launch.py camera_topics:=true
+
 2. The description publisher -- robot_state_publisher ALONE, no move_group and no
    controllers, because those would fight the direct ``joint_command`` writes::
 
@@ -106,7 +109,9 @@ import re
 import subprocess
 import time
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pinocchio as pin
@@ -117,47 +122,75 @@ from irob_lerobot_ros.ros2robot import ROS2Robot
 from pink.tasks import FrameTask, PostureTask
 from rclpy.duration import Duration
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation, Slerp
 from std_msgs.msg import String
 from std_srvs.srv import SetBool
 
 from block_bin.eval_policy import (
     CAMERAS,
+    GRIP_CLOSE_COMMAND,
     GRIPPER_OPEN,
     HOME_POSITION,
     ChunkStream,
     RunControl,
+    add_interpolation_arguments,
+    add_rtc_arguments,
     command_from_action,
+    check_state_distribution,
+    connect_robot,
     episode_plan,
+    rtc_config_from_args,
+    final_success,
     get_safe_torch_device,
     handle_stop,
     images_from,
     is_success,
     load_policy,
+    parse_evaluation_args,
     publish_command,
     report_rollout,
     sleep_sim,
+    state_stats,
 )
-from block_bin.eval_policy_servo import DELTA_DIMS, joint_state, libero_state
-from guide_msgs.srv import CheckSuccess, Randomize
+from block_bin.conventions import (
+    GUIDE_CAMERAS,
+    LIBERO_CAMERAS,
+    LIBERO_POSITION_SCALE,
+    LIBERO_ROTATION_SCALE,
+    delta_for,
+    parse_camera_map,
+    state_for,
+)
+from block_bin.eval_policy_servo import DELTA_DIMS, joint_state
+from block_bin.rollout_trace import RolloutTrace
+from guide_msgs.srv import CheckSuccess, Collision, Pose as PoseSrv, Randomize
 
-# world -> fr3_link0, the translation that turns an FK position into the frame the
-# recorder stored. MEASURED, not derived: every episode of libero_dataset_250 ends
-# homed, and the mean of those 250 final poses is [0.00022, 0.00003, 1.49983] in the
-# dataset's frame against an FK of [0.30689, 0, 0.48688] in fr3_link0 (spread 0.5 mm).
-# The scene geometry alone -- Scene_0 at -origin = [0, 0, 1] plus the bring-up's
-# xyz:="-0.3 0 0" -- predicts [-0.3, 0, 1.0], which is 6.7 mm and 12.9 mm off in x and
-# z. Small, and exactly the sort of bias that shifts a grasp; re-measure the same way
-# if the scene is re-placed or the arm re-mounted.
-BASE_OFFSET = (-0.30667, 0.00003, 1.01295)
+# scene frame -> fr3_link0: the translation that turns an FK position into the frame
+# the recorder stored. MEASURED, not derived: every episode ends homed, and the mean of
+# the 1473 final poses of libero_fr3_1_2_3_6_7_8 is [0.0002, -0.00004, 0.49995] against
+# an FK of [0.30689, 0, 0.48688] in fr3_link0 (spread 0.5, 1.6, 0.9 mm).
+#
+# The z was 1.01295 until 2026-08-24, and that is worth recording rather than quietly
+# deleting. It was correct when written: the datasets then stored EEF z in WORLD frame
+# (~1.5 at home) while their aggregate stats.json was a metre low, so training learned
+# on that offset and feeding raw world z reproduced it. The datasets were later fixed
+# at source and swept -- parquet re-framed down by a metre, stats regenerated to match
+# -- and every dataset on disk is now self-consistent at z in [0.025, 0.887]. This
+# constant was not swept with them, so evaluations kept feeding z about a metre high:
+# roughly +7 sigma at home, and "maximum height" at the moment the tool was at the
+# table. Do not reinstate the old value from the old reasoning; check the CHECKPOINT's
+# own normaliser instead, which is what check_state_distribution now does on every run.
+BASE_OFFSET = (-0.30669, -0.00004, 0.01307)
 
-# Where the home pose lands in the dataset's frame -- the mean of libero_dataset_250's
-# 250 final states, which are all homed, with a spread of 0.5 mm. Every episode here
-# starts by commanding HOME_POSITION too, so the first step of a rollout can be checked
-# against this directly. It is the one assertion that catches a wrong --base-offset, a
-# wrong --base-frame or a re-placed scene, all of which otherwise load fine and simply
-# feed the policy positions it never trained on.
-HOME_IN_DATASET = (0.00022, 0.00003, 1.499827)
+# Where the home pose lands in the dataset's frame -- the mean of the 1473 homed final
+# states of libero_fr3_1_2_3_6_7_8. Every episode here starts by commanding
+# HOME_POSITION too, so the first step of a rollout can be checked against this
+# directly. It is one of the two assertions that catch a wrong --base-offset, a wrong
+# --base-frame or a re-placed scene, all of which otherwise load fine and simply feed
+# the policy positions it never trained on. The other, and the stronger of the two, is
+# check_state_distribution: this constant can go stale with the datasets, the
+# checkpoint's own normaliser cannot.
+HOME_IN_DATASET = (0.0002, -0.00004, 0.49995)
 HOME_TOLERANCE = 0.01
 
 # How close the arm has to get back to home before a SUCCEEDED episode is allowed to
@@ -178,23 +211,17 @@ HOME_RETURN_TOLERANCE = 0.30
 # from the raw FK pose, so this can only change what the policy believes, never where
 # the arm is driven.
 #
-# 0.0 -- MEASURED at the home pose against the recorded data, not argued. Commanding
-# HOME_POSITION and reading joint_states back gives an FK of [0.0003, 0.0001, 1.4995]
-# once BASE_OFFSET is applied, against the mean final state of libero_dataset_250's 250
-# episodes (all homed) of [0.00022, 0.00003, 1.499827], spread 0.0005 m. That is 0.3 mm
-# out, well inside the dataset's own [1.4987, 1.5007]. Every other dimension lands
-# inside one standard deviation too.
+# 0.0, because BASE_OFFSET now carries the whole correction. This flag exists to A/B a
+# suspected frame error without editing a constant.
 #
-# A -1.0 hotfix was tried on the theory that the state should match the frame
-# ``meta/stats.json`` is expressed in. It is wrong, and expensively so: it puts z at
-# 0.4995 when the dataset's z never goes below 1.0398, i.e. about a thousand standard
-# deviations outside anything the policy has seen. The stats file is the thing that is
-# inconsistent, not the frames -- the parquet and the per-episode stats in
-# ``meta/episodes`` both say world frame, only the AGGREGATE is a metre low, and since
-# LeRobot builds the normalizer from that aggregate, training fed raw world z through a
-# mean a metre below it and learned on the resulting offset. Feeding raw world z here
-# reproduces training exactly. Kept as a flag only so the two can still be A/B'd.
-STATE_Z_OFFSET = 1.0
+# The comment that used to sit here argued at length that a -1.0 shift was wrong,
+# because the parquet stored world-frame z while only the aggregate stats.json was a
+# metre low. That was true of the datasets AS THEY WERE. They have since been re-framed
+# at source and swept, parquet and stats together, so the discrepancy it described no
+# longer exists and the reasoning no longer applies -- BASE_OFFSET carries the metre
+# instead. Left as a note because the argument was persuasive and wrong-by-then, and
+# the next person to find a metre in the z channel deserves the history.
+STATE_Z_OFFSET = 0.0
 
 # Ceiling on one step's commanded motion, from libero_dataset_250 -- the set the
 # shipped checkpoints were trained on -- which never exceeds 0.1029 m or 0.3302 rad in
@@ -396,23 +423,6 @@ class ArmIK:
         return configuration.q[self._to_ros], residual
 
 
-def delta_from_action(action, scale: float = 1.0) -> tuple[np.ndarray, np.ndarray, float]:
-    """7-dim LIBERO action -> (position delta, rotation delta as rotvec, gripper).
-
-    The gripper dimension stays an ABSOLUTE finger position in metres (GUIDE's
-    convention, ~0..0.04), not LIBERO's +-1, and ``scale`` deliberately does not touch
-    it -- stretching the motion must not stretch how far the fingers close.
-    """
-    values = np.asarray(action, dtype=np.float64).reshape(-1)
-    if values.size != DELTA_DIMS:
-        raise ValueError(
-            f"Policy returned {values.size} dims, expected {DELTA_DIMS} "
-            f"[dx dy dz dwx dwy dwz gripper]. Was this checkpoint trained on a dataset "
-            f"built with --eef-delta-action? A joint-space policy belongs in eval_policy.py."
-        )
-    return values[0:3] * scale, values[3:6] * scale, float(values[6])
-
-
 def clamp_delta(dposition, drotvec, max_linear: float, max_angular: float):
     """Scale one step's motion back under the ceilings, keeping its direction.
 
@@ -456,6 +466,62 @@ def apply_delta(position, rotvec, dposition, drotvec) -> tuple[np.ndarray, np.nd
 
 def measured_joints(observation: dict, arm_joints: list[str]) -> np.ndarray:
     return np.array([observation[f"{joint}.pos"] for joint in arm_joints], dtype=np.float64)
+
+
+# The cubes block_bin randomizes, from Scene.colors. Three are distractors on any
+# given episode, but a policy that grasps the WRONG one has still grasped -- which is
+# a different failure from never closing on anything, and only visible if all four are
+# followed.
+BLOCK_COLOURS = ("red", "yellow", "green", "blue")
+
+# Commanded-closed fingers settle here when something is between them: the cube's
+# half-width is ~0.025 and an empty close runs through to 0 or below. Measured across
+# this campaign, real grasps stalled at 0.018-0.035 and misses at -0.02 to 0.01.
+GRIP_STALL = 0.015
+
+
+def prim_position(robot, path: str):
+    """World-frame [x, y, z] of one prim, or None if the stage has no such path."""
+    response = robot.callService(robot.pose, PoseSrv.Request(path=path))
+    if not response.success:
+        return None
+    return [response.pose.position.x, response.pose.position.y, response.pose.position.z]
+
+
+def scene_objects(robot, scene_id: int) -> dict:
+    """Every cube and both bins, world frame, by name."""
+    objects = {}
+    for colour in BLOCK_COLOURS:
+        position = prim_position(robot, f"/Scene_{scene_id}/blocks/{colour}_block")
+        if position is not None:
+            objects[f"{colour}_block"] = position
+    for index, side in enumerate(("left", "right")):
+        position = prim_position(robot, f"/Scene_{scene_id}/bin_{index}")
+        if position is not None:
+            objects[f"{side}_bin"] = position
+    return objects
+
+
+def bin_contents(robot, scene_id: int) -> dict:
+    """Which bin each cube is in, or None. Asked once, at the end of the episode.
+
+    Containment per cube per bin is eight service calls, which is fine once and far
+    too much per step -- so the per-step trace follows positions (cheap, and enough to
+    see a lift) and this answers the placement question at the end.
+    """
+    where = {}
+    for colour in BLOCK_COLOURS:
+        block = f"/Scene_{scene_id}/blocks/{colour}_block"
+        where[f"{colour}_block"] = None
+        for index, side in enumerate(("left", "right")):
+            response = robot.callService(
+                robot.collision,
+                Collision.Request(prim1=block, prim2=f"/Scene_{scene_id}/bin_{index}"),
+            )
+            if response.collision:
+                where[f"{colour}_block"] = side
+                break
+    return where
 
 
 def wait_until_home(
@@ -512,8 +578,62 @@ def home_pose_error(position) -> float:
     return float(np.linalg.norm(np.asarray(position) - np.asarray(HOME_IN_DATASET)))
 
 
+def ramp_to_target(
+    robot,
+    clock,
+    deadline,
+    joints,
+    ik,
+    q_seed,
+    previous,
+    target,
+    grip,
+    tolerance,
+    sub_steps: int,
+    poll: float = 0.002,
+):
+    """Wait out the control period, publishing setpoints along a Cartesian path.
+
+    LERP on the translation, SLERP on the rotation. Blending joint angles instead
+    would bow the end effector off the straight line between two targets, and
+    averaging a rotation vector component-wise is not a rotation path at all -- it
+    cuts the chord and changes speed along the way.
+
+    IK is solved per sub-pose, each seeded from the previous solution so the arm stays
+    on the branch it is already on rather than flipping elbow mid-period.
+
+    The gripper is NOT ramped: it is close to a binary command and stretching it over a
+    period would move the instant the fingers close, which is the one thing in this
+    task that must not drift.
+
+    Returns the last joint solution, or None when it fell back to a plain wait (no
+    previous pose on the first step of an episode, or the step already overran).
+    """
+    remaining = (deadline - clock.now()).nanoseconds / 1e9
+    if sub_steps <= 1 or previous is None or remaining <= 0:
+        while clock.now() < deadline:
+            time.sleep(poll)
+        return None
+
+    (start_position, start_rotvec), (end_position, end_rotvec) = previous, target
+    rotations = Rotation.from_rotvec([start_rotvec, end_rotvec])
+    slerp = Slerp([0.0, 1.0], rotations)
+
+    started = clock.now()
+    q = q_seed
+    for k in range(1, sub_steps + 1):
+        fraction = k / sub_steps
+        position = start_position + (end_position - start_position) * fraction
+        rotvec = slerp(fraction).as_rotvec()
+        q, _ = ik.solve(q, position, rotvec, tolerance)
+        publish_command(robot, *command_from_action(list(q) + [grip], joints))
+        while clock.now() < started + Duration(seconds=remaining * fraction):
+            time.sleep(poll)
+    return q
+
+
 def run_episode(
-    robot, scene_id, zone, policy, processors, device, control, ik, args, seed=None
+    robot, scene_id, zone, policy, processors, device, control, ik, args, seed=None, trace=None
 ) -> dict:
     """Home + randomize the scene, then let the policy drive the IK until success.
 
@@ -560,27 +680,68 @@ def run_episode(
             seed=int(seed) if seed is not None else 0,
         ),
     )
-    task = args.task or json.loads(response.message)["task"]
+    drawn = json.loads(response.message)
+    scene_task = drawn["task"]
+    task = args.task or scene_task
+    if trace is not None and trace.poses is None:
+        # EVERY cube, not just the graded one. "Closed on a cube", "lifted a cube" and
+        # "put a cube in a bin" are the rungs between doing nothing and succeeding, and
+        # a policy that does them to the wrong cube has failed differently from one
+        # that never closed at all.
+        trace.poses = lambda: scene_objects(robot, scene_id)
+        trace.draw = {
+            "target": drawn.get("target"),
+            "goal": drawn.get("goal"),
+            "task": scene_task,
+        }
+    if args.task and args.task != scene_task:
+        # --task changes what the POLICY is told and nothing else. The success
+        # criterion is rebuilt from the scene's own draw every episode
+        # (Scene.is_success_preprocess picks the colour and bin from self.c/self.s),
+        # so an override that names a different block or bin grades a task nobody
+        # asked the policy to do, and a perfectly executed rollout scores as a miss.
+        robot.node.get_logger().warn(
+            f"--task tells the policy {args.task!r} but IsSuccess still grades the "
+            f"scene's own draw, {scene_task!r}. These disagree, so this episode "
+            f"cannot pass however well it is executed."
+        )
     robot.node.get_logger().info(f'Rolling out: "{task}"')
 
-    sleep_sim(robot, 5.0)  # let the randomized scene settle, as solve_task does
+    sleep_sim(robot, 0.5)  # let the randomized scene settle, as solve_task does
 
     preprocessor, postprocessor = processors
     policy.reset()
     preprocessor.reset()
     postprocessor.reset()
     control.abort_episode.clear()
-    stream = ChunkStream(policy, preprocessor, postprocessor, device, task, robot.name, args.lead)
+    stream = ChunkStream(
+        policy,
+        preprocessor,
+        postprocessor,
+        device,
+        task,
+        robot.name,
+        args.lead,
+        rtc=rtc_config_from_args(args),
+    )
 
-    period = 1.0 / args.fps
-    steps = int(args.seconds * args.fps)
-    check_interval = max(1, int(args.fps))  # poll the success service ~once a second
+    # One derived period, used everywhere the cadence appears. Computed once in main()
+    # so --time-scale cannot stretch one of these and not the others.
+    period = args.period
+    last_target = None  # previous commanded EEF pose, the ramp's start point
+    steps = int(args.seconds / period)
+    check_interval = max(1, int(1.0 / period))  # poll the success service ~once a second
     step_times, grips, home_errors = [], [], []
     # Where the tool went and what the fingers did, kept so a FAILED episode can still
     # say which way it failed. An arm that never left home, one that crossed the table
     # but never closed, and one that closed on empty air are three different problems
     # and only the first is cheap to see in the log.
     travelled, previous_position = 0.0, None
+    # World-frame tool positions, one per step. Where the arm WENT is the only
+    # evidence left when the block never moves: a policy that swings to a bin
+    # empty-handed and one that never leaves the block look identical in the
+    # success rate, and opposite in this list.
+    eef_path = []
     unreachable = clamped = refused = 0
     succeeded = returned_home = False
     success_step = 0
@@ -598,6 +759,7 @@ def run_episode(
         position, rotvec = ik.fk(q)
 
         dataset_position = position + offset
+        eef_path.append(dataset_position)
         home_error = home_pose_error(dataset_position)
         home_errors.append(home_error)
         if previous_position is not None:
@@ -607,11 +769,11 @@ def run_episode(
             # --state-z-offset shifts ONLY what the policy is shown. The IK below keeps
             # working from `position`, so a wrong guess here cannot move the arm to the
             # wrong place -- it can only feed the policy the wrong picture of where it is.
-            state = libero_state(
-                observation,
+            state = state_for(
+                args.convention,
                 dataset_position + np.array([0.0, 0.0, args.state_z_offset]),
                 rotvec,
-                gripper_joint,
+                float(observation[f"{gripper_joint}.pos"]),
             )
         else:
             state = joint_state(observation, joints)
@@ -636,8 +798,17 @@ def run_episode(
                     f"--base-frame.\033[0m"
                 )
 
-        action = stream.next_action({"observation.state": state, **images_from(observation)}, step)
-        dposition, drotvec, grip = delta_from_action(action, args.action_scale)
+        action = stream.next_action(
+            {"observation.state": state, **images_from(observation, args.cameras)}, step
+        )
+        dposition, drotvec, grip = delta_for(
+            args.convention,
+            action,
+            args.action_scale,
+            args.libero_position_scale,
+            args.libero_rotation_scale,
+            GRIPPER_OPEN,
+        )
         # Clamped AFTER --action-scale: the scale is a calibration knob the operator
         # sets, the ceiling is what the training data actually contains.
         dposition, drotvec, was_clamped = clamp_delta(
@@ -653,8 +824,10 @@ def run_episode(
             # otherwise look exactly like a policy that stopped asking to move.
             unreachable += 1
 
+        issued = None  # the pose actually commanded this step, if any
         jump = joint_step(q_command, q)
-        if args.max_joint_step > 0 and jump > args.max_joint_step:
+        held_step = args.max_joint_step > 0 and jump > args.max_joint_step
+        if held_step:
             # Hold instead of publishing. Nothing else re-publishes joint_command here,
             # so the arm simply stays where it is for this slot -- a dropped step costs
             # one period of motion, where a bad position target costs the episode and
@@ -666,10 +839,47 @@ def run_episode(
                 f"Holding. Measured q={np.round(q, 3).tolist()}"
             )
         else:
-            publish_command(robot, *command_from_action(list(q_command) + [grip], joints))
+            # With interpolation on, the ramp below publishes across the period instead
+            # of one target landing here and the arm idling for the rest of it.
+            if args.interpolate <= 1 or last_target is None:
+                publish_command(robot, *command_from_action(list(q_command) + [grip], joints))
+            issued = (target_position, target_rotvec)
 
         grips.append((grip, observation[f"{gripper_joint}.pos"]))
         step_times.append(time.perf_counter() - started)
+
+        if trace is not None:
+            # Both halves of every step: what was asked for and what happened. The
+            # pairs that matter are (target_position, eef_position) -- did the arm go
+            # where the policy pointed -- and (plan, eef_position) one step later --
+            # was the policy pointing anywhere sensible in the first place.
+            trace.step(
+                step,
+                {
+                    "sim_seconds": (clock.now() - started_sim).nanoseconds / 1e9,
+                    # Wall time is the cost side of --time-scale: sim seconds are what
+                    # the policy experiences, these are what the experiment spends.
+                    "wall_seconds": time.perf_counter() - started_wall,
+                    "step_ms": 1000 * step_times[-1],
+                    "state": state,
+                    "action": np.asarray(action).reshape(-1),
+                    "plan": stream.plan(),
+                    "eef_position": dataset_position,
+                    "eef_rotvec": rotvec,
+                    "target_position": target_position + offset,
+                    "target_rotvec": target_rotvec,
+                    "q_measured": q,
+                    "q_command": q_command,
+                    "grip_command": grip,
+                    "grip_measured": observation[f"{gripper_joint}.pos"],
+                    "residual": residual,
+                    "home_error": home_error,
+                    "held": bool(held_step),
+                    "clamped": bool(was_clamped),
+                    "unreachable": bool(residual > args.ik_tolerance),
+                },
+                observation,
+            )
 
         if control.abort_episode.is_set():
             robot.node.get_logger().warn(f"Episode aborted after {step + 1} steps.")
@@ -702,8 +912,25 @@ def run_episode(
         next_deadline = next_deadline + Duration(seconds=period)
         if clock.now() > next_deadline:
             next_deadline = clock.now()
-        while clock.now() < next_deadline:
-            time.sleep(0.002)
+        if args.interpolate > 1 and issued is not None:
+            ramp_to_target(
+                robot,
+                clock,
+                next_deadline,
+                joints,
+                ik,
+                q,
+                last_target,
+                issued,
+                grip,
+                args.ik_tolerance,
+                args.interpolate,
+            )
+        else:
+            while clock.now() < next_deadline:
+                time.sleep(0.002)
+        if issued is not None:
+            last_target = issued
 
     stream.close()
     wall_seconds = time.perf_counter() - started_wall
@@ -743,8 +970,11 @@ def run_episode(
 
     # Asked once more if the loop never got to poll (a rollout shorter than
     # check_interval), which is also what the old bool return did.
-    success = bool(succeeded or is_success(robot, scene_id))
-    return {
+    success = bool(succeeded or final_success(robot, scene_id))
+    grasp_step = next(
+        (i for i, (commanded, _) in enumerate(grips) if commanded < GRIP_CLOSE_COMMAND), None
+    )
+    record = {
         "zone": zone,
         "seed": seed,
         "task": task,
@@ -759,11 +989,17 @@ def run_episode(
         # Sim seconds to the moment of success, which is what "how fast is this
         # checkpoint" means -- wall time is whatever the GPU and the renderer were
         # doing, and total sim time now includes the homing return.
-        "success_seconds": round(success_step / args.fps, 3) if succeeded else None,
-        "median_step_ms": round(1000 * sorted(step_times)[len(step_times) // 2], 1)
-        if step_times
-        else None,
+        # success_step * period, NOT / fps: under --time-scale each step is worth
+        # period sim seconds, so dividing by fps reports the unscaled clock and makes
+        # every time-scale condition look identically fast.
+        "success_seconds": round(success_step * args.period, 3) if succeeded else None,
+        "median_step_ms": (
+            round(1000 * sorted(step_times)[len(step_times) // 2], 1) if step_times else None
+        ),
         "replans": stream.replans,
+        "rtc_engaged": stream.rtc_engaged,
+        "rtc_tail_mean": (round(stream.rtc_tail_total / stream.rtc_engaged, 2)
+                          if stream.rtc_engaged else None),
         "unreachable": unreachable,
         "clamped": clamped,
         "held": refused,
@@ -780,10 +1016,24 @@ def run_episode(
         # 0.025 m half-width when there is a block between them).
         "grip_commanded_min": round(min(g[0] for g in grips), 4) if grips else None,
         "grip_measured_min": round(min(g[1] for g in grips), 4) if grips else None,
+        # First step the policy asked for a close, or None if it never did.
+        "grasp_step": grasp_step,
     }
+    if getattr(args, "record_path", False):
+        # Off by default: 300 points per episode is noise in a sweep's CSV and the
+        # whole evidence base for a probe.
+        record["eef_path"] = [[round(float(v), 4) for v in point] for point in eef_path]
+    return record
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Every flag a Pink evaluation takes.
+
+    Split out so probe_grounding can add its own flags and inherit the rest. A probe
+    that redeclared them would be free to drift -- a different --fps or --n-action-steps
+    than the evaluation it is supposed to be characterising -- and its verdict would
+    then be about a system nobody runs.
+    """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--namespace", type=str, default="")
     parser.add_argument("--policy", type=str, required=True, help="Checkpoint dir or HF repo id.")
@@ -794,6 +1044,57 @@ def main():
     # -- a delta is applied as a displacement, not re-integrated as a velocity -- so
     # this rate only sets how often the policy looks.
     parser.add_argument("--fps", type=float, default=5.0, help="Control rate, Hz of SIM time.")
+    parser.add_argument(
+        "--time-scale",
+        type=float,
+        default=1.0,
+        help="Multiplier on how long each action takes to execute. 2.0 HALVES the speed "
+        "(each action gets twice the sim time); 0.25 QUADRUPLES it. Same meaning as in "
+        "eval_policy_servo. Separate from --fps on purpose: --fps is a property of the "
+        "DATASET -- the rate the deltas were sampled at, and changing it misreads how "
+        "far each one is meant to travel -- while this stretches the clock the rollout "
+        "runs on and leaves every delta the displacement it was recorded as.",
+    )
+    parser.add_argument(
+        "--trace-dir",
+        type=str,
+        default="",
+        help="Write a full RolloutTrace per episode under this directory, so a sweep "
+        "produces replayable rollouts instead of one row of numbers. The per-step "
+        "record is small; camera frames are the expensive part and are sampled "
+        "separately -- see --trace-frames-every.",
+    )
+    parser.add_argument(
+        "--trace-index-base",
+        type=int,
+        default=0,
+        help="Number traced episodes from here instead of 0. A resumed run restarts "
+        "its own episode counter, so without this its traces overwrite the first N of "
+        "the run it is continuing -- the results file is fine, the traces are lost.",
+    )
+    parser.add_argument(
+        "--trace-frames-every",
+        type=int,
+        default=0,
+        help="Save camera frames for every Nth traced episode (0 = never). Frames are "
+        "~11 MB per rollout and the numbers are ~100 kB, so a long campaign traces every "
+        "episode numerically and samples the video.",
+    )
+    parser.add_argument(
+        "--trace-pose-interval",
+        type=int,
+        default=5,
+        help="Query the target block's pose every N steps while tracing (default 5, "
+        "i.e. 1 Hz at --fps 5). One service round trip per polled step; this is what "
+        "makes a placement distinguishable from a shove.",
+    )
+    parser.add_argument(
+        "--record-path",
+        action="store_true",
+        help="Keep the tool's world-frame position at every step in the episode record. "
+        "What probe_grounding measures the arm's response with; off by default because "
+        "it is 300 points an episode that a sweep never reads.",
+    )
     parser.add_argument(
         "--n-action-steps",
         type=int,
@@ -931,19 +1232,105 @@ def main():
         "Only reproducible within one simulator session unless the scene's master seed was "
         "pinned at registration.",
     )
+    parser.add_argument(
+        "--allow-off-distribution",
+        action="store_true",
+        help="Run even though the first observation falls outside the range the "
+        "checkpoint was trained on. Almost always the wrong answer -- the check exists "
+        "because a frame error looks exactly like a policy that does not work.",
+    )
+    parser.add_argument(
+        "--convention",
+        type=str,
+        default="guide",
+        choices=("guide", "libero"),
+        help="Which I/O conventions the checkpoint was trained on. 'guide' is what "
+        "block_bin's own datasets record. 'libero' is lerobot/smolvla_libero: two "
+        "cameras keyed image/image2, a positive-hemisphere rotation vector, mirrored "
+        "finger dimensions, and OSC-unit actions with a binary +-1 gripper. Chosen as a "
+        "SET because half-applying them yields a policy that runs and never succeeds.",
+    )
+    parser.add_argument(
+        "--camera-map",
+        type=str,
+        default="",
+        help="Override which GUIDE camera feeds each key the policy expects, e.g. "
+        "'image=top,image2=wrist'. Defaults to the convention's own mapping.",
+    )
+    parser.add_argument(
+        "--libero-position-scale",
+        type=float,
+        default=LIBERO_POSITION_SCALE,
+        help=f"Metres per unit of OSC position action (default {LIBERO_POSITION_SCALE}, "
+        f"robosuite OSC_POSE output_max). The controller's setting, not something the "
+        f"checkpoint records -- the largest uncertainty in the libero adapter.",
+    )
+    parser.add_argument(
+        "--libero-rotation-scale",
+        type=float,
+        default=LIBERO_ROTATION_SCALE,
+        help=f"Radians per unit of OSC rotation action (default {LIBERO_ROTATION_SCALE}).",
+    )
     parser.add_argument("--task", type=str, default="", help="Override the scene's instruction.")
     parser.add_argument("--device", type=str, default=None, help="cuda, cpu (default: policy's)")
-    args = parser.parse_known_args()[0]
+    add_rtc_arguments(parser)
+    add_interpolation_arguments(parser)
+    return parser
 
+
+def derive_period(args) -> None:
+    """Set ``args.period``, the sim seconds one action gets. Idempotent.
+
+    Called from setup_evaluation, which every caller of run_episode goes through --
+    probe_grounding and debug_rollout drive the rollout themselves, and deriving the
+    cadence in main() alone is how a shared rollout grows a per-caller clock.
+    """
+    if args.time_scale <= 0:
+        raise SystemExit("--time-scale must be positive.")
+    args.period = args.time_scale / args.fps
+    if args.time_scale != 1.0:
+        print(
+            f"Time scale {args.time_scale:g}: each action executes over "
+            f"{args.period:.3f}s of sim time instead of {1 / args.fps:.3f}s "
+            f"({1 / args.time_scale:.2f}x speed). The deltas were recorded at "
+            f"{args.fps:g} Hz, so this drives the same path at a different rate -- "
+            f"which is itself a distribution shift, not a free knob."
+        )
+
+
+def resolve_conventions(args) -> None:
+    """Settle which cameras feed which key, and check the set is coherent."""
+    default = LIBERO_CAMERAS if args.convention == "libero" else GUIDE_CAMERAS
+    args.cameras = parse_camera_map(args.camera_map, default)
+    if args.convention == "libero" and args.state != "libero":
+        raise SystemExit(
+            f"--convention libero needs --state libero: that checkpoint takes an 8-dim "
+            f"end-effector state, not the {args.state!r} layout."
+        )
+    if args.convention != "guide":
+        print(
+            f"Convention {args.convention!r}: feeding "
+            + ", ".join(f"observation.images.{k} <- {v}" for k, v in args.cameras.items())
+            + f"; state canonicalised and finger-mirrored; actions scaled by "
+            f"{args.libero_position_scale:g} m and {args.libero_rotation_scale:g} rad "
+            f"per unit with a binary gripper."
+        )
+
+
+def setup_evaluation(args) -> SimpleNamespace:
+    """Bring up everything a rollout needs: robot, policy, IK, services, stop hook.
+
+    Returns the arguments `run_episode` takes, so a caller is a loop and nothing else.
+    Extracted from main() for probe_grounding: a grounding verdict is only about the
+    evaluator that produced it, so the probe has to drive this exact stack rather than
+    a second copy of it that is one refactor away from disagreeing.
+    """
+    derive_period(args)
+    resolve_conventions(args)
     namespace_base = args.namespace or ""
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
     scene_id = int(match.group()) if match else 0
     sim_namespace = "/" + namespace_base.split("/")[1] if namespace_base else ""
-
-    # Built before the policy loads so a bad --zone fails in a second rather than after
-    # 450M parameters have been read off disk.
-    plan = episode_plan(args.zone, args.episodes)
-    print(f"Evaluating {len(plan)} episodes: {args.zone or 'unrestricted placement'}")
 
     policy, preprocessor, postprocessor = load_policy(args.policy, args.device)
     device = get_safe_torch_device(policy.config.device)
@@ -983,9 +1370,7 @@ def main():
     }
 
     robot = ROS2Robot(config=config)
-    robot.connect()
-    time.sleep(5)  # wait for connections to establish
-    print("Connected to robot and cameras.")
+    connect_robot(robot)
 
     args.base_frame = args.base_frame or config.base_link_name
     urdf = urdf_from_file(args.urdf) if args.urdf else wait_for_robot_description(robot.node)
@@ -997,7 +1382,31 @@ def main():
         args.posture_cost,
         np.array(HOME_POSITION, dtype=np.float64),
     )
-    home_position, _ = ik.fk(np.array(HOME_POSITION))
+    home_position, home_rotvec = ik.fk(np.array(HOME_POSITION))
+
+    # Before a single episode runs: would the policy recognise the pose it is about to
+    # be shown? Checked against the CHECKPOINT's own normaliser, so it stays true when
+    # the datasets are re-framed underneath the constants above -- which has happened,
+    # and cost this project weeks of "the policy does not work".
+    if not args.allow_off_distribution:
+        # Built through the SAME convention the rollout will use, or the check tests a
+        # state the policy is never shown -- which is how this first reported the raw
+        # GUIDE pose as 17.8 sigma out while the adapted one sits within 0.9.
+        shown = state_for(
+            args.convention,
+            home_position + np.asarray(args.base_offset) + [0, 0, args.state_z_offset],
+            home_rotvec,
+            GRIPPER_OPEN,
+        )
+        try:
+            check_state_distribution(shown, state_stats(args.policy), args.base_offset)
+        except SystemExit:
+            # Unwind the executor first, exactly as connect_robot does: raising through
+            # a live ROS2Robot buries the diagnosis under ~70 lines of "cannot schedule
+            # new futures after shutdown", and the diagnosis is the entire point.
+            robot.disconnect()
+            raise
+
     print(
         f"Pink IK on {ik.model.nq} joints, '{args.base_frame}' -> "
         f"'{config.end_effector_name}' ({'--urdf' if args.urdf else 'robot_description'}). "
@@ -1015,6 +1424,23 @@ def main():
         srv_name=f"{sim_namespace}/IsSuccess",
         callback_group=robot._reentrant_callback_group,
     )
+    # Scene geometry, for tracing where the target block actually goes. Cheap to hold
+    # open even when nothing traces: a client that is never called costs one entry in
+    # the node's table.
+    robot.pose = robot.node.create_client(
+        srv_type=PoseSrv,
+        srv_name=f"{sim_namespace}/PoseRequest",
+        callback_group=robot._reentrant_callback_group,
+    )
+    robot.collision = robot.node.create_client(
+        srv_type=Collision,
+        srv_name=f"{sim_namespace}/CollisionRequest",
+        callback_group=robot._reentrant_callback_group,
+    )
+
+    # PoseRequest answers in WORLD frame while the policy's state is scene-relative.
+    # Recorded once here so every trace this run writes can say so for itself.
+    args.scene_origin = prim_position(robot, f"/Scene_{scene_id}")
 
     control = RunControl()
     stop_service_name = f"{namespace_base}/stop_episode"
@@ -1028,9 +1454,76 @@ def main():
     )
     print(
         "Abort a rollout that has clearly missed with:\n"
-        f"  ros2 service call {stop_service_name} std_srvs/srv/SetBool \"{{data: false}}\"\n"
+        f'  ros2 service call {stop_service_name} std_srvs/srv/SetBool "{{data: false}}"\n'
         "  (data: true also ends the whole evaluation)"
     )
+
+    return SimpleNamespace(
+        robot=robot,
+        scene_id=scene_id,
+        sim_namespace=sim_namespace,
+        policy=policy,
+        processors=(preprocessor, postprocessor),
+        device=device,
+        ik=ik,
+        control=control,
+    )
+
+
+def open_trace(args, episode: int, zone):
+    """A RolloutTrace for this episode, or None when --trace-dir was not given."""
+    if not args.trace_dir:
+        return None
+    every = args.trace_frames_every
+    with_frames = bool(every) and episode % every == 0
+    # Where this episode sits in the WHOLE plan, not in this invocation of it.
+    index = getattr(args, "trace_index_base", 0) + episode
+    trace = RolloutTrace(
+        Path(args.trace_dir) / f"ep_{index:04d}",
+        cameras=tuple(args.cameras.values()) if with_frames else (),
+        frame_interval=1,
+        pose_interval=args.trace_pose_interval,
+    )
+    trace.open(
+        {
+            "episode": index,
+            "zone": zone,
+            # The seed the scene was ACTUALLY randomised with, which is only the
+            # episode index when --seed-base is 0. Recording the index here instead
+            # silently mislabels every run with a seed base, and anything joining
+            # traces to results on (zone, seed) then joins the wrong rows.
+            "seed": None if args.seed_base < 0 else args.seed_base + episode,
+            "trial": "anywhere" if zone is None else f"zone {zone}",
+            "policy": args.policy,
+            "convention": args.convention,
+            "fps": args.fps,
+            "time_scale": args.time_scale,
+            "n_action_steps": args.n_action_steps,
+            "base_offset": list(args.base_offset),
+            "cameras": list(args.cameras.values()) if with_frames else [],
+            "scene_origin": args.scene_origin,
+            "recorded": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
+    return trace
+
+
+def main():
+    args = parse_evaluation_args(build_parser())
+
+    # Built before the policy loads so a bad --zone fails in a second rather than after
+    # 450M parameters have been read off disk.
+    plan = episode_plan(args.zone, args.episodes)
+    print(f"Evaluating {len(plan)} episodes: {args.zone or 'unrestricted placement'}")
+
+    evaluation = setup_evaluation(args)
+    robot = evaluation.robot
+    scene_id = evaluation.scene_id
+    policy = evaluation.policy
+    preprocessor, postprocessor = evaluation.processors
+    device = evaluation.device
+    ik = evaluation.ik
+    control = evaluation.control
 
     successes = 0
     attempted = 0
@@ -1039,18 +1532,32 @@ def main():
         for episode, zone in enumerate(plan):
             label = "anywhere" if zone is None else f"zone {zone}"
             robot.node.get_logger().info(f"--- Episode {episode + 1}/{len(plan)} ({label}) ---")
-            record = run_episode(
-                robot,
-                scene_id,
-                zone,
-                policy,
-                (preprocessor, postprocessor),
-                device,
-                control,
-                ik,
-                args,
-                seed=None if args.seed_base < 0 else args.seed_base + episode,
-            )
+            trace = open_trace(args, episode, zone)
+            try:
+                record = run_episode(
+                    robot,
+                    scene_id,
+                    zone,
+                    policy,
+                    (preprocessor, postprocessor),
+                    device,
+                    control,
+                    ik,
+                    args,
+                    seed=None if args.seed_base < 0 else args.seed_base + episode,
+                    trace=trace,
+                )
+            finally:
+                if trace is not None:
+                    # Closed even if the episode threw: the steps up to the fault are
+                    # the ones worth replaying.
+                    trace.close(
+                        {
+                            "objects_at_end": trace.poses() if trace.poses else {},
+                            "bin_contents": bin_contents(robot, evaluation.scene_id),
+                            **getattr(trace, "draw", {}),
+                        }
+                    )
             success = record["success"]
             if args.results:
                 append_record(

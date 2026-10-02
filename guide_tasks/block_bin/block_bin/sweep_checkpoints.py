@@ -25,6 +25,14 @@ Output, all under ``--output``::
     raw/<ckpt>.jsonl what eval_policy_pink appended as it went, one JSON per episode
     logs/<ckpt>.log  that child's full console output
 
+``--only 5000,15000`` evaluates just those checkpoints instead of the whole run;
+matching is on the training step, so the zero padding is optional.
+
+The whole sweep can be ended by hand at any point, and it then writes the same
+report from the episodes that finished::
+
+    ros2 service call <namespace>/stop_sweep std_srvs/srv/Trigger
+
 Checkpoints are evaluated NEWEST FIRST, and the sweep stops as soon as one of them
 scores 0 on a complete evaluation -- every zone, every episode, no wins. Walking
 backwards, the remaining checkpoints are earlier in training than a model that cannot
@@ -45,10 +53,13 @@ so budget by the worst case, not by how fast a good rollout ends.
 import argparse
 import json
 import math
+import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -87,6 +98,125 @@ def discover_checkpoints(root: Path) -> list[Path]:
     return sorted(found.values(), key=checkpoint_step)
 
 
+def select_checkpoints(checkpoints: list[Path], only: str) -> list[Path]:
+    """Narrow a discovered run to the checkpoints named in ``--only``.
+
+    Matching is on the training STEP, not the directory name, so ``5000`` finds
+    ``005000``: LeRobot's zero padding is a formatting detail of the trainer and
+    making the operator retype it exactly is a trap that silently selects nothing.
+    ``last`` still works, because discovery resolved it onto its numbered directory
+    and both names are offered here.
+
+    A name that matches nothing is fatal rather than skipped. The alternative is a
+    sweep that evaluates fewer checkpoints than asked for and then writes a report
+    that looks complete, which is the one failure mode worth being loud about --
+    a typo would otherwise cost the run silently.
+    """
+    if not only.strip():
+        return checkpoints
+
+    known: dict[str, Path] = {}
+    for path in checkpoints:
+        known.setdefault(path.name, path)
+        step = checkpoint_step(path)
+        if step >= 0:
+            known.setdefault(str(step), path)
+
+    # discover_checkpoints resolves LeRobot's `last` symlink onto its numbered
+    # directory and keeps the number, so the name is gone by the time we get here --
+    # but "just score the newest one" is the most useful selection there is, so it is
+    # offered back. A directory genuinely NAMED `last` wins, having been added above.
+    if checkpoints:
+        known.setdefault("last", max(checkpoints, key=checkpoint_step))
+
+    picked, missing = [], []
+    for item in (part.strip() for part in only.split(",") if part.strip()):
+        key = str(int(item)) if item.isdigit() else item
+        match = known.get(key) or known.get(item)
+        if match is None:
+            missing.append(item)
+        else:
+            picked.append(match)
+
+    if missing:
+        raise SystemExit(
+            f"--only {','.join(missing)}: no such checkpoint. "
+            f"Available: {', '.join(path.name for path in checkpoints)}"
+        )
+    # De-duplicated (5000 and 005000 name one directory) and put back in training
+    # order, so --only never changes the order the report plots.
+    return sorted(dict.fromkeys(picked), key=checkpoint_step)
+
+
+@contextmanager
+def stop_service(namespace: str):
+    """A ROS service that ends the whole sweep, leaving a full report behind.
+
+    ``eval_policy_pink`` already answers ``<ns>/stop_episode`` for one rollout; this
+    is the same idea one level up, for the case where the sweep itself has told you
+    what you needed an hour into a six-hour run.
+
+    ``std_srvs/Trigger`` rather than ``SetBool``, because there is no second mode
+    worth offering: every episode is appended to ``raw/<ckpt>.jsonl`` the moment it
+    finishes, so stopping immediately costs at most the episode in flight, and
+    waiting politely for the current checkpoint would cost half an hour to save
+    nothing. The child is stopped with SIGINT, the path it already handles -- it
+    disconnects from the robot and leaves what it wrote intact -- and the sweep then
+    builds the PDF, CSV and JSON from what is on disk, exactly as it does when the
+    early-stop rule fires.
+
+    rclpy is imported here rather than at module scope so ``--report-only`` still
+    rebuilds a report on a machine with no ROS environment sourced.
+    """
+    import rclpy
+    from rclpy.executors import MultiThreadedExecutor
+    from std_srvs.srv import Trigger
+
+    requested = threading.Event()
+    service_name = f"{namespace}/stop_sweep"
+
+    rclpy.init()
+    node = rclpy.create_node("block_bin_sweep")
+
+    def handle(_request, response):
+        requested.set()
+        response.success = True
+        response.message = (
+            "Stopping the sweep. The report will be built from the episodes already "
+            "on disk."
+        )
+        node.get_logger().warn(response.message)
+        return response
+
+    node.create_service(Trigger, service_name, handle)
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    spin = threading.Thread(target=executor.spin, daemon=True)
+    spin.start()
+    print(
+        f"Stop the whole sweep at any point with:\n"
+        f"  ros2 service call {service_name} std_srvs/srv/Trigger\n"
+        f"  (the report is written from whatever has finished by then)\n"
+    )
+    try:
+        yield requested
+    finally:
+        # Teardown is best-effort on purpose. rclpy.shutdown() raises RCLError if the
+        # context is already down -- which happened after a six-hour, 200-episode run
+        # and threw away the report for a campaign whose data was entirely intact.
+        # Nothing here can fail in a way worth more than the results.
+        for step in (executor.shutdown, node.destroy_node):
+            try:
+                step()
+            except Exception as error:  # noqa: BLE001 - teardown must not mask results
+                print(f"(ignored during shutdown: {type(error).__name__}: {error})")
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except Exception as error:  # noqa: BLE001
+            print(f"(ignored during shutdown: {type(error).__name__}: {error})")
+
+
 def expected_episodes(zones: str, episodes: int) -> int:
     """Rows a finished checkpoint leaves behind. Mirrors ``eval_policy.episode_plan``.
 
@@ -101,7 +231,9 @@ def expected_episodes(zones: str, episodes: int) -> int:
     )
 
 
-def run_checkpoint(checkpoint: Path, results: Path, log: Path, args, extra: list) -> str:
+def run_checkpoint(
+    checkpoint: Path, results: Path, log: Path, args, extra: list, stop=None
+) -> str:
     """One child evaluation. Returns how it ended, for the console line."""
     command = [
         sys.executable,
@@ -127,18 +259,58 @@ def run_checkpoint(checkpoint: Path, results: Path, log: Path, args, extra: list
     with open(log, "w") as stream:
         stream.write(" ".join(command) + "\n\n")
         stream.flush()
-        try:
-            finished = subprocess.run(
-                command, stdout=stream, stderr=subprocess.STDOUT, timeout=args.timeout
-            )
-        except subprocess.TimeoutExpired:
-            # Killed, not waited on: a wedged child (Isaac stalling, a service that
-            # never answers) must not take the rest of the sweep with it. Its finished
-            # episodes are already on disk.
-            return f"TIMED OUT after {args.timeout:.0f}s"
-        except KeyboardInterrupt:
-            raise
-    return "ok" if finished.returncode == 0 else f"exited {finished.returncode}"
+        # Popen and a poll loop rather than subprocess.run(timeout=...), so a stop
+        # request lands within the second instead of at the end of a checkpoint that
+        # may have half an hour left in it.
+        child = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT)
+        deadline = time.perf_counter() + args.timeout
+        # Progress, not elapsed time, is what separates a slow run from a wedged one.
+        # A total-time ceiling has to be guessed from an assumed per-episode cost, and
+        # guessing low silently truncates the sweep -- which is exactly how earlier
+        # campaigns lost their last dozen episodes. The child appends a line per
+        # finished episode, so a stalled clock on THAT is unambiguous.
+        stall = getattr(args, "stall", 0) or 0
+        seen, last_progress = -1, time.perf_counter()
+        while True:
+            try:
+                child.wait(timeout=1.0)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            except KeyboardInterrupt:
+                child.send_signal(signal.SIGINT)
+                raise
+            if stop is not None and stop.is_set():
+                # SIGINT, not kill: eval_policy_pink handles KeyboardInterrupt by
+                # disconnecting cleanly, and every episode it finished is already
+                # appended to results.
+                return end_child(child, signal.SIGINT, "stopped on request")
+            now = time.perf_counter()
+            if stall:
+                done = checkpoint_score(results)[1]
+                if done != seen:
+                    seen, last_progress = done, now
+                elif now - last_progress > stall:
+                    return end_child(child, signal.SIGKILL,
+                                     f"STALLED: no episode finished in {stall / 60:.0f} min")
+            if now > deadline:
+                # Backstop. With --stall set this should not be what fires, but it
+                # stays unconditional: a zero timeout means "fail now", not
+                # "supervise nothing", and a caller that passes neither guard would
+                # otherwise wait on a wedged child forever.
+                return end_child(child, signal.SIGKILL, f"TIMED OUT after {args.timeout:.0f}s")
+    return "ok" if child.returncode == 0 else f"exited {child.returncode}"
+
+
+def end_child(child: subprocess.Popen, sig: int, status: str) -> str:
+    """Signal a child and reap it, escalating to SIGKILL if it will not go."""
+    child.send_signal(sig)
+    try:
+        child.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+    return status
 
 
 def checkpoint_score(results: Path) -> tuple[int, int]:
@@ -526,12 +698,15 @@ def cover_page(pdf: PdfPages, meta: dict, per_checkpoint: pd.DataFrame) -> None:
         f"Extra eval flags  {' '.join(meta['extra']) or '(none)'}",
     ]
     if meta.get("stopped_at"):
+        # The reason matters on the cover: "scored 0 everywhere" is a finding about the
+        # run, "the operator stopped it" is not, and a reader who cannot tell them apart
+        # will read an unfinished sweep as a verdict on the earlier checkpoints.
+        reason = meta.get("stopped_reason") or "stopped before the run was finished"
         lines += [
             "",
-            f"STOPPED EARLY     at {meta['stopped_at']}, which scored 0 across every "
-            f"zone.",
-            "                  Checkpoints before it were not evaluated. --no-early-stop",
-            "                  runs them.",
+            f"STOPPED EARLY     at {meta['stopped_at']} --",
+            *textwrap.wrap(reason, 60, initial_indent=" " * 18, subsequent_indent=" " * 18),
+            "                  Checkpoints before it were not evaluated.",
         ]
     figure.text(0.06, 0.72, "\n".join(lines), fontsize=11, family="monospace", va="top")
     figure.text(
@@ -841,6 +1016,16 @@ def write_report(
         health_page(pdf, per_checkpoint)
 
 
+def recorded_episodes(raw: Path) -> int:
+    """How many episodes are on disk, over every checkpoint."""
+    if not raw.is_dir():
+        return 0
+    return sum(
+        sum(1 for line in path.read_text().splitlines() if line.strip())
+        for path in raw.glob("*.jsonl")
+    )
+
+
 def build_outputs(output: Path, meta: dict) -> pd.DataFrame:
     """Turn the raw JSON Lines into the CSV, the JSON summary and the PDF."""
     frame = with_failure_modes(load_records(output / "raw"))
@@ -878,6 +1063,14 @@ def main():
         type=Path,
         default=Path.home() / "models/smolvla_fr3_07_29/checkpoints",
         help="Directory of checkpoint directories (each holding pretrained_model/).",
+    )
+    parser.add_argument(
+        "--only",
+        type=str,
+        default="",
+        help="Evaluate just these checkpoints instead of the whole run: '5000' or "
+        "'5000,15000,last'. Matched on training step, so zero padding is optional "
+        "(5000 finds 005000). A name that matches nothing is an error.",
     )
     parser.add_argument("--namespace", type=str, default="/Sim_0/Scene_0")
     parser.add_argument(
@@ -957,10 +1150,11 @@ def main():
         "extra": extra,
         "finished": "",
         "stopped_at": "",
+        "stopped_reason": "",
     }
 
     if not args.report_only:
-        checkpoints = discover_checkpoints(args.checkpoints)
+        checkpoints = select_checkpoints(discover_checkpoints(args.checkpoints), args.only)
         wanted = expected_episodes(args.zones, args.episodes)
         # 4x is for the gap between sim time and wall time; the flat margin covers the
         # model load, the scene settling and the homing before each episode.
@@ -977,40 +1171,86 @@ def main():
         # Newest first. The last checkpoint is the one you would ship, so the sweep
         # answers "is this model any good" in its first half-hour instead of its last,
         # and the walk backwards is then a search for where the ability appeared.
-        for index, checkpoint in enumerate(reversed(checkpoints), start=1):
-            results = output / "raw" / f"{checkpoint.name}.jsonl"
-            done = len(results.read_text().splitlines()) if results.is_file() else 0
-            head = f"[{index}/{len(checkpoints)}] {checkpoint.name}"
-            if done >= wanted and not args.no_resume:
-                print(f"{head}: {done} episodes already recorded, skipping.")
-            else:
-                if done and not args.no_resume:
-                    # Partial results from a killed run: they stay, and this run appends
-                    # to them. A checkpoint's rate is then over more episodes than
-                    # --episodes, which the report shows honestly rather than hiding.
-                    print(f"{head}: resuming, {done} episodes already recorded.")
+        with stop_service(args.namespace) as stop:
+            for index, checkpoint in enumerate(reversed(checkpoints), start=1):
+                results = output / "raw" / f"{checkpoint.name}.jsonl"
+                done = len(results.read_text().splitlines()) if results.is_file() else 0
+                head = f"[{index}/{len(checkpoints)}] {checkpoint.name}"
+                barren = False
+                if done >= wanted and not args.no_resume:
+                    print(f"{head}: {done} episodes already recorded, skipping.")
+                else:
+                    if done and not args.no_resume:
+                        # Partial results from a killed run: they stay, and this run appends
+                        # to them. A checkpoint's rate is then over more episodes than
+                        # --episodes, which the report shows honestly rather than hiding.
+                        print(f"{head}: resuming, {done} episodes already recorded.")
 
-                started = time.perf_counter()
-                print(f"{head}: running...", flush=True)
-                status = run_checkpoint(
-                    checkpoint, results, output / "logs" / f"{checkpoint.name}.log", args, extra
-                )
-                print(
-                    f"{head}: {status}, {checkpoint_score(results)[1] - done} episodes in "
-                    f"{(time.perf_counter() - started) / 60:.1f} min"
-                )
+                    started = time.perf_counter()
+                    print(f"{head}: running...", flush=True)
+                    status = run_checkpoint(
+                        checkpoint,
+                        results,
+                        output / "logs" / f"{checkpoint.name}.log",
+                        args,
+                        extra,
+                        stop,
+                    )
+                    print(
+                        f"{head}: {status}, {checkpoint_score(results)[1] - done} episodes in "
+                        f"{(time.perf_counter() - started) / 60:.1f} min"
+                    )
+                    barren = status != "ok" and checkpoint_score(results)[1] == done
 
-            wins, ran = checkpoint_score(results)
-            if not args.no_early_stop and is_hopeless(wins, ran, wanted):
-                print(
-                    f"{head}: 0/{ran} across every zone. Stopping -- going backwards, "
-                    f"the checkpoints left are earlier in training than one that cannot "
-                    f"do the task at all. --no-early-stop runs them anyway."
-                )
-                meta["stopped_at"] = checkpoint.name
-                break
+                if stop.is_set():
+                    # Asked for by hand, so nothing is wrong and nothing is thrown
+                    # away: fall through to the report, which is built from every
+                    # episode written so far.
+                    print(f"{head}: stop requested. Building the report from what has run.")
+                    meta["stopped_at"] = checkpoint.name
+                    meta["stopped_reason"] = f"stop requested through {args.namespace}/stop_sweep"
+                    break
+
+                if barren:
+                    # Died without finishing one episode. A checkpoint cannot fail that
+                    # way on its own merits -- a bad policy still completes episodes and
+                    # scores 0 -- so this is the simulator, the launch or the machine,
+                    # and it will greet the next checkpoint identically. Carrying on
+                    # spends a policy load per checkpoint to reprint the same traceback
+                    # and ends with an empty report. The child's log has the reason.
+                    print(
+                        f"{head}: {status} with no episodes recorded. Stopping -- that is "
+                        f"the setup, not the checkpoint, and every checkpoint left would "
+                        f"hit it too. See {output / 'logs' / f'{checkpoint.name}.log'}"
+                    )
+                    meta["stopped_at"] = checkpoint.name
+                    meta["stopped_reason"] = (
+                        f"its evaluation {status} before finishing an episode, which is a "
+                        f"problem with the setup rather than with the checkpoints"
+                    )
+                    break
+
+                wins, ran = checkpoint_score(results)
+                if not args.no_early_stop and is_hopeless(wins, ran, wanted):
+                    print(
+                        f"{head}: 0/{ran} across every zone. Stopping -- going backwards, "
+                        f"the checkpoints left are earlier in training than one that cannot "
+                        f"do the task at all. --no-early-stop runs them anyway."
+                    )
+                    meta["stopped_at"] = checkpoint.name
+                    meta["stopped_reason"] = (
+                        "it scored 0 across every zone (--no-early-stop runs them anyway)"
+                    )
+                    break
 
     meta["finished"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    # A sweep stopped by hand can end before the first episode has finished, and every
+    # aggregate downstream of here assumes at least one row -- summarize() indexes by
+    # checkpoint and the cover page takes .iloc[0]. Saying so beats a traceback that
+    # looks like the report itself is broken.
+    if not recorded_episodes(output / "raw"):
+        print(f"\nNo episodes finished, so there is nothing to report. {output} is kept.")
+        return
     per_checkpoint, suggestions = build_outputs(output, meta)
     print(f"\n{output}/report.pdf")
     for row in per_checkpoint.itertuples():

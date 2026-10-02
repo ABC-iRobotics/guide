@@ -208,7 +208,7 @@ def test_position_delta_adds():
 def test_action_scale_stretches_the_motion_but_not_the_gripper():
     action = [0.01, 0.02, 0.03, 0.1, 0.2, 0.3, 0.035]
 
-    dposition, drotvec, grip = ep.delta_from_action(action, scale=2.0)
+    dposition, drotvec, grip = ep.delta_for("guide", action, scale=2.0)
 
     assert dposition == pytest.approx([0.02, 0.04, 0.06])
     assert drotvec == pytest.approx([0.2, 0.4, 0.6])
@@ -217,7 +217,7 @@ def test_action_scale_stretches_the_motion_but_not_the_gripper():
 
 
 def test_batched_policy_action_is_accepted():
-    dposition, _, grip = ep.delta_from_action(np.zeros((1, 7)) + 0.1)
+    dposition, _, grip = ep.delta_for("guide", np.zeros((1, 7)) + 0.1)
 
     assert dposition == pytest.approx([0.1, 0.1, 0.1])
     assert grip == pytest.approx(0.1)
@@ -225,7 +225,7 @@ def test_batched_policy_action_is_accepted():
 
 def test_joint_space_action_is_rejected_with_a_pointer_to_the_other_script():
     with pytest.raises(ValueError, match="eval_policy.py"):
-        ep.delta_from_action(np.zeros(8))
+        ep.delta_for("guide", np.zeros(8))
 
 
 def test_a_delta_inside_the_ceiling_is_left_alone():
@@ -425,26 +425,162 @@ def test_the_default_base_offset_puts_the_home_pose_where_the_dataset_has_it(ik)
 
 
 def test_a_metre_of_frame_error_is_caught(ik):
-    # Reading the state in Scene_0 instead of world -- the single most likely mistake,
-    # and worth exactly one metre of z.
+    # Reading the state a metre below the frame the recorder stores -- the single most
+    # likely mistake, and worth exactly one metre of z.
     position, _ = ik.fk(HOME)
     scene_frame = position + np.asarray(ep.BASE_OFFSET) - np.array([0.0, 0.0, 1.0])
 
     assert ep.home_pose_error(scene_frame) > ep.HOME_TOLERANCE
 
 
-def test_the_scene_geometry_alone_would_have_been_a_centimetre_out():
-    # Kept as the reason BASE_OFFSET is measured rather than computed: Scene_0 at
-    # -origin plus the bring-up's xyz:="-0.3 0 0" predicts [-0.3, 0, 1.0], and the arm
-    # is not mounted exactly where the launch file says.
-    import yaml
-    from ament_index_python.packages import get_package_share_directory
-
-    share = get_package_share_directory("block_bin")
-    origin = yaml.safe_load(open(f"{share}/config/init.yaml"))["origin"]
-    derived = -np.asarray(origin, dtype=float) + np.array([-0.3, 0.0, 0.0])
+def test_the_arm_mounting_alone_would_have_been_a_centimetre_out():
+    # Kept as the reason BASE_OFFSET is measured rather than computed: the bring-up's
+    # xyz:="-0.3 0 0" predicts [-0.3, 0, 0], and the arm is not mounted exactly where
+    # the launch file says. Close, but a centimetre of z is a grasp.
+    derived = np.array([-0.3, 0.0, 0.0])
 
     error = np.asarray(ep.BASE_OFFSET) - derived
 
     assert np.abs(error).max() > 5e-3
     assert np.abs(error).max() < 5e-2
+
+
+def test_the_offset_does_not_carry_the_scene_origins_metre():
+    """Regression on the bug that cost this project weeks.
+
+    The datasets once stored EEF z in WORLD frame, so BASE_OFFSET carried Scene_0's
+    +1 m origin. They were re-framed at source and swept; this constant was not, and
+    every evaluation afterwards fed the policy z a metre above anything it had trained
+    on -- while loading, running and logging perfectly normally.
+    """
+    import yaml
+    from ament_index_python.packages import get_package_share_directory
+
+    share = get_package_share_directory("block_bin")
+    origin = np.asarray(yaml.safe_load(open(f"{share}/config/init.yaml"))["origin"], dtype=float)
+    world_frame = -origin + np.array([-0.3, 0.0, 0.0])
+
+    # The old, world-frame value is a metre away from the measured one.
+    assert abs(ep.BASE_OFFSET[2] - world_frame[2]) > 0.9
+    # And home lands where the recorded episodes end, not a metre above it.
+    assert ep.HOME_IN_DATASET[2] == pytest.approx(0.49995, abs=1e-3)
+
+
+def args_with(time_scale=1.0, fps=5.0):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(time_scale=time_scale, fps=fps)
+
+
+def test_the_default_period_is_just_the_control_rate():
+    args = args_with()
+
+    ep.derive_period(args)
+
+    assert args.period == pytest.approx(0.2)
+
+
+def test_a_scale_above_one_gives_each_action_more_sim_time():
+    """2.0 halves the speed: the same delta, twice as long to execute it."""
+    args = args_with(time_scale=2.0)
+
+    ep.derive_period(args)
+
+    assert args.period == pytest.approx(0.4)
+
+
+def test_a_scale_below_one_speeds_it_up():
+    args = args_with(time_scale=0.25)
+
+    ep.derive_period(args)
+
+    assert args.period == pytest.approx(0.05)
+
+
+def test_a_non_positive_scale_is_refused():
+    for bad in (0.0, -1.0):
+        with pytest.raises(SystemExit, match="positive"):
+            ep.derive_period(args_with(time_scale=bad))
+
+
+def test_deriving_twice_is_harmless():
+    """setup_evaluation and main both call it; probe_grounding calls only the first."""
+    args = args_with(time_scale=2.0)
+
+    ep.derive_period(args)
+    ep.derive_period(args)
+
+    assert args.period == pytest.approx(0.4)
+
+
+def _trace_args(tmp_path, seed_base):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        trace_dir=str(tmp_path), trace_frames_every=0, trace_pose_interval=5,
+        cameras={}, seed_base=seed_base, policy="p", convention="guide", fps=5.0,
+        time_scale=1.0, n_action_steps=4, base_offset=(0.0, 0.0, 0.0),
+        scene_origin=(0.0, 0.0, 1.0),
+    )
+
+
+def test_the_trace_records_the_seed_it_actually_ran_not_the_episode_index(tmp_path):
+    """--seed-base 100, episode 3, is seed 103.
+
+    Recording the index instead agrees with the seed for every default run and
+    mislabels every run with a seed base, so anything joining traces to results on
+    (zone, seed) silently drops or mis-pairs the rows.
+    """
+    import json
+
+    trace = ep.open_trace(_trace_args(tmp_path, 100), episode=3, zone=7)
+    trace.close({})
+
+    meta = json.loads((tmp_path / "ep_0003/meta.json").read_text())
+    assert meta["episode"] == 3
+    assert meta["seed"] == 103
+
+
+def test_the_seed_still_matches_the_episode_at_the_default_base(tmp_path):
+    import json
+
+    trace = ep.open_trace(_trace_args(tmp_path, 0), episode=3, zone=7)
+    trace.close({})
+
+    assert json.loads((tmp_path / "ep_0003/meta.json").read_text())["seed"] == 3
+
+
+def test_a_negative_seed_base_records_no_seed(tmp_path):
+    """--seed-base below zero means unseeded: the scene is not reproducible."""
+    import json
+
+    trace = ep.open_trace(_trace_args(tmp_path, -1), episode=3, zone=7)
+    trace.close({})
+
+    assert json.loads((tmp_path / "ep_0003/meta.json").read_text())["seed"] is None
+
+
+def test_a_resumed_run_numbers_its_traces_from_the_offset(tmp_path):
+    """Without this a resumed run overwrites the first N traces it is continuing.
+
+    The results file stays correct either way, which is what makes the loss quiet:
+    100 rows on disk, 84 traces, and an analysis that silently reads the wrong scenes.
+    """
+    import json
+
+    args = _trace_args(tmp_path, 0)
+    args.trace_index_base = 84
+
+    trace = ep.open_trace(args, episode=3, zone=12)
+    trace.close({})
+
+    meta = json.loads((tmp_path / "ep_0087/meta.json").read_text())
+    assert meta["episode"] == 87
+
+
+def test_without_an_offset_traces_are_numbered_as_before(tmp_path):
+    args = _trace_args(tmp_path, 0)
+
+    ep.open_trace(args, episode=3, zone=1).close({})
+
+    assert (tmp_path / "ep_0003/meta.json").is_file()

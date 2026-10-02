@@ -32,7 +32,10 @@ any other frame sends it through a frame conversion that is miscoded in moveit_s
 
 Running it
 ----------
-1. Isaac with the scene, ``publish_camera_topics: true`` in ``config/init.yaml``.
+1. Isaac with the scene, WITH the camera topics -- they are off by default::
+
+       ros2 launch guide_core bringup.launch.py camera_topics:=true
+
 2. MoveIt + servo, without the demonstration solver::
 
        ros2 launch block_bin eval_servo.launch.py
@@ -87,12 +90,15 @@ from block_bin.eval_policy import (
     HOME_POSITION,
     ChunkStream,
     RunControl,
+    connect_robot,
     episode_plan,
+    final_success,
     get_safe_torch_device,
     handle_stop,
     images_from,
     is_success,
     load_policy,
+    parse_evaluation_args,
     report_rollout,
     sleep_sim,
 )
@@ -364,7 +370,9 @@ class Servo:
                 f"  incoming_command_timeout: {period}   in block_bin/config/servo.yaml, "
                 f"then relaunch eval_servo.launch.py (the value is latched when "
                 f"servo_node starts)\n"
-                f"  --fps {1 / timeout:g}   to match the servo already running"
+                f"  make the control period {timeout}s to match the servo already "
+                f"running: --fps {1 / timeout:g} at time scale 1, or keep --fps and "
+                f"scale the period by {timeout / period:g}x with --time-scale"
             )
 
     def pause(self, paused: bool) -> None:
@@ -447,7 +455,7 @@ def run_servo(queue: Queue, stop_event: Event, arm, robot, args) -> None:
     the motion rather than adding to it.
     """
     servo, _, gripper = arm
-    period = 1.0 / args.fps
+    period = args.period
     clock = robot.node.get_clock()
     next_deadline = clock.now()
 
@@ -489,7 +497,19 @@ def run_episode(robot, scene_id, zone, policy, processors, device, control, arm,
         robot.randomize,
         Randomize.Request(id=scene_id, use_zone=zone is not None, zone=zone or 0),
     )
-    task = args.task or json.loads(response.message)["task"]
+    scene_task = json.loads(response.message)["task"]
+    task = args.task or scene_task
+    if args.task and args.task != scene_task:
+        # --task changes what the POLICY is told and nothing else. The success
+        # criterion is rebuilt from the scene's own draw every episode
+        # (Scene.is_success_preprocess picks the colour and bin from self.c/self.s),
+        # so an override that names a different block or bin grades a task nobody
+        # asked the policy to do, and a perfectly executed rollout scores as a miss.
+        robot.node.get_logger().warn(
+            f"--task tells the policy {args.task!r} but IsSuccess still grades the "
+            f"scene's own draw, {scene_task!r}. These disagree, so this episode "
+            f"cannot pass however well it is executed."
+        )
     robot.node.get_logger().info(f'Rolling out: "{task}"')
 
     sleep_sim(robot, 0.5)  # let the randomized scene settle, as solve_task does
@@ -515,9 +535,9 @@ def run_episode(robot, scene_id, zone, policy, processors, device, control, arm,
     servo.clear_status()  # a halt from the last episode must not end this one
     stream = ChunkStream(policy, preprocessor, postprocessor, device, task, robot.name, args.lead)
 
-    period = 1.0 / args.fps
-    steps = int(args.seconds * args.fps)
-    check_interval = max(1, int(args.fps))  # poll the success service ~once a second
+    period = args.period
+    steps = int(args.seconds / period)
+    check_interval = max(1, int(1.0 / period))  # poll the success service ~once a second
     step_times, grips = [], []
     succeeded = False
 
@@ -584,7 +604,7 @@ def run_episode(robot, scene_id, zone, policy, processors, device, control, arm,
 
     stream.close()
     report_rollout(robot, args, policy, step_times, grips, stream.replans)
-    return succeeded or is_success(robot, scene_id)
+    return succeeded or final_success(robot, scene_id)
 
 
 def main():
@@ -597,6 +617,21 @@ def main():
     # deltas span ~0.2 s each. This rate is what converts them back into a velocity --
     # get it wrong and every motion is executed proportionally too fast or too slow.
     parser.add_argument("--fps", type=float, default=5.0, help="Control rate, Hz of SIM time.")
+    # Separate from --fps on purpose. --fps is a property of the DATASET (the rate the
+    # deltas were sampled at) and changing it misreads how far each one is meant to
+    # travel; this stretches the clock the whole rollout runs on, leaving every delta
+    # exactly the displacement it was recorded as. Same path, same actions, more sim
+    # seconds -- which is the knob you want when the arm crosses the scene faster than
+    # the policy can watch it.
+    parser.add_argument(
+        "--time-scale",
+        type=float,
+        default=1.0,
+        help="Multiplier on how long each action takes to execute. 2.0 halves the speed "
+        "and doubles the sim seconds per step; 0.5 doubles it. Needs a matching "
+        "incoming_command_timeout in config/servo.yaml (the script prints the value), "
+        "and below 1.0 also needs more scale.linear/rotational headroom.",
+    )
     parser.add_argument(
         "--n-action-steps",
         type=int,
@@ -670,7 +705,7 @@ def main():
     )
     parser.add_argument("--task", type=str, default="", help="Override the scene's instruction.")
     parser.add_argument("--device", type=str, default=None, help="cuda, cpu (default: policy's)")
-    args = parser.parse_known_args()[0]
+    args = parse_evaluation_args(parser)
 
     namespace_base = args.namespace or ""
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
@@ -685,6 +720,20 @@ def main():
     # `Scene_i` at -origin, which is [0, 0, 1.0] for block_bin.
     args.state_frame = args.state_frame or "world"
     offset = np.zeros(3) if args.state_offset is None else np.asarray(args.state_offset)
+
+    # The one rate every part of the rollout reads: the twist conversion, the servo
+    # thread's cadence, the step budget, and the lifetime servo_node has to agree with.
+    # Derived once so --time-scale cannot stretch one of them and not the others.
+    if args.time_scale <= 0:
+        raise SystemExit("--time-scale must be positive.")
+    args.period = args.time_scale / args.fps
+    if args.time_scale != 1.0:
+        print(
+            f"Time scale {args.time_scale:g}: each action executes over "
+            f"{args.period:.3f}s instead of {1 / args.fps:.3f}s "
+            f"({1 / args.time_scale:.2f}x speed, {args.time_scale:g}x the twist duration). "
+            f"config/servo.yaml needs incoming_command_timeout: {args.period:g}."
+        )
 
     # Built before the policy loads so a bad --zone fails in a second rather than after
     # 450M parameters have been read off disk.
@@ -706,8 +755,8 @@ def main():
     if args.n_action_steps != policy.config.n_action_steps:
         print(
             f"Action horizon: {args.n_action_steps} of {chunk_size} predicted steps "
-            f"({args.n_action_steps / args.fps:.1f}s open-loop, was "
-            f"{policy.config.n_action_steps / args.fps:.1f}s)"
+            f"({args.n_action_steps * args.period:.1f}s open-loop, was "
+            f"{policy.config.n_action_steps * args.period:.1f}s)"
         )
         # ONLY n_action_steps. chunk_size is a trained quantity, not a preference: it
         # sizes the action-token sequence the expert denoises
@@ -737,9 +786,7 @@ def main():
     }
 
     robot = ROS2Robot(config=config)
-    robot.connect()
-    time.sleep(5)  # wait for connections to establish
-    print("Connected to robot and cameras.")
+    connect_robot(robot)
 
     robot.randomize = robot.node.create_client(
         srv_type=Randomize,
@@ -755,10 +802,10 @@ def main():
     args.twist_frame = twist_frame_for(config, args.twist_frame)
     servo = Servo(robot, args.twist_frame, args.servo_stall)
     servo.start()
-    servo.check_command_lifetime(1.0 / args.fps)
+    servo.check_command_lifetime(args.period)
     print(
         f"MoveIt Servo in TWIST mode, commanding in frame '{args.twist_frame}', "
-        f"dropping each twist after its {1 / args.fps:.3f}s slot."
+        f"dropping each twist after its {args.period:.3f}s slot."
     )
     if args.twist_frame != config.base_link_name:
         print(

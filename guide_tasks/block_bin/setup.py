@@ -57,6 +57,12 @@ setup(
             "eval_policy_servo = block_bin.eval_policy_servo:main",
             "eval_policy_pink = block_bin.eval_policy_pink:main",
             "sweep_checkpoints = block_bin.sweep_checkpoints:main",
+            "validate = block_bin.validate:main",
+            "probe_grounding = block_bin.probe_grounding:main",
+            "debug_rollout = block_bin.debug_rollout:main",
+            "replay_rollout = block_bin.replay_rollout:main",
+            "compare_runs = block_bin.compare_runs:main",
+            "study = block_bin.study:main",
         ],
     },
 )

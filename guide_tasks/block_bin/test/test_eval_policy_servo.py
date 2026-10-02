@@ -151,7 +151,8 @@ class FakeServo:
         self.send(np.zeros(3), np.zeros(3))
 
 
-def test_servo_thread_never_publishes_twice_inside_one_control_period():
+@pytest.mark.parametrize("period", [0.2, 0.4])
+def test_servo_thread_never_publishes_twice_inside_one_control_period(period):
     """The regression that made servo look like it never started.
 
     A twist stays in effect until the next one replaces it, so a second message
@@ -160,12 +161,17 @@ def test_servo_thread_never_publishes_twice_inside_one_control_period():
     behind its 0.2 s budget it stayed in the past for the rest of the episode and
     the loop published on every pass: each real twist was overwritten by a flood of
     zeros microseconds later and the arm never moved.
+
+    0.4 is the same 5 Hz under --time-scale 2. The cadence has to follow the scaled
+    period, not --fps, or the multiplier stretches the twist without stretching the
+    slot it is executed in -- which is the overshoot check_command_lifetime exists
+    to prevent, reintroduced from the other side.
     """
     clock = FakeClock()
     servo = FakeServo(clock)
     robot = FakeRobot(node=SimpleNamespace(get_clock=lambda: clock))
     gripper = es.Gripper(robot, "fr3_finger_joint1", deadband=0.005)
-    args = SimpleNamespace(fps=5.0)  # 0.2 s period
+    args = SimpleNamespace(period=period)
 
     queue = Queue()
     for vz in (-0.01, -0.02):
@@ -190,8 +196,9 @@ def test_servo_thread_never_publishes_twice_inside_one_control_period():
     # slots, which hold still rather than coasting on a stale velocity.
     assert [vz for _, vz in servo.sent if vz != 0.0] == [-0.01, -0.02]
     gaps = [later - earlier for (earlier, _), (later, _) in zip(servo.sent, servo.sent[1:])]
-    assert min(gaps) >= 0.2 - 3 * clock.tick, (
-        f"published {min(gaps) * 1000:.0f} ms apart, the control period is 200 ms"
+    assert min(gaps) >= period - 3 * clock.tick, (
+        f"published {min(gaps) * 1000:.0f} ms apart, "
+        f"the control period is {period * 1000:.0f} ms"
     )
 
 
