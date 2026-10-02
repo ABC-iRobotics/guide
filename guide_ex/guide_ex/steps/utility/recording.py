@@ -47,7 +47,7 @@ class StartRecording(BaseNode):
         self, robot, sim_namespace: str, scene_id: int, path: str = "", timeout_sec: float = 60.0
     ) -> ExecutionResult:
         """
-        Starts recording a LeRobot episode in the scene.
+        Starts recording a LeRobot episode in the scene, or resumes a paused one.
 
         Returns once the cameras have warmed up and frames are being captured. The
         dataset itself is created on the first frame of the run, under `path`.
@@ -70,6 +70,41 @@ class StartRecording(BaseNode):
             srv.StartRecording.Request(id=scene_id, path=path),
             timeout_sec,
             f"Start recording scene {scene_id}",
+        )
+
+
+class PauseRecording(BaseNode):
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("PauseRecording", alias, dynamic_map, static_args, output_map)
+
+    def run(
+        self, robot, sim_namespace: str, scene_id: int, timeout_sec: float = 60.0
+    ) -> ExecutionResult:
+        """
+        Pauses the recording; the episode stays open and StartRecording resumes it.
+
+        The paused stretch is cut out of the episode (LeRobot numbers frames, so no
+        timestamp gap). Pause only where the robot is still: the first frame after the
+        resume follows the last one before the pause directly.
+
+        Args:
+            robot (Node): The ROS2 robot to use for service calls.
+            sim_namespace (str): The simulation namespace.
+            scene_id (int): The scene being recorded.
+            timeout_sec (float): Per-attempt service timeout.
+        Returns:
+            ExecutionResult: PERFECT once paused, FAILURE if it was not recording.
+        """
+        return _call_recording_service(
+            robot,
+            "pause_recording",
+            srv.PauseRecording,
+            sim_namespace,
+            srv.PauseRecording.Request(id=scene_id),
+            timeout_sec,
+            f"Pause recording scene {scene_id}",
         )
 
 

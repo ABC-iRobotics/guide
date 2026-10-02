@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetJoint.srv"
   "srv/StartRecording.srv"
   "srv/StopRecording.srv"
+  "srv/PauseRecording.srv"
   "srv/FinalizeRecording.srv"
 
   # Actions

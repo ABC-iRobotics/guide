@@ -489,19 +489,45 @@ class SceneManager:
             if hasattr(self._scenes[scene_id], "clear_recording_history"):
                 self._scenes[scene_id].clear_recording_history()
 
-    def stop_recording(self, scene_id: int, save_episode: bool = True):
+    def pause_recording(self, scene_id: int):
+        """Stop capturing without closing the episode. ``start_recording`` resumes it.
+
+        The LeRobot episode buffer only ends on FINALIZE_EPISODE / DISCARD_EPISODE, and
+        LeRobot numbers frames itself (timestamp = frame_index / fps), so the paused
+        stretch is simply absent from the episode -- no time gap to compensate.
+
+        The start flag goes down so that the resuming ``start_recording`` blocks through
+        the camera warm-up exactly as a fresh start does.
+        """
         with self._locks[scene_id]:
+            scene = self._scenes[scene_id]
+            if scene.state != SceneState.RECORDING:
+                raise RuntimeError(f"Scene {scene_id} is {scene.state.name}; only RECORDING pauses.")
+            scene.state = SceneState.PAUSED
+            scene.recorder.clear_start_recording()
+
+    def stop_recording(self, scene_id: int, save_episode: bool = True) -> bool:
+        """End the episode, saving or discarding it. Returns False if nothing was recording."""
+        with self._locks[scene_id]:
+            scene = self._scenes[scene_id]
+            if scene.state in (SceneState.IDLE, SceneState.FINALIZING):
+                # No episode is open, and the signal below would sit in the queue of a
+                # writer that is not reading it: the caller would wait forever.
+                return False
             # Nothing reads the cameras again until the next start_recording, so stop
             # rendering them. They otherwise keep costing three RTX passes a frame for
             # the whole idle stretch between episodes and after the run ends.
-            self._scenes[scene_id].set_render_products_enabled(False)
-            self._scenes[scene_id].recorder.clear_start_recording()
-            self._scenes[scene_id].state = SceneState.FINALIZING
-            self._scenes[scene_id].recorder.clear_stop_recording()
-            if save_episode:
-                self._scenes[scene_id].recorder.put_record_data("FINALIZE_EPISODE")
-            else:
-                self._scenes[scene_id].recorder.put_record_data("DISCARD_EPISODE")
+            scene.set_render_products_enabled(False)
+            scene.state = SceneState.FINALIZING
+            scene.recorder.clear_stop_recording()
+            # Wake the writer BEFORE handing it the signal. It reads the queue only while
+            # the start flag is up: paused, it is parked on the flag, and had the flag been
+            # lowered here it could drain its last frame, leave the loop and never see the
+            # signal. Raised first, the signal is always read; the writer lowers the flag
+            # itself once the episode is written (_finalize_episode / _discard_episode).
+            scene.recorder.set_start_recording()
+            scene.recorder.put_record_data("FINALIZE_EPISODE" if save_episode else "DISCARD_EPISODE")
+            return True
 
     def finalize_recording(self, scene_id: int):
         with self._locks[scene_id]:

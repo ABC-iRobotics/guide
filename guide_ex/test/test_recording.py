@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from guide_ex.core.states import DemoStatus, Layer
-from guide_ex.steps.utility.recording import StartRecording, StopRecording
+from guide_ex.steps.utility.recording import PauseRecording, StartRecording, StopRecording
 
 
 class FakeRobot:
@@ -46,6 +46,16 @@ def test_stop_creates_its_client_once_and_can_discard():
 
     assert robot.created == ["/Sim_0/stop_recording"]
     assert [r.save_episode for _, r, _ in robot.calls] == [False, True]
+
+
+def test_pause_calls_its_own_service_and_start_resumes():
+    robot = FakeRobot()
+
+    PauseRecording().run(robot, "/Sim_0", scene_id=3)
+    StartRecording().run(robot, "/Sim_0", scene_id=3)
+
+    assert robot.created == ["/Sim_0/pause_recording", "/Sim_0/start_recording"]
+    assert [r.id for _, r, _ in robot.calls] == [3, 3]
 
 
 def test_a_refused_call_is_a_failure_with_the_reason():
