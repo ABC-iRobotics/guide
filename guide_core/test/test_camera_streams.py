@@ -40,6 +40,7 @@ def plan(orchestrator, cameras, images, encoding=None):
         _config=config,
         _logger=logging.getLogger("test"),
         DEPTH_SUFFIX=orchestrator.SceneOrchestrator.DEPTH_SUFFIX,
+        INSTANCE_SUFFIX=orchestrator.SceneOrchestrator.INSTANCE_SUFFIX,
     )
     # The real property, so the plan's fps and the recorder's fps cannot drift apart.
     scene.record_frequency = orchestrator.SceneOrchestrator.record_frequency.fget(scene)
@@ -177,7 +178,7 @@ def test_semantic_patterns_are_scoped_to_the_scene(orchestrator):
     # randomize.yaml use for prim_path.
     labels = semantics(
         orchestrator,
-        {"dataset": {"semantics": {"red_block": "/blocks/red_block"}}},
+        {"dataset": {"tracked_objects": {"red_block": "/blocks/red_block"}}},
         scene_id=3,
     )
 
@@ -187,4 +188,31 @@ def test_semantic_patterns_are_scoped_to_the_scene(orchestrator):
 def test_a_task_without_semantics_labels_nothing(orchestrator):
     assert semantics(orchestrator, {}) == {}
     assert semantics(orchestrator, {"dataset": {}}) == {}
-    assert semantics(orchestrator, {"dataset": {"semantics": None}}) == {}
+    assert semantics(orchestrator, {"dataset": {"tracked_objects": None}}) == {}
+
+
+def test_instance_stream_gets_its_own_suffix(orchestrator):
+    camera = {**CAMERA, "depth": True, "instance": True}
+    cameras = plan(orchestrator, {"top": camera}, [{"top": "top"}])
+
+    features = [cameras["top"][f] for f in ("rgb_feature", "depth_feature", "instance_feature")]
+    assert features == ["top", "top_depth", "top_instance"]
+
+
+def test_instance_frames_paint_tracked_objects_in_their_own_colour(orchestrator):
+    scene = SimpleNamespace(instance_colors={"robot": (1, 1, 1), "bin_0": (2, 2, 2)})
+    ids = np.array([[0, 1, 5], [7, 9, 9]], np.uint32)
+    info = {
+        "idToLabels": {
+            "0": {"class": "BACKGROUND"},
+            "1": {"class": "UNLABELLED"},
+            "5": {"class": "robot, camera"},  # inherited labels arrive comma-joined
+            "7": {"class": "bin_0"},
+            "9": {"class": "table"},  # labelled, but not tracked
+        }
+    }
+
+    image = orchestrator.SceneOrchestrator.colorize_instances(scene, {"data": ids, "info": info})
+
+    assert image.dtype == np.uint8 and image.shape == (2, 3, 3)
+    assert image[:, :, 0].tolist() == [[0, 0, 1], [2, 0, 0]]

@@ -17,10 +17,12 @@ from guide_core.types.geometry import Pose as PoseType
 from guide_core.types.geometry import Rotation as RotationType
 from guide_core.types.randomization import zone_plan
 from guide_ex.core.composite_node import CompositeNode, RecoveryNode
-from guide_ex.core.states import Layer
+from guide_ex.core.states import DemoStatus, Layer
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
+from guide_ex.steps.simulation.success import IsTaskSuccessful
+from guide_ex.steps.utility import recording
 from guide_ex.steps.utility.exception import NodeException
 from guide_ex.steps.utility.pose import InvertPose, TransformPose
 from guide_ex.steps.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
@@ -39,7 +41,7 @@ from guide_msgs.srv import (
 namespace_base = ""
 
 
-def solveTask(scene_id, robot, zone=None):
+def solveTask(scene_id, robot, zone=None, path=""):
     global namespace_base
 
     task = robot.callService(
@@ -79,6 +81,7 @@ def solveTask(scene_id, robot, zone=None):
         "goal": goal,
         "scene_path": "",
         "rest_pose": rest_pose,
+        "dataset_path": path,
     }
 
     robot.node.get_logger().info(f"Context {global_context}")
@@ -390,10 +393,42 @@ def solveTask(scene_id, robot, zone=None):
         dynamic_map={key: key for key, _ in global_context.items()},
         children=[
             unclutch_subtask,
+            # The episode starts once the arm is unclutched at rest, not at randomization.
+            recording.StartRecording(
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                    "path": "dataset_path",
+                },
+                # A busy recorder has held start_recording for ~3 min before.
+                static_args={"timeout_sec": 240.0},
+            ),
             get_target_pose_sequence,
             pick_subtask,
             place_subtask,
             return_subtask,
+            # ...and ends after homing: saved if the scene says the task is done, else
+            # discarded. Return's WaitAfterTask has already let the scene settle.
+            IsTaskSuccessful(
+                alias="CheckSuccess",
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                },
+                output_map={"success": "task_success", "reason": "task_reason"},
+            ),
+            recording.StopRecording(
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                    "save_episode": "task_success",
+                },
+                # Saving encodes every camera stream of the episode before it answers.
+                static_args={"timeout_sec": 300.0},
+            ),
         ],
         fallbacks={
             "Pick": RecoveryNode(
@@ -437,13 +472,12 @@ def solveTask(scene_id, robot, zone=None):
 
     robot.node.get_logger().info("Executing pick and place motion sequence")
     try:
-        pick_and_place.execute(context=global_context)
+        result = pick_and_place.execute(context=global_context)
         robot.node.get_logger().info("Executed pick and place motion sequence")
 
-        # Evaluate success of the task
-        time.sleep(1.0)  # Wait a second for physics to settle completely before evaluating
-        response = robot.callService(robot.is_success, CheckSuccess.Request(id=scene_id))
-        if response.success:
+        # The tree checked success itself, right before StopRecording saved or dropped
+        # the episode. A run that broke off earlier never got that far: not a success.
+        if result.status == DemoStatus.PERFECT and result.outputs.get("task_success"):
             robot.node.get_logger().info("\033[92m" + "=" * 50 + "\033[0m")
             robot.node.get_logger().info(
                 f"\033[92m[SUCCESS] Scene {scene_id}: Task completed successfully!\033[0m"
@@ -451,7 +485,7 @@ def solveTask(scene_id, robot, zone=None):
             robot.node.get_logger().info("\033[92m" + "=" * 50 + "\033[0m")
             return True
         else:
-            reason = response.message if response.message else "Conditions not met"
+            reason = result.outputs.get("task_reason") or result.error_message or "Sequence aborted"
             robot.node.get_logger().error("\033[91m" + "=" * 50 + "\033[0m")
             robot.node.get_logger().error(
                 f"\033[91m[FAILURE] Scene {scene_id}: Task failed! Reason: {reason}\033[0m"
@@ -520,24 +554,25 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
                 f"--- Episode {idx + 1}/{total} (zone={zone}) | attempt {attempts} ---"
             )
 
-            robot.callService(
-                robot.start_recording, StartRecording.Request(id=scene_id, path=path)
-            )
+            # The tree records its own episode: StartRecording after Unclutch,
+            # StopRecording after homing, saving only on success.
+            success = solveTask(scene_id, robot, zone=zone, path=path)
 
-            success = solveTask(scene_id, robot, zone=zone)
+            # A run that broke off between the two leaves its episode open: drop it.
+            # stop_recording is a no-op when nothing is open, and a stalled recorder
+            # must cost this one attempt, not the whole generation run.
+            try:
+                robot.callService(
+                    robot.stop_recording,
+                    StopRecording.Request(id=scene_id, save_episode=False),
+                    timeout_sec=300.0,
+                )
+            except TimeoutError as e:
+                robot.node.get_logger().error(f"Cleanup stop_recording timed out: {e}")
 
             if success:
-                robot.node.get_logger().info("Task succeeded. Saving episode...")
-                robot.callService(
-                    robot.stop_recording, StopRecording.Request(id=scene_id, save_episode=True)
-                )
                 idx += 1
                 attempts = 0
-            else:
-                robot.node.get_logger().info("Task failed. Discarding episode...")
-                robot.callService(
-                    robot.stop_recording, StopRecording.Request(id=scene_id, save_episode=False)
-                )
 
         robot.node.get_logger().info("Test completed. Finalizing recording dataset...")
         robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))

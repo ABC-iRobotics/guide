@@ -160,6 +160,7 @@ class SceneOrchestrator(ABC):
                         "nrows": g.nrows,
                         "num_zones": g.num_zones,
                     }
+                run_meta["instance_colors"] = {k: list(v) for k, v in self.instance_colors.items()}
                 self.recorder.set_run_meta(run_meta)
             except Exception as e:
                 self._logger.debug(f"Could not set run meta on recorder: {e}")
@@ -246,6 +247,14 @@ class SceneOrchestrator(ABC):
     #: Appended to a dataset feature key to keep a camera's depth stream apart from its
     #: own rgb stream. Only used when the camera publishes both -- see resolve_cameras.
     DEPTH_SUFFIX = "_depth"
+    #: Same, for a camera's instance-segmentation stream.
+    INSTANCE_SUFFIX = "_instance"
+    #: Colour of each tracked object in the instance stream, in ``dataset.tracked_objects``
+    #: order (tab10); everything untracked is black. The legend goes into guide_info.json.
+    INSTANCE_PALETTE = [
+        (31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40), (148, 103, 189),
+        (140, 86, 75), (227, 119, 194), (127, 127, 127), (188, 189, 34), (23, 190, 207),
+    ]
 
     def resolve_cameras(self) -> List[Dict]:
         """The camera plan: one entry per configured camera, derived once from the config.
@@ -296,9 +305,10 @@ class SceneOrchestrator(ABC):
 
             rgb = bool(data.get("rgb", True))
             depth = bool(data.get("depth", False))
-            if not (rgb or depth):
+            instance = bool(data.get("instance", False))
+            if not (rgb or depth or instance):
                 self._logger.warning(
-                    f"[SceneOrchestrator] camera '{name}' has rgb and depth both off; "
+                    f"[SceneOrchestrator] camera '{name}' has every stream off; "
                     f"skipping it entirely."
                 )
                 continue
@@ -324,6 +334,11 @@ class SceneOrchestrator(ABC):
                     "depth_feature": (
                         (f"{ds_key}{self.DEPTH_SUFFIX}" if rgb else ds_key)
                         if (depth and ds_key)
+                        else None
+                    ),
+                    "instance_feature": (
+                        (f"{ds_key}{self.INSTANCE_SUFFIX}" if (rgb or depth) else ds_key)
+                        if (instance and ds_key)
                         else None
                     ),
                 }
@@ -405,6 +420,14 @@ class SceneOrchestrator(ABC):
     @abstractmethod
     def check_warmup(self):
         raise NotImplementedError("Check warmup function is not implemented for this scene.")
+
+    def _recorded_annotators(self) -> Dict[str, Any]:
+        return {
+            **getattr(self, "rgb_annotators", {}),
+            **getattr(self, "depth_annotators", {}),
+            **getattr(self, "instance_annotators", {}),
+        }
+
 
     def zone_target(self) -> Optional[str]:
         """Prim path to place in the requested zone (e.g. the selected target).
@@ -505,10 +528,13 @@ class SceneOrchestrator(ABC):
     def create_render_products(self, rep):
         self.rgb_annotators = {}
         self.depth_annotators = {}
+        self.instance_annotators = {}
         self.render_products = []
+        # Label the tracked prims before any annotator renders.
+        self.apply_semantics()
 
         for camera in self.resolve_cameras():
-            if not (camera["rgb_feature"] or camera["depth_feature"]):
+            if not (camera["rgb_feature"] or camera["depth_feature"] or camera["instance_feature"]):
                 continue  # published for a live policy, but not part of the dataset
 
             # One render product per camera, shared by both annotators: rgb and depth
@@ -529,7 +555,24 @@ class SceneOrchestrator(ABC):
                 annotator.attach([rp])
                 self.depth_annotators[camera["depth_feature"]] = annotator
 
-        self.apply_semantics()
+            if camera["instance_feature"]:
+                # Per-object masks of the tracked objects. Every tracked object carries
+                # its own label (apply_semantics), so the label segmentation separates
+                # exactly the tracked instances; record_step paints each label in a fixed
+                # colour across frames, episodes and cameras. Not the instance AOVs: on
+                # this scene (Isaac 6.0.1) both instance_segmentation_fast and
+                # instance_id_segmentation_fast segfault in rtx.syntheticdata
+                # (Sdf_PathNode::GetPathToken) as soon as a frame is rendered.
+                # device="cuda": the ids stay a warp array on the render GPU and
+                # colorize_instances copies them with that array's own device. The
+                # default host copy goes through Warp's device numbering, which on a
+                # two-GPU host is not Kit's, and fails (wp_memcpy_d2h invalid argument).
+                annotator = rep.AnnotatorRegistry.get_annotator(
+                    "semantic_segmentation", init_params={"colorize": False}, device="cuda"
+                )
+                annotator.attach([rp])
+                self.instance_annotators[camera["instance_feature"]] = annotator
+
         self.setup_dataset()
 
     def set_render_products_enabled(self, enabled: bool) -> None:
@@ -573,7 +616,7 @@ class SceneOrchestrator(ABC):
         return float(self._config.get("dataset", {}).get("fps", DEFAULT_FPS))
 
     def resolve_semantics(self) -> Dict[str, str]:
-        """Identifier -> scene-scoped prim-path pattern, from ``dataset.semantics``.
+        """Identifier -> scene-scoped prim-path pattern, from ``dataset.tracked_objects``.
 
         These are the labels an instance-segmentation mask is keyed by. Each value is an
         Isaac prim-path pattern in the same syntax ``reset.yaml`` and ``randomize.yaml``
@@ -585,8 +628,36 @@ class SceneOrchestrator(ABC):
         instances, it just reports them under one name. Give a prim its own key when it
         needs its own name.
         """
-        semantics = self._config.get("dataset", {}).get("semantics", {}) or {}
-        return {str(label): f"/Scene_{self._scene_id}{expr}" for label, expr in semantics.items()}
+        tracked = self._config.get("dataset", {}).get("tracked_objects", {}) or {}
+        return {str(label): f"/Scene_{self._scene_id}{expr}" for label, expr in tracked.items()}
+
+    @property
+    def instance_colors(self) -> Dict[str, tuple]:
+        """Tracked-object label -> RGB in the instance stream, in config order."""
+        labels = list(self.resolve_semantics())
+        palette = self.INSTANCE_PALETTE
+        return {label: palette[i % len(palette)] for i, label in enumerate(labels)}
+
+    def colorize_instances(self, data: dict) -> np.ndarray:
+        """Paint a semantic_segmentation frame: each tracked object in its colour,
+        everything else black.
+
+        ``idToLabels`` maps each id to its labels, e.g. {"class": "red_block"}; labels a
+        prim inherits arrive comma-joined ("robot, camera"), so any part naming a
+        tracked object claims the id. One lookup-table pass per frame.
+        """
+        ids = data["data"]
+        ids = ids.numpy() if hasattr(ids, "numpy") else np.asarray(ids)  # warp array on GPU
+        ids = ids.reshape(ids.shape[:2])
+        colors = self.instance_colors
+        lut = np.zeros((int(ids.max()) + 1 if ids.size else 1, 3), np.uint8)
+        for label_id, labels in data.get("info", {}).get("idToLabels", {}).items():
+            names = labels.get("class", "") if isinstance(labels, dict) else labels
+            parts = [p.strip() for p in str(names).split(",")]
+            label = next((p for p in parts if p in colors), None)
+            if label is not None and int(label_id) < len(lut):
+                lut[int(label_id)] = colors[label]
+        return lut[ids]
 
     def apply_semantics(self) -> Dict[str, list]:
         """Stamp the configured identifiers onto the stage. Returns {label: [prim paths]}.
@@ -785,7 +856,7 @@ class SceneOrchestrator(ABC):
         if hasattr(self, "rgb_annotators"):
             for ds_key, annotator in self.rgb_annotators.items():
                 data = annotator.get_data()
-                if data is not None:
+                if data is not None and getattr(data, "size", 0):
                     # Isaac Sim annotators return RGBA (4 channels), strip alpha for RGB
                     if data.ndim == 3 and data.shape[2] == 4:
                         data = data[:, :, :3]
@@ -796,6 +867,18 @@ class SceneOrchestrator(ABC):
                 data = annotator.get_data()
                 if data is not None and getattr(data, "size", 0):
                     observation[ds_key] = depth_to_uint16_mm(data)
+
+        for ds_key, annotator in getattr(self, "instance_annotators", {}).items():
+            data = annotator.get_data()
+            if data is not None and getattr(data.get("data"), "size", 0):
+                observation[ds_key] = self.colorize_instances(data)
+
+        # A frame missing a stream is dropped, not recorded: the recorder builds the
+        # dataset's features from the first frame and every later one must match them.
+        missing = [k for k in self._recorded_annotators() if k not in observation]
+        if missing:
+            self._logger.warning(f"[SceneOrchestrator] dropping frame, no data yet for {missing}")
+            return None
 
         # Joint states
         if hasattr(self, "obs_masks"):

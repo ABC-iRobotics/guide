@@ -386,6 +386,8 @@ class SceneRecorder(Thread):
                     "master_seed": self._run_meta.get("master_seed"),
                     "grid": self._run_meta.get("grid"),
                 },
+                # Legend of the *_instance streams: tracked-object label -> RGB.
+                "instance_colors": self._run_meta.get("instance_colors"),
                 "config": self._curate_config(self.config),
                 "provenance": self._collect_provenance(),
             }
