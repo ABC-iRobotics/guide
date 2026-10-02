@@ -57,7 +57,7 @@ from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
-from guide_msgs.srv import Randomize, RegisterScene, StartRecording, StopRecording
+from guide_msgs.srv import PauseRecording, Randomize, RegisterScene, StartRecording, StopRecording
 
 
 class GUIDEROS2Interface(Node):
@@ -139,6 +139,14 @@ class GUIDEROS2Interface(Node):
             srv_type=StopRecording,
             srv_name="stop_recording",
             callback=self._stop_recording_callback,
+            callback_group=self._reentrant_group,
+        )
+
+        # Pause Recording (resume = start_recording)
+        self._pause_recording = self.create_service(
+            srv_type=PauseRecording,
+            srv_name="pause_recording",
+            callback=self._pause_recording_callback,
             callback_group=self._reentrant_group,
         )
 
@@ -334,16 +342,29 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Stopping recording for scene {id}... (Save: {save_episode})")
 
             self._backend._scene_manager.clear_idle_event(id)
-            self._backend._scene_manager.stop_recording(id, save_episode)
+            if self._backend._scene_manager.stop_recording(id, save_episode):
+                # Block until Consumer thread processes Poison Pill
+                self._backend._scene_manager.wait_stop_recording_event(id)
+                response.message = "Recording stopped and scene reset successfully."
+            else:
+                # Idempotent: a caller cleaning up after a failed run may stop a scene
+                # that never started, or already stopped.
+                response.message = "Not recording; nothing to stop."
+            response.success = True
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+        finally:
+            return response
 
-            # Block until Consumer thread processes Poison Pill
-            self._backend._scene_manager.wait_stop_recording_event(id)
-
-            # Also block until scene resets and transitions to IDLE (if not already)
-            # Actually we can just wait until the recorder is idle.
-            # self._backend._scene_manager.wait_idle_event(id)
-
-            response.message = "Recording stopped and scene reset successfully."
+    def _pause_recording_callback(
+        self, request: PauseRecording.Request, response: PauseRecording.Response
+    ) -> PauseRecording.Response:
+        response = PauseRecording.Response()
+        try:
+            self._logger.info(f"Pausing recording for scene {request.id}...")
+            self._backend._scene_manager.pause_recording(request.id)
+            response.message = "Recording paused; start_recording resumes it."
             response.success = True
         except Exception as e:
             response.message = str(e)
