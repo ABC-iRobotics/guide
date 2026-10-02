@@ -72,6 +72,7 @@ def solveTask(scene_id, robot, zone=None):
     global_context: dict[str, Any] = {
         "sim_namespace": f'/{namespace_base.split("/")[1]}',
         "scene_namespace": f"/Scene_{scene_id}",
+        "scene_id": scene_id,
         "robot": robot,
         "robot_prim": "/fr3/fr3_rightfinger",
         "target": target,
