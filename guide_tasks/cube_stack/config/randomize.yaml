@@ -1,8 +1,9 @@
 # cube_stack: the four cubes land anywhere in front of the robot, each with its own pose
 # and yaw. Scene.randomize redraws any layout with two cubes closer than 12 cm, so an
 # open gripper always fits around the cube it picks and around the tower it builds.
-# Region: x [-0.15, 0.25] (>= 15 cm in front of the robot base), y [-0.3, 0.3], all of it
-# in both fixed cameras' view up to the full tower height (20 cm).
+# Region: x [0.0, 0.25], y [-0.3, 0.3], i.e. >= 30 cm in front of the robot base (x = -0.3):
+# closer in, MoveIt often finds only part of a straight top-down path to the table or
+# the tower. All of it is in both fixed cameras' view up to the full tower height.
 #
 # The stacking order is drawn by the scene (Scene.randomize_preprocess), not here.
 instructions:
@@ -11,9 +12,9 @@ instructions:
       prim_path: '/blocks/*'
       pose:
         position:
-          value: [0.05, 0.0, 0.025]
+          value: [0.125, 0.0, 0.025]
           random:            # [[x_min, x_max], [y_min, y_max], [z_min, z_max]], offsets from value
-            - [-0.20, 0.20]
+            - [-0.125, 0.125]
             - [-0.30, 0.30]
             - [0.0, 0.0]
         orientation:

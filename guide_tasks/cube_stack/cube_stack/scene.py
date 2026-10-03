@@ -12,7 +12,7 @@ CUBE = 0.05  # edge of the BlocksWorld cubes, m
 # fingers, so a neighbour closer than ~9 cm is hit on the way down; 12 cm leaves margin.
 MIN_SEPARATION = 0.12
 STACKED = {"xy_tolerance": 0.02, "z_tolerance": 0.01}
-# Layouts drawn before giving up on separation; ~35% of draws pass, so 50 never runs out.
+# Layouts drawn before giving up on separation; ~20% of draws pass (all 50 failing: 1e-5).
 MAX_LAYOUT_DRAWS = 50
 
 
@@ -46,14 +46,24 @@ class Scene(SceneOrchestrator):
         # time: take it as it is.
         for _ in range(MAX_LAYOUT_DRAWS):
             context = super().randomize(seed=seed, inject=inject, zone=zone)
-            if seed is not None or inject is not None or separated(self._cube_positions(), MIN_SEPARATION):
+            if (
+                seed is not None
+                or inject is not None
+                or separated(self._cube_positions(), MIN_SEPARATION)
+            ):
                 break
         else:
-            self._logger.warning(f"No layout with {MIN_SEPARATION} m between cubes; using the last.")
+            self._logger.warning(
+                f"No layout with {MIN_SEPARATION} m between cubes; using the last."
+            )
         return context
 
     def _cube_positions(self):
-        cubes = next(i for i in self.randomize_instructions if i.get("_prim_pattern", "").endswith("/blocks/*"))
+        cubes = next(
+            i
+            for i in self.randomize_instructions
+            if i.get("_prim_pattern", "").endswith("/blocks/*")
+        )
         return [pose.position.to_numpy() for pose in cubes["kwargs"]["pose"]]
 
     def randomize_preprocess(self, randomizer):
@@ -80,7 +90,9 @@ class Scene(SceneOrchestrator):
         ]
 
     def is_success_postprocess(self, result):
-        return all(is_on_top(upper, lower, CUBE, **STACKED) for lower, upper in zip(result, result[1:]))
+        return all(
+            is_on_top(upper, lower, CUBE, **STACKED) for lower, upper in zip(result, result[1:])
+        )
 
     def reset_preprocess(self, instructions):
         return instructions

@@ -26,7 +26,9 @@ def scene_drawing(monkeypatch, layouts):
     def randomize(self, *, seed=None, inject=None, zone=None):
         self.draws += 1
         poses = [Pose(position=Point(p)) for p in next(layouts)]
-        self.randomize_instructions = [{"_prim_pattern": "/Scene_0/blocks/*", "kwargs": {"pose": poses}}]
+        self.randomize_instructions = [
+            {"_prim_pattern": "/Scene_0/blocks/*", "kwargs": {"pose": poses}}
+        ]
         return self.draws
 
     monkeypatch.setattr(SceneOrchestrator, "randomize", randomize)

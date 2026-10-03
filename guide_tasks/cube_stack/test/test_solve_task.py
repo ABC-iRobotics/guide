@@ -4,6 +4,7 @@ Each motion, gripper, sensing and recording node is replaced by a few lines of f
 physics (cubes follow a closed gripper, fall onto whatever is below when let go), so
 the tree runs exactly as built for Isaac, minus Isaac.
 """
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -27,22 +28,28 @@ PERFECT = ExecutionResult(DemoStatus.PERFECT)
 
 
 class World:
-    def __init__(self, misses=0, slips=0, slides=0, failing_moves=()):
+    def __init__(self):
         spots = [(0.0, -0.2), (0.15, 0.2), (-0.1, 0.1), (0.2, -0.05)]
         self.cubes = {p: np.array([x, y, 0.025]) for p, (x, y) in zip(ORDER, spots)}
         self.tcp, self.held = np.array([0.0, 0.0, 0.5]), None
-        self.misses, self.slips, self.slides = misses, slips, slides
-        self.failing_moves = list(failing_moves)
+        self.misses = self.slips = self.slides = 0
+        self.failing_moves, self.short_moves = [], []  # fail / stop halfway yet "succeed"
         self.prompts, self.moves, self.saved = [], [], None
 
+    def landing(self, cube, x, y):
+        below = [
+            c[2] for p, c in self.cubes.items() if p != cube and np.hypot(*(c[:2] - (x, y))) < 0.03
+        ]
+        return max(below, default=-0.025) + 0.05
+
     def settle(self, cube):
-        """Let go of `cube`: it lands on the highest cube under it, or the table."""
-        x, y = self.cubes[cube][:2]
-        if self.slides:  # it slides off whatever it was put on
-            self.slides -= 1
+        """Let go of `cube`: it lands on the highest cube under it, or the table. Slid
+        off, or dropped from more than 2 cm, it ends up 8 cm aside."""
+        x, y, z = self.cubes[cube]
+        if self.slides or z - self.landing(cube, x, y) > 0.02:
+            self.slides = max(0, self.slides - 1)
             x += 0.08
-        below = [c[2] for p, c in self.cubes.items() if p != cube and np.hypot(*(c[:2] - (x, y))) < 0.03]
-        self.cubes[cube] = np.array([x, y, max(below, default=-0.025) + 0.05])
+        self.cubes[cube] = np.array([x, y, self.landing(cube, x, y)])
 
     def tower(self):
         poses = [Pose(position=Point(self.cubes[p])) for p in ORDER]
@@ -54,15 +61,21 @@ def world(monkeypatch):
     w = World()
 
     def get_pose(self, robot, sim_namespace, scene_namespace, prim_path):
-        position = w.cubes[prim_path] if prim_path else np.zeros(3)
-        return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(position))})
+        places = {**w.cubes, "": np.zeros(3), "/fr3/fr3_hand_tcp": w.tcp}
+        return ExecutionResult(
+            DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(places[prim_path]))}
+        )
 
     def move(self, robot, target_pose, speed=1.0, cartesian=False):
         w.moves.append(self.name)
         if self.name in w.failing_moves:
             w.failing_moves.remove(self.name)
             return ExecutionResult(DemoStatus.FAILURE, error_message="no path")
-        w.tcp = target_pose.position.to_numpy()
+        target = target_pose.position.to_numpy()
+        if self.name in w.short_moves:  # a partly computed Cartesian path
+            w.short_moves.remove(self.name)
+            target = (w.tcp + target) / 2
+        w.tcp = target
         if w.held:
             w.cubes[w.held] = w.tcp - (0, 0, st.GRASP)
             if w.slips and self.name == "MoveOverSupport":
@@ -117,20 +130,7 @@ def run(world):
     robot = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
     prompts = subtask_prompts(COLOURS)
     tree = st.build_tree(robot, prompts, len(ORDER))
-    return tree.execute(
-        {
-            "robot": robot,
-            "sim_namespace": "/Sim_0",
-            "scene_namespace": "/Scene_0",
-            "scene_id": 0,
-            "scene_path": "",
-            "robot_prim": "/fr3/fr3_rightfinger",
-            "rest_pose": Pose(position=Point([0.0, 0.0, 0.5])),
-            "dataset_path": "",
-            "order": ORDER,
-            "prompts": prompts,
-        }
-    )
+    return tree.execute(st.episode_context(robot, "/Sim_0", 0, ORDER, prompts))
 
 
 def test_builds_the_tower_announcing_each_subtask(world):
@@ -155,6 +155,15 @@ def test_route_2_a_failed_move_detours_via_rest(world):
     assert run(world).status == DemoStatus.PERFECT
     assert world.tower()
     assert {"LowerViaRestToRest", "OverCubeViaRestToRest"} <= set(world.moves)
+
+
+def test_route_2_a_move_that_stops_short_is_caught_before_the_gripper_acts(world):
+    world.short_moves = ["MoveToGrasp", "LowerOntoSupport"]
+
+    assert run(world).status == DemoStatus.PERFECT
+    assert world.tower()
+    # One retry each; nothing dropped from height, so no layer had to be rebuilt.
+    assert world.moves.count("MoveToGrasp") == world.moves.count("LowerOntoSupport") == 4
 
 
 def test_route_3_a_cube_dropped_on_the_way_is_picked_up_again(world):

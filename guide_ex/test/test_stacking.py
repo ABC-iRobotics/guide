@@ -67,7 +67,9 @@ class Measure(BaseNode):
         self.world = world
 
     def run(self, order):
-        return ExecutionResult(DemoStatus.PERFECT, outputs={"poses": [self.world.poses[n] for n in order]})
+        return ExecutionResult(
+            DemoStatus.PERFECT, outputs={"poses": [self.world.poses[n] for n in order]}
+        )
 
 
 class PutOn(BaseNode):

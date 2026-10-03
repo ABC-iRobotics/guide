@@ -4,7 +4,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -23,7 +27,8 @@ def generate_nodes(context, *args, **kwargs):
 
     # The solver imports lerobot, which lives in the '.venv' (override: ISAACSIM_PYTHON).
     venv_python = os.environ.get(
-        "ISAACSIM_PYTHON", os.path.join(os.path.expanduser("~"), "ros2_ws", ".venv", "bin", "python")
+        "ISAACSIM_PYTHON",
+        os.path.join(os.path.expanduser("~"), "ros2_ws", ".venv", "bin", "python"),
     )
     guide_moveit = os.path.join(
         get_package_share_directory("franka_fr3_moveit_config"), "launch", "guide_moveit.launch.py"
