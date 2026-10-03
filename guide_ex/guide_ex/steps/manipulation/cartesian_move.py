@@ -17,7 +17,12 @@ class MoveToCartesianPose(BaseNode):
         super().__init__("CartesianMove", alias, dynamic_map, static_args, output_map)
 
     def run(
-        self, robot: Robot, target_pose: Pose, speed: float = 1.0, cartesian: bool = False
+        self,
+        robot: Robot,
+        target_pose: Pose,
+        speed: float = 1.0,
+        cartesian: bool = False,
+        min_fraction: float = 0.95,
     ) -> ExecutionResult:
         """
         Executes a Cartesian move to the specified target pose at the given speed.
@@ -26,6 +31,8 @@ class MoveToCartesianPose(BaseNode):
             target_pose (Pose): The target pose to move to.
             speed (float): The speed at which to execute the move (default: 1.0).
             cartesian (bool): Whether to execute the move in Cartesian space (default: False).
+            min_fraction (float): A straight-line move MoveIt can compute for less than
+                this share of the way is refused before the arm moves.
         Returns:
             ExecutionResult: The result of the move execution.
         """
@@ -46,6 +53,25 @@ class MoveToCartesianPose(BaseNode):
                 ActionType.CARTESIAN_POSE
             )  # Ensure the robot is in Cartesian mode
             robot._moveit2.max_velocity = speed  # Set the speed for the move
+
+            # MoveIt executes whatever part of a Cartesian path it could compute and the
+            # robot reports success (pymoveit2's threshold defaults to 0): stopping short of
+            # a cube, or at the edge of a self-collision no later plan can start from.
+            # Ask for the path first; one MoveIt cannot (nearly) finish is not executed.
+            if cartesian and (
+                robot._moveit2.plan(
+                    pose=target_pose.to_ros(),
+                    frame_id=robot.config.frame_id,
+                    cartesian=True,
+                    cartesian_fraction_threshold=min_fraction,
+                    start_joint_state=robot.joint_state,
+                )
+                is None
+            ):
+                return ExecutionResult(
+                    status=DemoStatus.FAILURE,
+                    error_message=f"No straight path to the target (< {min_fraction:.0%}).",
+                )
 
             for _ in range(3):  # Retry logic for robustness
                 success = robot.send_action(

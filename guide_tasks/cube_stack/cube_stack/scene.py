@@ -12,8 +12,9 @@ CUBE = 0.05  # edge of the BlocksWorld cubes, m
 # fingers, so a neighbour closer than ~9 cm is hit on the way down; 12 cm leaves margin.
 MIN_SEPARATION = 0.12
 STACKED = {"xy_tolerance": 0.02, "z_tolerance": 0.01}
-# Layouts drawn before giving up on separation; ~20% of draws pass (all 50 failing: 1e-5).
-MAX_LAYOUT_DRAWS = 50
+# Layouts drawn before giving up on separation. A draw is only numbers (nothing moves
+# until the last one is applied) and ~9% pass, so 200 all failing is ~1e-8.
+MAX_LAYOUT_DRAWS = 200
 
 
 def subtask_prompts(order):

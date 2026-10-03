@@ -16,19 +16,21 @@ Recovery routes, for the failures most likely in this task (most likely first):
 1. Grasp misses (fingers empty after the lift; block_bin's 5 failed attempts in 300
    were all this). Pick checks the fingers; on a miss PutOn's Regrasp opens, measures
    the cube again (the attempt may have nudged it) and grasps the other pair of faces.
-2. An arm motion fails or stops short. MoveIt executes whatever part of a Cartesian path
-   it could compute and reports success (~1% of block_bin's moves, many more near the
-   robot base), so before the gripper closes or opens, AtGrasp/AtPlace compare the
-   measured TCP with the target. Every move has a detour through the rest pose, planned
-   in joint space, before the move is tried again.
+2. An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt
+   can only partly compute (~1% of block_bin's moves, most near the robot base).
+   MoveToCartesianPose refuses the last before moving -- executed, it stopped grasps
+   short and left the arm in a self-collision nothing could plan out of. Every move has
+   a detour through the rest pose, planned in joint space, before it is tried again.
 3. The cube slips out on the way to the tower. CarryToSupport checks the fingers once
    above the tower; RepickDropped picks the cube up again from wherever it fell.
 4. A placed cube does not stay, or the tower is knocked. Nothing in PutOn trusts a
    placement: each loop pass measures the whole tower and rebuilds from the lowest
    layer that is out of place, within REBUILDS extra passes.
 5. Anything else -- a cube knocked off the table, retries used up: the tree fails, the
-   episode is discarded, and generation draws a new layout and tries again.
-(Cubes spawned too close to grasp are ruled out up front: see Scene.randomize.)
+   episode is discarded, and generation draws a new layout and tries again, up to
+   MAX_ATTEMPTS times before it stops the run.
+(Cubes spawned too close to grasp, or too close to the robot to reach down to, are
+ruled out up front: see Scene.randomize and config/randomize.yaml.)
 """
 
 import argparse
@@ -57,7 +59,7 @@ from guide_ex.steps.simulation.isaac.prim import (
 )
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility.exception import NodeException
-from guide_ex.utility.pose import InvertPose, IsAtPose, TransformPose
+from guide_ex.utility.pose import InvertPose, TransformPose
 from guide_ex.utility.recording import SetSubtaskPrompt, StartRecording, StopRecording
 from guide_ex.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
 from guide_ex.utility.stacking import TowerProgress
@@ -70,6 +72,9 @@ OVER_CUBE = 0.275  # approach above a cube centre: TCP ~30 cm over the table
 PLACE = CUBE + GRASP + 0.005  # TCP above the support's centre at release: 5 mm drop
 OVER_SUPPORT = PLACE + 0.10  # carried cube clears the tower top by 10 cm
 REBUILDS = 3  # loop passes beyond one per layer, for placements that did not hold
+# Attempts at one episode before the run stops: past this something is stuck (e.g. an
+# arm MoveIt will not plan from), and every further attempt would fail the same way.
+MAX_ATTEMPTS = 8
 OPEN, CLOSED = 0.04, 0.01  # finger targets; closed over-squeezes, see block_bin
 
 SIM = ("robot", "sim_namespace", "scene_namespace")
@@ -152,23 +157,6 @@ def locate(name, prim, out):
     ]
 
 
-def arrived(name, target):
-    """Did the TCP get to `target`? A partly computed Cartesian path still "succeeds"."""
-    return [
-        GetPrimPose(
-            alias=f"Get{name}TcpPose",
-            dynamic_map={**keys(*SIM), "prim_path": "tcp_prim"},
-            output_map={"pose": "tcp_pose"},
-        ),
-        TransformPose(
-            alias=f"{name}TcpInScene",
-            dynamic_map={"l_pose": "scene_pose_inv", "r_pose": "tcp_pose"},
-            output_map={"pose": "tcp_pose"},
-        ),
-        IsAtPose(alias=name, dynamic_map={"pose": "tcp_pose", "target": target}),
-    ]
-
-
 def via_rest(name, resume, *then, needs=()):
     """Route 2: detour through the rest pose (joint-space plan), then retry from `resume`."""
     return RecoveryNode(
@@ -190,20 +178,15 @@ def build_tree(robot, prompts, n_cubes):
         children=locate("Cube", "top", "cube_pose"),
     )
 
-    grasp_detour = via_rest("GraspViaRest", "MoveOverCube")
     pick = CompositeNode(
         name="Pick",
         level=Layer.SEQUENCE,
-        dynamic_map=keys(
-            *SIM, "robot_prim", "tcp_prim", "rest_pose", "scene_pose_inv", "top", "cube_pose"
-        ),
+        dynamic_map=keys(*SIM, "robot_prim", "rest_pose", "top", "cube_pose"),
         children=[
             above("OverCubePose", "cube_pose", OVER_CUBE, "over_cube_pose"),
             move("MoveOverCube", "over_cube_pose"),
             above("GraspPose", "cube_pose", GRASP, "grasp_pose"),
             move("MoveToGrasp", "grasp_pose", speed=0.2),
-            # Short of the cube, the fingers would close on air.
-            *arrived("AtGrasp", "grasp_pose"),
             *gripper("CloseGripper", robot, CLOSED, settle=2.0),
             move("LiftCube", "over_cube_pose"),
             holding("CheckHolding"),
@@ -213,8 +196,7 @@ def build_tree(robot, prompts, n_cubes):
         false_branch=NodeException(name="NotHolding"),
         fallbacks={
             "MoveOverCube": via_rest("OverCubeViaRest", "MoveOverCube"),
-            "MoveToGrasp": grasp_detour,
-            "AtGrasp": grasp_detour,
+            "MoveToGrasp": via_rest("GraspViaRest", "MoveOverCube"),
             "LiftCube": via_rest("LiftViaRest", "CheckHolding"),
         },
     )
@@ -236,30 +218,24 @@ def build_tree(robot, prompts, n_cubes):
         fallbacks={"MoveOverSupport": via_rest("CarryViaRest", "MoveOverSupport")},
     )
 
-    lower_detour = via_rest(
-        "LowerViaRest",
-        "LowerOntoSupport",
-        move("BackOverSupport", "over_support_pose"),
-        needs=("over_support_pose",),
-    )
     release = CompositeNode(
         name="Release",
         level=Layer.SEQUENCE,
-        dynamic_map=keys(
-            *SIM, "tcp_prim", "rest_pose", "scene_pose_inv", "support_pose", "over_support_pose"
-        ),
+        dynamic_map=keys("robot", "rest_pose", "support_pose", "over_support_pose"),
         children=[
             above("PlacePose", "support_pose", PLACE, "place_pose"),
             move("LowerOntoSupport", "place_pose", speed=0.2),
-            # Short of the tower, the cube would drop and scatter it: keep holding.
-            *arrived("AtPlace", "place_pose"),
             *gripper("OpenGripper", robot, OPEN),
             # Slow and straight up, so the fingers do not drag the cube along.
             move("RetreatFromTower", "over_support_pose", speed=0.2),
         ],
         fallbacks={
-            "LowerOntoSupport": lower_detour,
-            "AtPlace": lower_detour,
+            "LowerOntoSupport": via_rest(
+                "LowerViaRest",
+                "LowerOntoSupport",
+                move("BackOverSupport", "over_support_pose"),
+                needs=("over_support_pose",),
+            ),
             "RetreatFromTower": via_rest("RetreatViaRest", "RetreatFromTower"),
         },
     )
@@ -271,7 +247,6 @@ def build_tree(robot, prompts, n_cubes):
             *SIM,
             "scene_id",
             "robot_prim",
-            "tcp_prim",
             "rest_pose",
             "scene_pose_inv",
             "top",
@@ -325,7 +300,6 @@ def build_tree(robot, prompts, n_cubes):
         *SIM,
         "scene_id",
         "robot_prim",
-        "tcp_prim",
         "rest_pose",
         "scene_pose_inv",
         "order",
@@ -378,7 +352,6 @@ def build_tree(robot, prompts, n_cubes):
             "scene_id",
             "scene_path",
             "robot_prim",
-            "tcp_prim",
             "rest_pose",
             "dataset_path",
             "order",
@@ -458,7 +431,6 @@ def episode_context(robot, sim_namespace, scene_id, order, prompts, path=""):
         "scene_id": scene_id,
         "scene_path": "",
         "robot_prim": "/fr3/fr3_rightfinger",
-        "tcp_prim": "/fr3/fr3_hand_tcp",
         # Gripper pointing down, 50 cm over the scene origin.
         "rest_pose": Pose(
             position=Point([0.0, 0.0, 0.5]),
@@ -505,6 +477,8 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
     try:
         done = attempts = errors = 0
         while done < len(plan):
+            if attempts == MAX_ATTEMPTS:
+                raise RuntimeError(f"episode {done + 1} failed {attempts} times in a row")
             attempts += 1
             log.info(f"--- Episode {done + 1}/{len(plan)} | attempt {attempts} ---")
             try:

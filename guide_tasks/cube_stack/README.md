@@ -15,9 +15,9 @@ subtask annotation.
   and ~2.7 m from anywhere the wrist camera goes. They are dynamic rigid bodies, so they
   rest on the floor instead of floating. They stay in `dataset.tracked_objects`, so a bin
   colour in an instance mask would show one in view (none does).
-- **Cubes:** uniform over x [0.0, 0.25], y [-0.3, 0.3] (scene frame, robot base at
-  x = -0.3, so >= 30 cm in front of it: closer in, MoveIt often finds only part of a
-  straight top-down path), any yaw; a layout with two cubes closer than 12 cm is redrawn.
+- **Cubes:** uniform over x [0.10, 0.30], y [-0.25, 0.25] (scene frame; the robot base is
+  at x = -0.3, so 40-60 cm in front of it), any yaw; a layout with two cubes closer than
+  12 cm is redrawn.
 - **Order:** a seeded draw over all 24 permutations, recorded with the episode's other
   drawn values in `meta/guide_episodes.jsonl`.
 
@@ -35,7 +35,10 @@ subtask annotation.
 5. Cubes have 4-fold symmetry about z, so a grasp never turns the wrist more than 45°;
    a cube that toppled onto another face is still grasped from its flattest axis.
 6. The open gripper needs ~9 cm around a cube (8 cm opening plus fingers), so spawned
-   cubes keep 12 cm between centres (~20% of uniform draws pass; redrawn otherwise).
+   cubes keep 12 cm between centres (~9% of uniform draws pass; redrawn otherwise).
+7. Everything is reachable top-down without folding the arm onto itself: 30 cm from the
+   base, a top-down reach to the table brings the forearm into the shoulder (MoveIt
+   reports `fr3_link1`-`fr3_link5` contact), so cubes spawn 40-60 cm out.
 
 ## Tree
 
@@ -57,10 +60,10 @@ The five failures judged most likely, most likely first:
 | # | Failure | Detected by | Route |
 |---|---------|-------------|-------|
 | 1 | Grasp misses (block_bin's only failure mode in 300 episodes) | finger/cube contact after the lift (`Pick` condition) | `Regrasp`: open, measure the cube again, grasp the other pair of faces, retry `Pick` (2x) |
-| 2 | An arm motion fails or stops short (no path, aborted trajectory, or a Cartesian path MoveIt computed only partly, which still reports success) | the move step fails; `AtGrasp`/`AtPlace` compare the measured TCP with the target before the gripper closes or opens | `*ViaRest`: detour through the rest pose (joint-space plan), retry the move (2x per move) |
+| 2 | An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; `MoveToCartesianPose` refuses a path under 95% before moving | `*ViaRest`: detour through the rest pose (joint-space plan), retry the move (2x per move) |
 | 3 | The cube slips out on the way to the tower | finger/cube contact above the tower (`CarryToSupport` condition) | `RepickDropped`: pick it up again from wherever it landed (2x) |
 | 4 | A placed cube does not stay, or the tower is knocked | every loop pass measures the whole tower | the loop itself: rebuild from the lowest layer out of place (3 spare passes) |
-| 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again |
+| 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again (8 attempts, then the run stops) |
 
 Cubes spawned too close to grasp are prevented rather than recovered (assumption 6).
 `test/test_solve_task.py` runs the real tree against a fake world through each route.

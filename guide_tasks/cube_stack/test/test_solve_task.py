@@ -33,7 +33,7 @@ class World:
         self.cubes = {p: np.array([x, y, 0.025]) for p, (x, y) in zip(ORDER, spots)}
         self.tcp, self.held = np.array([0.0, 0.0, 0.5]), None
         self.misses = self.slips = self.slides = 0
-        self.failing_moves, self.short_moves = [], []  # fail / stop halfway yet "succeed"
+        self.failing_moves = []
         self.prompts, self.moves, self.saved = [], [], None
 
     def landing(self, cube, x, y):
@@ -61,21 +61,15 @@ def world(monkeypatch):
     w = World()
 
     def get_pose(self, robot, sim_namespace, scene_namespace, prim_path):
-        places = {**w.cubes, "": np.zeros(3), "/fr3/fr3_hand_tcp": w.tcp}
-        return ExecutionResult(
-            DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(places[prim_path]))}
-        )
+        position = w.cubes[prim_path] if prim_path else np.zeros(3)
+        return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(position))})
 
     def move(self, robot, target_pose, speed=1.0, cartesian=False):
         w.moves.append(self.name)
         if self.name in w.failing_moves:
             w.failing_moves.remove(self.name)
             return ExecutionResult(DemoStatus.FAILURE, error_message="no path")
-        target = target_pose.position.to_numpy()
-        if self.name in w.short_moves:  # a partly computed Cartesian path
-            w.short_moves.remove(self.name)
-            target = (w.tcp + target) / 2
-        w.tcp = target
+        w.tcp = target_pose.position.to_numpy()
         if w.held:
             w.cubes[w.held] = w.tcp - (0, 0, st.GRASP)
             if w.slips and self.name == "MoveOverSupport":
@@ -155,15 +149,6 @@ def test_route_2_a_failed_move_detours_via_rest(world):
     assert run(world).status == DemoStatus.PERFECT
     assert world.tower()
     assert {"LowerViaRestToRest", "OverCubeViaRestToRest"} <= set(world.moves)
-
-
-def test_route_2_a_move_that_stops_short_is_caught_before_the_gripper_acts(world):
-    world.short_moves = ["MoveToGrasp", "LowerOntoSupport"]
-
-    assert run(world).status == DemoStatus.PERFECT
-    assert world.tower()
-    # One retry each; nothing dropped from height, so no layer had to be rebuilt.
-    assert world.moves.count("MoveToGrasp") == world.moves.count("LowerOntoSupport") == 4
 
 
 def test_route_3_a_cube_dropped_on_the_way_is_picked_up_again(world):
