@@ -1,0 +1,8 @@
+# The subtask the robot works on from now on, as a natural-language prompt (e.g. "Put
+# the red cube on the blue cube."). Every frame the scene records after this carries it,
+# until the next prompt or the end of the episode; an empty prompt clears it.
+int32 id
+string prompt
+---
+bool success
+string message

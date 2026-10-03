@@ -1,0 +1,70 @@
+# Run only on an explicit Reset service call: the cubes in a row in front of the robot,
+# the arm home, the bins parked where randomize.yaml keeps them.
+instructions:
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/red_block'
+      pose:
+        position:
+          value: [0.15, -0.225, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/yellow_block'
+      pose:
+        position:
+          value: [0.15, -0.075, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/green_block'
+      pose:
+        position:
+          value: [0.15, 0.075, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/blue_block'
+      pose:
+        position:
+          value: [0.15, 0.225, 0.025]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_joint'
+    kwargs:
+      articulation_root: '/fr3'
+      joint_positions: [0.0, -0.7854, 0.0, -2.3562, 0.0, 1.5708, 0.7854, 0.0, 0.0]
+      joint_velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      joint_efforts: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_0'
+      pose:
+        position:
+          value: [3.0, -0.5, -0.68]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_1'
+      pose:
+        position:
+          value: [3.0, 0.5, -0.68]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: true

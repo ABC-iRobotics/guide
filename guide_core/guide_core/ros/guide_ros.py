@@ -57,7 +57,14 @@ from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
-from guide_msgs.srv import PauseRecording, Randomize, RegisterScene, StartRecording, StopRecording
+from guide_msgs.srv import (
+    PauseRecording,
+    Randomize,
+    RegisterScene,
+    SetSubtask,
+    StartRecording,
+    StopRecording,
+)
 
 
 class GUIDEROS2Interface(Node):
@@ -147,6 +154,14 @@ class GUIDEROS2Interface(Node):
             srv_type=PauseRecording,
             srv_name="pause_recording",
             callback=self._pause_recording_callback,
+            callback_group=self._reentrant_group,
+        )
+
+        # Subtask prompt: stamped on every frame recorded after it
+        self._set_subtask = self.create_service(
+            srv_type=SetSubtask,
+            srv_name="set_subtask",
+            callback=self._set_subtask_callback,
             callback_group=self._reentrant_group,
         )
 
@@ -371,6 +386,19 @@ class GUIDEROS2Interface(Node):
             response.success = False
         finally:
             return response
+
+    def _set_subtask_callback(
+        self, request: SetSubtask.Request, response: SetSubtask.Response
+    ) -> SetSubtask.Response:
+        response = SetSubtask.Response()
+        try:
+            self._logger.info(f"Subtask of scene {request.id}: {request.prompt!r}")
+            self._backend._scene_manager.set_subtask(request.id, request.prompt)
+            response.success = True
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+        return response
 
     def _finalize_recording_callback(
         self, request: FinalizeRecording.Request, response: FinalizeRecording.Response

@@ -22,11 +22,11 @@ from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
 from guide_ex.steps.simulation.success import IsTaskSuccessful
-from guide_ex.steps.utility import recording
-from guide_ex.steps.utility.exception import NodeException
-from guide_ex.steps.utility.pose import InvertPose, TransformPose
-from guide_ex.steps.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
-from guide_ex.steps.utility.wait import WaitForSeconds
+from guide_ex.utility import recording
+from guide_ex.utility.exception import NodeException
+from guide_ex.utility.pose import InvertPose, TransformPose
+from guide_ex.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
+from guide_ex.utility.wait import WaitForSeconds
 from guide_msgs.srv import (
     CheckSuccess,
     Collision,

@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import queue
+import tempfile
 import traceback
 from pathlib import Path
 from threading import Event, Thread
@@ -22,6 +23,47 @@ GUIDE_META_SCHEMA = 1
 #: (this file's old literal) -- so every dataset recorded in that window claims a rate
 #: it was not recorded at. 10 is what the recorder actually did.
 DEFAULT_FPS = 10
+
+
+def write_subtasks(root: Path, subtasks: dict) -> bool:
+    """Write saved episodes' subtask prompts into a finalized dataset, the LeRobot way.
+
+    ``subtasks`` maps an episode index to ``[(frame_index, prompt), ...]``, one entry per
+    change. LeRobot (>= 0.6) keeps these in the ``language_persistent`` column as
+    ``style="subtask"`` rows, each active from its timestamp until the next one -- what
+    a training recipe's ``active_at(t, style=subtask)`` reads. ``add_frame`` drops
+    language values at record time, so they go in afterwards through LeRobot's own
+    annotation writer, timestamps taken from the dataset's frames. A LeRobot without
+    language columns gets nothing written: returns False.
+    """
+    try:
+        from lerobot.annotations.steerable_pipeline.executor import Executor
+        from lerobot.annotations.steerable_pipeline.reader import iter_episodes
+        from lerobot.annotations.steerable_pipeline.staging import EpisodeStaging
+        from lerobot.annotations.steerable_pipeline.writer import LanguageColumnsWriter
+    except ImportError:
+        return False
+
+    root = Path(root)
+    records = list(iter_episodes(root))
+    with tempfile.TemporaryDirectory() as staging:
+        for record in records:
+            rows = [
+                {
+                    "role": "assistant",
+                    "content": prompt,
+                    "style": "subtask",
+                    "timestamp": record.frame_timestamps[frame_index],
+                    "camera": None,
+                    "tool_calls": None,
+                }
+                for frame_index, prompt in subtasks.get(record.episode_index, [])
+            ]
+            if rows:
+                EpisodeStaging(Path(staging), record.episode_index).write("plan", rows)
+        LanguageColumnsWriter().write_all(records, Path(staging), root)
+    Executor._ensure_annotation_metadata_in_info(root)
+    return True
 
 
 class SceneRecorder(Thread):
@@ -56,6 +98,12 @@ class SceneRecorder(Thread):
         self._run_meta: dict = {}
         self._pending_episode_meta: dict | None = None
         self._info_written = False
+
+        # Subtask prompts: this episode's changes as (frame_index, prompt), and those of
+        # every saved episode, written into the dataset when it is finalized.
+        self._episode_frames = 0
+        self._subtasks: list = []
+        self._saved_subtasks: dict = {}
 
         self.dataset = None
         self.LeRobotDataset = None
@@ -324,9 +372,14 @@ class SceneRecorder(Thread):
         )
 
         task_str = item.pop("task", self.task_name)
+        subtask = item.pop("subtask", "")
         frame = {**observation_frame, **action_frame, "task": task_str}
 
         self.dataset.add_frame(frame)
+        # LeRobot numbers an episode's frames 0, 1, ... in the order they are added.
+        if subtask and (not self._subtasks or self._subtasks[-1][1] != subtask):
+            self._subtasks.append((self._episode_frames, subtask))
+        self._episode_frames += 1
         self._logger.info(
             f"Frame added successfully at time={current_time:.2f} (relative={relative_time:.2f}). Total frames: {len(self.dataset)}"
         )
@@ -345,6 +398,9 @@ class SceneRecorder(Thread):
             self.dataset.save_episode(parallel_encoding=False)
             self._logger.info("Episode successfully saved.")
             self._write_episode_meta(episode_index)
+            if self._subtasks:
+                self._saved_subtasks[episode_index] = self._subtasks
+        self._subtasks, self._episode_frames = [], 0
         self._pending_episode_meta = None
         self.start_recording_event.clear()
         self.stop_recording_event.set()
@@ -355,6 +411,7 @@ class SceneRecorder(Thread):
             self._logger.info("Discarding episode...")
             self.dataset.clear_episode_buffer()
             self._logger.info("Episode buffer cleared.")
+        self._subtasks, self._episode_frames = [], 0
         # Drop the pending sidecar payload so only saved episodes are recorded.
         self._pending_episode_meta = None
         self.start_recording_event.clear()
@@ -481,6 +538,17 @@ class SceneRecorder(Thread):
             self.dataset.finalize()
             self.dataset = None
             self._logger.info("Dataset finalized successfully.")
+
+            if self._saved_subtasks:
+                try:
+                    written = write_subtasks(dataset_root, self._saved_subtasks)
+                    self._logger.info(
+                        f"Subtasks of {len(self._saved_subtasks)} episode(s) "
+                        f"{'written' if written else 'skipped: this LeRobot has no subtask column'}."
+                    )
+                except Exception as e:
+                    self._logger.error(f"Writing subtasks failed: {e}\n{traceback.format_exc()}")
+                self._saved_subtasks = {}
 
             # Verify dataset files exist on disk (local only, no Hub access)
             try:

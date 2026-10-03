@@ -1,0 +1,47 @@
+# cube_stack: the four cubes land anywhere in front of the robot, each with its own pose
+# and yaw. Scene.randomize redraws any layout with two cubes closer than 12 cm, so an
+# open gripper always fits around the cube it picks and around the tower it builds.
+# Region: x [-0.15, 0.25] (>= 15 cm in front of the robot base), y [-0.3, 0.3], all of it
+# in both fixed cameras' view up to the full tower height (20 cm).
+#
+# The stacking order is drawn by the scene (Scene.randomize_preprocess), not here.
+instructions:
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/blocks/*'
+      pose:
+        position:
+          value: [0.05, 0.0, 0.025]
+          random:            # [[x_min, x_max], [y_min, y_max], [z_min, z_max]], offsets from value
+            - [-0.20, 0.20]
+            - [-0.30, 0.30]
+            - [0.0, 0.0]
+        orientation:
+          random:
+            axis: [0.0, 0.0, 1.0]
+            angle: [-180, 180]   # [min, max] degrees about axis
+    parallel: false
+
+  # The bins are not part of this task. They are dynamic rigid bodies, so they are set
+  # down on the room floor (ground plane at z = -0.769, so origin at -0.68) 3 m behind
+  # the base camera: outside the top and base cameras' frustums and ~2.7 m from anywhere
+  # the wrist camera goes. Re-placed every episode in case anything moved them.
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_0'
+      pose:
+        position:
+          value: [3.0, -0.5, -0.68]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: false
+
+  - cmd: 'set_local_poses'
+    kwargs:
+      prim_path: '/bin_1'
+      pose:
+        position:
+          value: [3.0, 0.5, -0.68]
+        orientation:
+          value: [0.0, 0.0, 0.0]
+    parallel: false

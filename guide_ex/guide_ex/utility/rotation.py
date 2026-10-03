@@ -42,8 +42,14 @@ def _base_yaw(rot: R, heading_axis: str) -> float:
     This ignores any tilt out of the XY plane, which is exactly what "assume the
     transform is a single rotation about Z" means. If the chosen axis points
     (near) straight up/down the projection is degenerate and yaw collapses to 0.
+    ``"auto"`` avoids that: it takes the body axis lying flattest in the XY plane,
+    so a cube that fell over onto another face still yields a usable heading.
     """
-    axis = rot.as_matrix()[:, _AXIS_INDEX[heading_axis]]
+    matrix = rot.as_matrix()
+    if heading_axis == "auto":
+        axis = matrix[:, int(np.argmin(np.abs(matrix[2])))]
+    else:
+        axis = matrix[:, _AXIS_INDEX[heading_axis]]
     return float(np.arctan2(axis[1], axis[0]))
 
 
@@ -68,13 +74,16 @@ class ProjectRotationToBaseZ(BaseNode):
         Args:
             pose: The object's pose/transform expressed in the base frame.
             heading_axis: Which body axis ("x", "y" or "z") defines the yaw
-                heading that is preserved. Defaults to the body X axis.
+                heading that is preserved. Defaults to the body X axis; "auto"
+                picks the flattest one (for objects that may have toppled).
         Returns:
             ExecutionResult with ``pose`` (same container, Z-only orientation)
             and the extracted ``yaw`` in radians.
         """
-        if heading_axis not in _AXIS_INDEX:
-            raise ValueError(f"heading_axis must be one of {list(_AXIS_INDEX)}, got {heading_axis!r}")
+        if heading_axis not in (*_AXIS_INDEX, "auto"):
+            raise ValueError(
+                f"heading_axis must be one of {[*_AXIS_INDEX, 'auto']}, got {heading_axis!r}"
+            )
 
         rot, rebuild = _decompose(pose)
         yaw = _base_yaw(rot, heading_axis)
