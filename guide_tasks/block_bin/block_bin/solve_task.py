@@ -209,10 +209,12 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.01}},
             ),
             WaitForSeconds(alias="WaitAfterClose", static_args={"seconds": 2.0}),
+            # Lift 28 cm straight up before heading for the bin. 20 cm taught policies a
+            # lift too shallow to clear the bin walls (their main failure mode).
             TransformPose(
                 alias="TransformCubeRetreatPose",
                 dynamic_map={"r_pose": "cube_pose"},
-                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.2]))},
+                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.28]))},
                 output_map={"pose": "cube_retreat_pose"},
             ),
             MoveToCartesianPose(
