@@ -17,7 +17,8 @@ subtask annotation.
   colour in an instance mask would show one in view (none does).
 - **Cubes:** uniform over x [0.10, 0.30], y [-0.25, 0.25] (scene frame; the robot base is
   at x = -0.3, so 40-60 cm in front of it), any yaw; a layout with two cubes closer than
-  12 cm is redrawn.
+  12 cm is redrawn. `randomize.yaml` gives the region in the frame of `/blocks`, which
+  block_bin.usd turns -90° about z (local x = -scene y, local y = scene x).
 - **Order:** a seeded draw over all 24 permutations, recorded with the episode's other
   drawn values in `meta/guide_episodes.jsonl`.
 
@@ -26,11 +27,11 @@ subtask annotation.
 1. *All* cubes in view form one tower. With four cubes on the table, "Stack the cubes."
    only has one meaning if every cube is stacked; each subtask puts one cube on top of
    the other.
-2. Any order is physically valid: the cubes are identical 5 cm cubes of equal mass, so
+2. Any order is physically valid: the cubes are identical 5.15 cm cubes of equal mass, so
    all 24 orders are drawn uniformly, and every pair appears in both directions.
 3. The tower is built where the bottom cube spawned; no step moves the base.
-4. A cube is *on* another when it is centred within 2 cm and its centre is 5 cm ± 1 cm
-   higher (world z). The tree's progress check and the scene's success check share this
+4. A cube is *on* another when it is centred within 2 cm and its centre is one cube edge
+   (5.15 cm) ± 1 cm higher (world z). The tree's progress check and the scene's success check share this
    test (`guide_ex.utility.stacking.is_on_top`).
 5. Cubes have 4-fold symmetry about z, so a grasp never turns the wrist more than 45°;
    a cube that toppled onto another face is still grasped from its flattest axis.

@@ -1,12 +1,14 @@
 # Run only on an explicit Reset service call: the cubes in a row in front of the robot,
-# the arm home, the bins parked where randomize.yaml keeps them.
+# the arm home, the bins parked where randomize.yaml keeps them. Cube positions are in
+# the /blocks frame (turned -90 deg: local x = -scene y, local y = scene x), so this
+# is a row across the table 50 cm in front of the robot base.
 instructions:
   - cmd: 'set_local_poses'
     kwargs:
       prim_path: '/blocks/red_block'
       pose:
         position:
-          value: [0.15, -0.225, 0.025]
+          value: [0.225, 0.2, 0.025]
         orientation:
           value: [0.0, 0.0, 0.0]
     parallel: true
@@ -16,7 +18,7 @@ instructions:
       prim_path: '/blocks/yellow_block'
       pose:
         position:
-          value: [0.15, -0.075, 0.025]
+          value: [0.075, 0.2, 0.025]
         orientation:
           value: [0.0, 0.0, 0.0]
     parallel: true
@@ -26,7 +28,7 @@ instructions:
       prim_path: '/blocks/green_block'
       pose:
         position:
-          value: [0.15, 0.075, 0.025]
+          value: [-0.075, 0.2, 0.025]
         orientation:
           value: [0.0, 0.0, 0.0]
     parallel: true
@@ -36,7 +38,7 @@ instructions:
       prim_path: '/blocks/blue_block'
       pose:
         position:
-          value: [0.15, 0.225, 0.025]
+          value: [-0.225, 0.2, 0.025]
         orientation:
           value: [0.0, 0.0, 0.0]
     parallel: true

@@ -1,10 +1,13 @@
 # cube_stack: the four cubes land anywhere in front of the robot, each with its own pose
 # and yaw. Scene.randomize redraws any layout with two cubes closer than 12 cm, so an
 # open gripper always fits around the cube it picks and around the tower it builds.
-# Region: x [0.10, 0.30], y [-0.25, 0.25], i.e. 40-60 cm in front of the robot base
-# (x = -0.3). Closer in, a top-down reach to the table folds the forearm into the
-# shoulder (MoveIt: fr3_link1 - fr3_link5 contact); farther out it runs out of reach.
+# Region, scene frame: x [0.10, 0.30], y [-0.25, 0.25], i.e. 40-60 cm in front of the
+# robot base (x = -0.3). Closer in, a top-down reach to the table folds the forearm into
+# the shoulder (MoveIt: fr3_link1 - fr3_link5 contact); farther out it runs out of reach.
 # All of it is in both fixed cameras' view up to the full tower height.
+#
+# The numbers below are in the frame of /blocks, which block_bin.usd turns -90 deg about
+# z (rotateZYX = (0, 0, -90)): local x = -scene y, local y = scene x.
 #
 # The stacking order is drawn by the scene (Scene.randomize_preprocess), not here.
 instructions:
@@ -13,10 +16,10 @@ instructions:
       prim_path: '/blocks/*'
       pose:
         position:
-          value: [0.2, 0.0, 0.025]
+          value: [0.0, 0.2, 0.025]
           random:            # [[x_min, x_max], [y_min, y_max], [z_min, z_max]], offsets from value
-            - [-0.10, 0.10]
-            - [-0.25, 0.25]
+            - [-0.25, 0.25]  # scene y
+            - [-0.10, 0.10]  # scene x
             - [0.0, 0.0]
         orientation:
           random:

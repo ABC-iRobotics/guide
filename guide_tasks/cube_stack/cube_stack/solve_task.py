@@ -66,7 +66,7 @@ from guide_ex.utility.stacking import TowerProgress
 from guide_ex.utility.wait import WaitForSeconds
 from guide_msgs import srv
 
-CUBE = 0.05  # cube edge, m
+CUBE = 0.0515  # cube edge, m (BlocksWorld cubes scaled 0.0515 in block_bin.usd)
 GRASP = 0.01  # TCP above the cube centre when grasping (block_bin's grasp)
 OVER_CUBE = 0.275  # approach above a cube centre: TCP ~30 cm over the table
 PLACE = CUBE + GRASP + 0.005  # TCP above the support's centre at release: 5 mm drop

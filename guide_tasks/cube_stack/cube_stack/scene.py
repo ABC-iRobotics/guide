@@ -7,7 +7,7 @@ from guide_core.scene.scene_orchestrator import SceneOrchestrator
 from guide_core.types.randomization import Categorical
 from guide_ex.utility.stacking import is_on_top
 
-CUBE = 0.05  # edge of the BlocksWorld cubes, m
+CUBE = 0.0515  # cube edge, m (BlocksWorld cubes scaled 0.0515 in block_bin.usd)
 # Spawn distance between cube centres. The open gripper spans 8 cm plus two ~1.5 cm
 # fingers, so a neighbour closer than ~9 cm is hit on the way down; 12 cm leaves margin.
 MIN_SEPARATION = 0.12
