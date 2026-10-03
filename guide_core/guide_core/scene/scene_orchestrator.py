@@ -562,7 +562,9 @@ class SceneOrchestrator(ABC):
                 # colour across frames, episodes and cameras. Not the instance AOVs: on
                 # this scene (Isaac 6.0.1) both instance_segmentation_fast and
                 # instance_id_segmentation_fast segfault in rtx.syntheticdata
-                # (Sdf_PathNode::GetPathToken) as soon as a frame is rendered.
+                # (Sdf_PathNode::GetPathToken) as soon as a frame is rendered, gated or
+                # not. This one works -- provided the render product is never gated
+                # (SceneManager.gate_render keeps it on).
                 # device="cuda": the ids stay a warp array on the render GPU and
                 # colorize_instances copies them with that array's own device. The
                 # default host copy goes through Warp's device numbering, which on a

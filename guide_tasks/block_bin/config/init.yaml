@@ -82,12 +82,13 @@ dataset:
   #
   # A pattern that matches several prims gives them all one label ('/blocks/*' would
   # label every block "block") and so one colour. Each block is named separately here so
-  # the mask says which block, not just that a block is there.
+  # the mask says which block, not just that a block is there. The blocks are listed in
+  # this order so each one's mask colour matches its name (blue, orange~yellow, green, red).
   tracked_objects:
-    red_block: '/blocks/red_block'
+    blue_block: '/blocks/blue_block'
     yellow_block: '/blocks/yellow_block'
     green_block: '/blocks/green_block'
-    blue_block: '/blocks/blue_block'
+    red_block: '/blocks/red_block'
     bin_0: '/bin_0'
     bin_1: '/bin_1'
     robot: '/fr3'

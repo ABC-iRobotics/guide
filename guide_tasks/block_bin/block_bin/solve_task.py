@@ -547,6 +547,7 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
         total = len(plan)
         idx = 0
         attempts = 0
+        errors = 0  # consecutive attempts that raised
         while idx < total:
             zone = plan[idx]
             attempts += 1
@@ -556,7 +557,17 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
 
             # The tree records its own episode: StartRecording after Unclutch,
             # StopRecording after homing, saving only on success.
-            success = solveTask(scene_id, robot, zone=zone, path=path)
+            try:
+                success = solveTask(scene_id, robot, zone=zone, path=path)
+                errors = 0
+            except Exception as e:
+                # A timed-out sim call (Randomize, ...) costs this attempt, not the run;
+                # five in a row means the simulator is gone.
+                errors += 1
+                robot.node.get_logger().error(f"Attempt failed ({errors} in a row): {e}")
+                if errors >= 5:
+                    raise
+                success = False
 
             # A run that broke off between the two leaves its episode open: drop it.
             # stop_recording is a no-op when nothing is open, and a stalled recorder
@@ -579,6 +590,11 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
         robot.node.get_logger().info("Recording dataset finalized.")
     except Exception as e:
         robot.node.get_logger().error(f"Error during generation: {e}")
+        # Episodes already saved stay unreadable until the dataset is finalized.
+        try:
+            robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
+        except Exception as finalize_error:
+            robot.node.get_logger().error(f"Finalize after abort failed: {finalize_error}")
     finally:
         with generation_lock:
             is_generating = False
