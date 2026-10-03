@@ -68,9 +68,13 @@ class SceneManager:
         """
         for scene in self._scenes:
             interval = max(1, round(step_hz / getattr(scene, "record_frequency", DEFAULT_FPS)))
-            scene.set_render_products_enabled(
-                enabled if enabled is not None else (frame_index + 1) % interval == 0
-            )
+            on = enabled if enabled is not None else (frame_index + 1) % interval == 0
+            # A segmentation annotator stalls every stream of a render product whose
+            # updates are switched per frame (Isaac 6.0.1: rgb, depth and segmentation all
+            # return empty data). Such a scene renders every frame; measured no slower here.
+            if getattr(scene, "instance_annotators", None):
+                on = True
+            scene.set_render_products_enabled(on)
 
     def wait_start_recording_event(self, scene_id: int, timeout=None):
         return self._scenes[scene_id].recorder.wait_start_recording(timeout)
@@ -479,10 +483,10 @@ class SceneManager:
     def start_recording(self, scene_id: int, path: str = ""):
         with self._locks[scene_id]:
             self._scenes[scene_id].state = SceneState.PREPARATION
-            # Warmup renders the cameras so the first captured frame is not a cold
-            # RTX frame; SceneManager.step takes the products back over once RECORDING
-            # starts, and stop_recording switches them off again.
-            self._scenes[scene_id].set_render_products_enabled(True)
+            # No render-product switching here: this runs on a ROS service thread, and
+            # gate_render toggles the same hydra textures on the main thread every frame.
+            # Doing both froze the sim's main loop (2026-10-03). gate_render alone owns
+            # them; record_step drops the frames captured before every stream is warm.
             # Forward the requested dataset base dir to the recorder (empty => ~/dataset).
             self._scenes[scene_id].recorder.set_output_path(path)
             # self._scenes[scene_id].recorder.clear_start_recording()
@@ -514,10 +518,8 @@ class SceneManager:
                 # No episode is open, and the signal below would sit in the queue of a
                 # writer that is not reading it: the caller would wait forever.
                 return False
-            # Nothing reads the cameras again until the next start_recording, so stop
-            # rendering them. They otherwise keep costing three RTX passes a frame for
-            # the whole idle stretch between episodes and after the run ends.
-            scene.set_render_products_enabled(False)
+            # Render products are left to gate_render (main thread only) -- see
+            # start_recording.
             scene.state = SceneState.FINALIZING
             scene.recorder.clear_stop_recording()
             # Wake the writer BEFORE handing it the signal. It reads the queue only while
