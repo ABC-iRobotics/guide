@@ -467,15 +467,24 @@ class SceneManager:
                     # received, which gate_render has already arranged to be the frame
                     # rendered just before this tick.
                     if current_step % interval == 0:
-                        try:
-                            # record_step must run natively and return a frame dict
-                            data = scene.record_step(current_step)
-                            if data:
-                                # A full queue is dropped inside the recorder process
-                                # (SceneRecorder.put_record_data); nothing to catch here.
-                                scene.recorder.put_record_data(data)
-                        except Exception as e:
-                            print(f"Error in record_step: {e}")
+                        # Under the scene's lock, which stop_recording/pause_recording hold
+                        # while they close the episode: a frame is queued either before the
+                        # episode's end marker or not captured at all. Without it a capture
+                        # (milliseconds: nine streams) that straddled stop_recording was
+                        # queued after the marker and became frame 0 of the NEXT episode --
+                        # 15-20% of block_bin's episodes started with the previous one's end.
+                        with self._locks[scene_id]:
+                            if scene.state != SceneState.RECORDING:
+                                continue
+                            try:
+                                # record_step must run natively and return a frame dict
+                                data = scene.record_step(current_step)
+                                if data:
+                                    # A full queue is dropped inside the recorder process
+                                    # (SceneRecorder.put_record_data); nothing to catch here.
+                                    scene.recorder.put_record_data(data)
+                            except Exception as e:
+                                print(f"Error in record_step: {e}")
 
                 elif state == SceneState.FINALIZING:
                     # is_idle() is a blocking round trip to the recorder process. Poll it
