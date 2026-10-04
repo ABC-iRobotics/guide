@@ -25,13 +25,11 @@ def scene_drawing(monkeypatch, layouts):
 
     def randomize(self, *, seed=None, inject=None, zone=None):
         self.draws += 1
-        poses = [Pose(position=Point(p)) for p in next(layouts)]
-        self.randomize_instructions = [
-            {"_prim_pattern": "/Scene_0/blocks/*", "kwargs": {"pose": poses}}
-        ]
+        self.layout = next(layouts)
         return self.draws
 
     monkeypatch.setattr(SceneOrchestrator, "randomize", randomize)
+    monkeypatch.setattr(Scene, "_cube_positions", lambda self: self.layout)
     scene = Scene.__new__(Scene)
     scene.draws = 0
     return scene
@@ -47,6 +45,13 @@ def test_a_seeded_layout_is_taken_as_drawn(monkeypatch):
     scene = scene_drawing(monkeypatch, [CRAMPED, APART])
 
     assert scene.randomize(seed=7) == 1
+
+
+def test_the_starting_cube_is_the_zone_target():
+    scene = Scene.__new__(Scene)
+    scene._scene_id, scene.order = 2, ["green", "red", "blue", "yellow"]
+
+    assert scene.zone_target() == "/Scene_2/blocks/green_block"
 
 
 def test_success_is_one_tower_in_the_drawn_order():

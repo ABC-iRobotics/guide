@@ -16,6 +16,7 @@ from guide_core.types.geometry import Point, Pose
 from guide_ex.core.states import DemoStatus, ExecutionResult
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
+from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
 from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility import recording
@@ -79,6 +80,13 @@ def world(monkeypatch):
                 w.held = None
         return PERFECT
 
+    def home(self, robot, target_configuration, speed=1.0):
+        w.moves.append(self.name)
+        w.tcp = np.array([0.0, 0.0, 0.5])
+        if w.held:
+            w.cubes[w.held] = w.tcp - (0, 0, st.GRASP)
+        return PERFECT
+
     def grip(self, robot, gripper_goal_pos):
         (width,) = gripper_goal_pos.values()
         if width == st.CLOSED:
@@ -105,6 +113,7 @@ def world(monkeypatch):
     patches = {
         GetPrimPose: get_pose,
         MoveToCartesianPose: move,
+        MoveToJointConfiguration: home,
         SetGripperState: grip,
         IsPrimClashing: clashing,
         WaitForSeconds: lambda self, seconds, timer=None: PERFECT,
@@ -143,12 +152,12 @@ def test_route_1_a_missed_grasp_is_regrasped(world):
     assert world.tower() and world.moves.count("MoveToGrasp") == 4
 
 
-def test_route_2_a_failed_move_detours_via_rest(world):
+def test_route_2_a_failed_move_detours_through_home(world):
     world.failing_moves = ["LowerOntoSupport", "MoveOverCube"]
 
     assert run(world).status == DemoStatus.PERFECT
     assert world.tower()
-    assert {"LowerViaRestToRest", "OverCubeViaRestToRest"} <= set(world.moves)
+    assert {"LowerViaHomeToHome", "OverCubeViaHomeToHome"} <= set(world.moves)
 
 
 def test_route_3_a_cube_dropped_on_the_way_is_picked_up_again(world):

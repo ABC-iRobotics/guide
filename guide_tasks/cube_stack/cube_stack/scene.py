@@ -5,15 +5,17 @@ import numpy as np
 
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
 from guide_core.types.randomization import Categorical
-from guide_ex.utility.stacking import is_on_top
+from guide_ex.utility.pose import is_at_offset
 
 CUBE = 0.0515  # cube edge, m (BlocksWorld cubes scaled 0.0515 in block_bin.usd)
+# A cube rests on another when it sits one edge above it, within this much per axis.
+STACKED = (0.02, 0.02, 0.01)
 # Spawn distance between cube centres. The open gripper spans 8 cm plus two ~1.5 cm
 # fingers, so a neighbour closer than ~9 cm is hit on the way down; 12 cm leaves margin.
 MIN_SEPARATION = 0.12
-STACKED = {"xy_tolerance": 0.02, "z_tolerance": 0.01}
-# Layouts drawn before giving up on separation. A draw is only numbers (nothing moves
-# until the last one is applied) and ~9% pass, so 200 all failing is ~1e-8.
+# Layouts drawn before giving up on separation. Replicator applies every draw (~0.15 s;
+# randomize.yaml zeroes the cubes' velocities so a rejected one leaves nothing behind),
+# ~9% pass, so 200 all failing is ~1e-8.
 MAX_LAYOUT_DRAWS = 200
 
 
@@ -35,7 +37,8 @@ class Scene(SceneOrchestrator):
 
     The order is a seeded draw over all 24 permutations, so any cube can be the base
     and every pair occurs in both directions; it lands in the dataset sidecar's drawn
-    values and in the subtask prompts.
+    values and in the subtask prompts. The starting (bottom) cube is the zone target:
+    a zoned request puts it, and so the tower, in that grid cell.
     """
 
     colors = ["red", "yellow", "green", "blue"]
@@ -60,12 +63,12 @@ class Scene(SceneOrchestrator):
         return context
 
     def _cube_positions(self):
-        cubes = next(
-            i
-            for i in self.randomize_instructions
-            if i.get("_prim_pattern", "").endswith("/blocks/*")
-        )
-        return [pose.position.to_numpy() for pose in cubes["kwargs"]["pose"]]
+        """Where the cubes are now: Replicator has already applied the draw."""
+        from isaacsim.core.prims import XFormPrim
+
+        paths = [f"/Scene_{self._scene_id}/blocks/{c}_block" for c in self.colors]
+        positions, _ = XFormPrim(paths, reset_xform_properties=False).get_world_poses()
+        return positions
 
     def randomize_preprocess(self, randomizer):
         self.order = list(
@@ -73,6 +76,10 @@ class Scene(SceneOrchestrator):
         )
         self.task = "Stack the cubes."
         return randomizer
+
+    def zone_target(self):
+        order = getattr(self, "order", None)
+        return f"/Scene_{self._scene_id}/blocks/{order[0]}_block" if order else None
 
     def randomize_postprocess(self, result):
         return json.dumps(
@@ -92,7 +99,8 @@ class Scene(SceneOrchestrator):
 
     def is_success_postprocess(self, result):
         return all(
-            is_on_top(upper, lower, CUBE, **STACKED) for lower, upper in zip(result, result[1:])
+            is_at_offset(upper, lower, (0.0, 0.0, CUBE), STACKED)
+            for lower, upper in zip(result, result[1:])
         )
 
     def reset_preprocess(self, instructions):
