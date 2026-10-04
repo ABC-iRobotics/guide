@@ -48,3 +48,4 @@ world:
 
 extensions:
   - isaacsim.storage.native
+  - omni.replicator.replicator_yaml

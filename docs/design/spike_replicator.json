@@ -1,0 +1,35 @@
+{
+ "dialect": "replicator",
+ "scenes": 1,
+ "register_s": [
+  4.74
+ ],
+ "rtf_idle": 0.256,
+ "scene_0": {
+  "deterministic_same_seed": true,
+  "record_identical": true,
+  "layout_changes_with_seed": true,
+  "per_prim_independent": true,
+  "randomize_ms_mean": 198.1,
+  "randomize_ms_p95": 204.1,
+  "zone_target_in_cell": {
+   "0": true,
+   "7": true,
+   "19": true
+  },
+  "poses_inside_region_after_call": true,
+  "scale_preserved": true,
+  "block_scale": [
+   0.0515,
+   0.0515,
+   0.0515
+  ],
+  "sample_record_keys": [
+   "color",
+   "replicator/blocks_position",
+   "replicator/blocks_rotation",
+   "side"
+  ]
+ },
+ "rtf_randomizing_every_60_frames": 0.239
+}

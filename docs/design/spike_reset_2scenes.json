@@ -1,0 +1,106 @@
+{
+ "dialect": "replicator",
+ "scenes": 2,
+ "register_s": [
+  8.01,
+  4.37
+ ],
+ "rtf_idle": 0.15,
+ "scene_0": {
+  "deterministic_same_seed": true,
+  "record_identical": true,
+  "layout_changes_with_seed": true,
+  "per_prim_independent": true,
+  "randomize_ms_mean": 336.4,
+  "randomize_ms_p95": 348.9,
+  "zone_target_in_cell": {
+   "0": true,
+   "7": true,
+   "19": true
+  },
+  "poses_inside_region_after_call": true,
+  "scale_preserved": true,
+  "block_scale": [
+   0.0515,
+   0.0515,
+   0.0515
+  ],
+  "sample_record_keys": [
+   "color",
+   "replicator/blocks_position",
+   "replicator/blocks_rotation",
+   "side"
+  ]
+ },
+ "scene_1": {
+  "deterministic_same_seed": true,
+  "record_identical": true,
+  "layout_changes_with_seed": true,
+  "per_prim_independent": true,
+  "randomize_ms_mean": 337.5,
+  "randomize_ms_p95": 345.7,
+  "zone_target_in_cell": {
+   "0": true,
+   "7": true,
+   "19": true
+  },
+  "poses_inside_region_after_call": true,
+  "scale_preserved": true,
+  "block_scale": [
+   0.0515,
+   0.0515,
+   0.0515
+  ],
+  "sample_record_keys": [
+   "color",
+   "replicator/blocks_position",
+   "replicator/blocks_rotation",
+   "side"
+  ]
+ },
+ "rtf_randomizing_every_60_frames": 0.133,
+ "reset_scene_0": {
+  "poses_at_home": {
+   "/Scene_0/blocks/red_block": true,
+   "/Scene_0/blocks/yellow_block": true,
+   "/Scene_0/blocks/green_block": true,
+   "/Scene_0/blocks/blue_block": true,
+   "/Scene_0/bin_0": true,
+   "/Scene_0/bin_1": true
+  },
+  "still_at_home_after_30_frames": {
+   "/Scene_0/blocks/red_block": true,
+   "/Scene_0/blocks/yellow_block": true,
+   "/Scene_0/blocks/green_block": true,
+   "/Scene_0/blocks/blue_block": true,
+   "/Scene_0/bin_0": true,
+   "/Scene_0/bin_1": true
+  },
+  "arm_frames_to_home_1deg": 34,
+  "idempotent": true,
+  "reset_ms": 353.9
+ },
+ "reset_scene_1": {
+  "poses_at_home": {
+   "/Scene_1/blocks/red_block": true,
+   "/Scene_1/blocks/yellow_block": true,
+   "/Scene_1/blocks/green_block": true,
+   "/Scene_1/blocks/blue_block": true,
+   "/Scene_1/bin_0": true,
+   "/Scene_1/bin_1": true
+  },
+  "still_at_home_after_30_frames": {
+   "/Scene_1/blocks/red_block": true,
+   "/Scene_1/blocks/yellow_block": true,
+   "/Scene_1/blocks/green_block": true,
+   "/Scene_1/blocks/blue_block": true,
+   "/Scene_1/bin_0": true,
+   "/Scene_1/bin_1": true
+  },
+  "arm_frames_to_home_1deg": 34,
+  "idempotent": true,
+  "reset_ms": 294.0
+ },
+ "reset_cross_talk_free": true,
+ "cross_talk_free": true
+}

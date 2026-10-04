@@ -287,13 +287,18 @@ class SceneManager:
 
         return instructions
 
-    def reset_postprocess(self, scene_id: int, result):
-        try:
-            result = self._scenes[scene_id].reset_postprocess(result)
-        except NotImplementedError:
-            pass
+    def reset_postprocess(self, scene_id: int, result) -> bool:
+        """Whether the reset succeeded: the scene's answer, or True if it has none.
 
-        return result
+        The Reset service puts this into a bool. A scene without the hook used to hand
+        back the executor's raw result list, and rclpy aborts the whole simulator on a
+        list in a bool field (block_bin: every Reset call crashed the sim). The executor
+        raises on a failed command, so reaching here means the reset ran.
+        """
+        try:
+            return bool(self._scenes[scene_id].reset_postprocess(result))
+        except NotImplementedError:
+            return True
 
     def randomize_preprocess(self, scene_id: int, seed=None, inject=None, zone=None):
         # Drawing now happens inside the scene's randomize() lifecycle (seeded +

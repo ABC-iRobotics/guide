@@ -13,6 +13,7 @@ from scipy.spatial.transform import Rotation as R
 
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder
 from guide_core.types.geometry import Point, Pose, Rotation
+from guide_core.types.randomization import replicator_guide
 from guide_core.types.randomization import (
     RandomizationRecord,
     Randomizer,
@@ -107,16 +108,30 @@ class SceneOrchestrator(ABC):
         self._get_limits()
         self._get_origin()
 
+        # Each instruction file is either the instruction list or the Replicator dialect
+        # (spike: see types/randomization/replicator_guide.py). Replicator files parse into a
+        # graph once the scene's USD is on the stage (build_replicator); their instruction
+        # lists stay empty so the hooks and the executor see nothing to run.
+        self.replicator_files: dict[str, Path] = {}
+        self.replicator: dict[str, dict] = {}
+
+        def instructions(phase: str, rel: str) -> list:
+            file = Path(f"{path}/{rel}")
+            if replicator_guide.is_replicator_yaml(file):
+                self.replicator_files[phase] = file
+                return []
+            return self.parse_instruction(file)
+
         # Getting reset.yaml
-        self.reset_instructions = self.parse_instruction(Path(f"{path}/{reset_path}"))
+        self.reset_instructions = instructions("reset", reset_path)
 
         # Getting randomize.yaml
-        self.randomize_instructions = self.parse_instruction(Path(f"{path}/{randomize_path}"))
+        self.randomize_instructions = instructions("randomize", randomize_path)
 
         # At most one grid-enabled instruction per scene (raises on a second).
         self._grid = single_grid(self.randomize_instructions)
 
-        # Getting success.yaml
+        # Getting success.yaml (a query; stays on the executor -- see docs/design)
         self.success_instructions = self.parse_instruction(Path(f"{path}/{success_path}"))
 
         # Single RNG authority for this scene (master seed injected at
@@ -471,6 +486,10 @@ class SceneOrchestrator(ABC):
             zone_target=self.zone_target(),
         )
 
+        if "randomize" in self.replicator:
+            samples = replicator_guide.fire(self.replicator["randomize"], used, zone, self.zone_target())
+            record.values.update({f"replicator/{k}": v for k, v in samples.items()})
+
         self._last_context = SceneContext(
             scene_id=self._scene_id,
             episode_index=self._episode_index,
@@ -479,6 +498,18 @@ class SceneOrchestrator(ABC):
         )
         self._episode_index += 1
         return self._last_context
+
+    def build_replicator(self) -> None:
+        """Parse every Replicator-dialect file once the scene's USD is on the stage."""
+        for phase, file in self.replicator_files.items():
+            self.replicator[phase] = replicator_guide.build(file, f"/Scene_{self._scene_id}")
+        if "randomize" in self.replicator:
+            self._grid = self.replicator["randomize"].get("grid")
+
+    def reset_fire(self) -> None:
+        """Run the Replicator reset file, if the task ships one."""
+        if "reset" in self.replicator:
+            replicator_guide.fire(self.replicator["reset"])
 
     @staticmethod
     def _pose_from_vec7(vec) -> Pose:
