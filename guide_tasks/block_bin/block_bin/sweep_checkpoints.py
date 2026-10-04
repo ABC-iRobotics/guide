@@ -392,7 +392,7 @@ def summarize(frame: pd.DataFrame, by: list) -> pd.DataFrame:
     return summary
 
 
-# The block is a 0.05 m cube (config/randomize.yaml sets its centre at z = 0.025), and
+# The block is a ~0.05 m cube (0.0515; it rests with its centre 0.026 above the table), and
 # GRIPPER_OPEN is 0.04. So fingers that stall near the 0.025 m half-width have a block
 # between them, and fingers that reach ~0 shut on air. NEVER_MOVED is metres of tool
 # path: a rollout that walks less than this has not so much failed the task as declined

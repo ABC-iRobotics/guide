@@ -32,8 +32,10 @@ place_cubes:
           write_to_usd: true                     # PhysX teleports on USD writes, not Fabric
           position:
             distribution.uniform:                # absolute bounds, metres, /blocks frame
-              lower: [-0.25, 0.10, 0.025]
-              upper: [ 0.25, 0.30, 0.025]
+              # z: the 5.15 cm cube resting on the table top (0.0153) is at 0.041;
+              # 1 mm above that it drops into place instead of popping out of it.
+              lower: [-0.25, 0.10, 0.042]
+              upper: [ 0.25, 0.30, 0.042]
               name: cubes_position               # named: samples are recorded per episode
           rotation:
             distribution.uniform:                # Euler XYZ, degrees

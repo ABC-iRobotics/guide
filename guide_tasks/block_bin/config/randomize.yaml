@@ -18,8 +18,10 @@ place_blocks:
                                                  # poses stay local to the parent and keep scale
           position:
             distribution.uniform:                # absolute bounds, metres
-              lower: [-0.25, 0.0, 0.025]
-              upper: [ 0.25, 0.4, 0.025]
+              # z: the 5.15 cm cube resting on the table top (0.0153) is at 0.041;
+              # 1 mm above that it drops into place instead of popping out of it.
+              lower: [-0.25, 0.0, 0.042]
+              upper: [ 0.25, 0.4, 0.042]
               name: blocks_position              # named: samples are recorded per episode
           rotation:
             distribution.uniform:                # Euler XYZ, degrees
