@@ -512,19 +512,14 @@ def scene_num_zones() -> int:
     try:
         import os
 
-        import yaml
         from ament_index_python.packages import get_package_share_directory
 
-        from guide_core.types.randomization import grid_from_yaml
+        from guide_core.types.randomization.replicator_guide import zone_grid
 
         share = get_package_share_directory("block_bin")
-        with open(os.path.join(share, "config", "randomize.yaml")) as f:
-            spec = yaml.safe_load(f)
-        for instr in spec.get("instructions", []):
-            pos = (instr.get("kwargs", {}).get("pose") or {}).get("position")
-            g = grid_from_yaml(pos)
-            if g is not None:
-                return g.num_zones
+        grid = zone_grid(os.path.join(share, "config", "randomize.yaml"))
+        if grid is not None:
+            return grid.num_zones
     except Exception:
         pass
     return 1

@@ -76,7 +76,8 @@ randomizers run on the one after — the new layout is in PhysX two frames after
 - Injecting recorded values to reproduce a layout has no native path (custom node).
 - `guide.axis_angle` covers principal axes only.
 - Samples are recorded per named node in prim-match order without the prim paths.
-- `scene_num_zones()` in `block_bin/solve_task.py` still reads the instruction dialect.
+- ~~`scene_num_zones()` in `block_bin/solve_task.py` still reads the instruction dialect.~~
+  Fixed on dev: `replicator_guide.zone_grid(path)` reads the grid from either dialect.
 - Pre-existing, both dialects: `/blocks/*` also matches `/blocks/properties`; a second scene
   logs "Failed to add robot /Scene_1/fr3 … name is not unique"; `add_scene`'s filesystem branch
   expects the flat `dummy_scene` layout; a headless `SimulationApp.close()` sometimes leaves

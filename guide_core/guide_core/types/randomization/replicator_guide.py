@@ -22,7 +22,7 @@ import numpy as np
 import yaml
 
 from guide_core.types.randomization import _quat
-from guide_core.types.randomization.grid import Grid
+from guide_core.types.randomization.grid import Grid, grid_from_yaml
 
 
 _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the scene
@@ -58,6 +58,41 @@ def prefixed(doc: dict, scene_prefix: str) -> dict:
         return node
 
     return walk(doc)
+
+
+def _find(node, key: str):
+    """Every value stored under ``key`` anywhere in a parsed YAML document."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == key:
+                yield v
+            yield from _find(v, key)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _find(v, key)
+
+
+def zone_grid(path: Path) -> Grid | None:
+    """The zone grid a ``randomize.yaml`` declares, in either dialect; ``None`` if none.
+
+    Read from the file, not from a scene, so a solver process can count the zones a
+    ``zones: [-1]`` request expands to. Instruction dialect: the position spec with
+    ``grid.enabled``. Replicator dialect: ``guide.zone`` over its named uniform position.
+    """
+    doc = yaml.safe_load(Path(path).read_text()) or {}
+    if "instructions" in doc:
+        for instruction in doc["instructions"] or []:
+            pose = (instruction.get("kwargs") or {}).get("pose") or {}
+            grid = grid_from_yaml(pose.get("position"))
+            if grid is not None:
+                return grid
+        return None
+    spec = next(_find(doc, "guide.zone"), None)
+    if spec is None:
+        return None
+    uniform = {d.get("name"): d for d in _find(doc, "distribution.uniform") if isinstance(d, dict)}
+    region = uniform[spec["distribution"]]
+    return Grid(region["lower"], region["upper"], float(spec.get("resolution", 0.1)))
 
 
 def principal_axis(axis) -> int:

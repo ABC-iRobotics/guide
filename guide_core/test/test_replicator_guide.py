@@ -40,3 +40,31 @@ def test_event_name_and_scene_suffix():
     assert rg._event_name(out) == "guide_reset_Scene_2"
     with pytest.raises(ValueError):
         rg._event_name({"x": {"get.prims": {}}})
+
+
+def test_zone_grid_reads_either_dialect(tmp_path):
+    (tmp_path / "rep.yaml").write_text(
+        "g:\n"
+        "  randomizer.register:\n"
+        "    g:\n"
+        "      with.x:\n"
+        "        modify.pose:\n"
+        "          position:\n"
+        "            distribution.uniform: {lower: [-0.25, 0.0, 0.025], upper: [0.25, 0.4, 0.025], name: p}\n"
+        "w:\n"
+        "  with.e:\n"
+        "    guide.zone: {distribution: p, path_pattern: '/x', resolution: 0.1}\n"
+    )
+    (tmp_path / "old.yaml").write_text(
+        "instructions:\n"
+        "  - cmd: set_local_poses\n"
+        "    kwargs:\n"
+        "      pose:\n"
+        "        position: {value: [0, 0, 0.025], random: [[-0.25, 0.25], [0, 0.4], [0, 0]],"
+        " grid: {enabled: true, resolution: 0.1}}\n"
+    )
+    (tmp_path / "free.yaml").write_text("instructions: []\n")
+
+    assert rg.zone_grid(tmp_path / "rep.yaml").num_zones == 20
+    assert rg.zone_grid(tmp_path / "old.yaml").num_zones == 20
+    assert rg.zone_grid(tmp_path / "free.yaml") is None
