@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import queue
+import shutil
 import tempfile
 import traceback
 from pathlib import Path
@@ -409,7 +410,14 @@ class SceneRecorder(Thread):
     def _discard_episode(self):
         if self.dataset is not None:
             self._logger.info("Discarding episode...")
-            self.dataset.clear_episode_buffer()
+            writer = self.dataset.writer
+            episode_index = int(np.asarray(writer.episode_buffer["episode_index"]).reshape(-1)[0])
+            self.dataset.clear_episode_buffer()  # waits for the image writer first
+            # lerobot 0.6 deletes the buffered frames of image features only. Cameras are
+            # video features, and the retry -- same episode index -- overwrites just its
+            # own frames: a longer attempt's tail was encoded after the episode's last.
+            for key in self.dataset.meta.video_keys:
+                shutil.rmtree(writer._get_image_file_dir(episode_index, key), ignore_errors=True)
             self._logger.info("Episode buffer cleared.")
         self._subtasks, self._episode_frames = [], 0
         # Drop the pending sidecar payload so only saved episodes are recorded.
