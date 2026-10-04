@@ -68,9 +68,14 @@ class MoveToCartesianPose(BaseNode):
                 )
                 is None
             ):
+                where = target_pose.toDict()
+                message = f"[{self.name}] no straight path (< {min_fraction:.0%}) to " + ", ".join(
+                    f"{k}={v:.3f}" for k, v in where.items()
+                )
+                self.logger.warning(message)
                 return ExecutionResult(
                     status=DemoStatus.FAILURE,
-                    error_message=f"No straight path to the target (< {min_fraction:.0%}).",
+                    error_message=message,
                 )
 
             for _ in range(3):  # Retry logic for robustness

@@ -24,8 +24,10 @@ Recovery routes, for the failures most likely in this task (most likely first):
    a detour through the home joints before it is tried again: from there a straight
    descent is feasible over the whole spawn region (mapped with MoveIt), whereas a
    rest *pose* lets the planner leave the arm in any posture.
-3. The cube slips out on the way to the tower. CarryToSupport checks the fingers once
-   above the tower; RepickDropped picks the cube up again from wherever it fell.
+3. The cube does not get to the tower: it slips out (CarryToSupport checks the fingers
+   above the tower), or the arm finds no way there. RepickDropped sets it down where it
+   was picked -- opening wherever the arm is would drop it from height onto the tower --
+   and picks it up again from wherever it is.
 4. A placed cube does not stay, or the tower is knocked. Nothing in PutOn trusts a
    placement: each loop pass measures the whole tower and rebuilds from the lowest
    layer that is out of place, within REBUILDS extra passes.
@@ -319,12 +321,20 @@ def build_tree(robot, prompts, n_cubes):
                 resume_target="Pick",
                 max_retries=2,
             ),
-            # Route 3: pick it up again from wherever it landed.
+            # Route 3: the cube did not get to the tower -- it slipped out, or the arm found
+            # no way there. Set it down where it was picked (if it is still held: opening
+            # anywhere else drops it from height), then pick it up again from wherever it is.
             "CarryToSupport": RecoveryNode(
                 name="RepickDropped",
                 level=Layer.SUBTASK,
-                children=[*gripper("OpenForRepick", robot, OPEN), locate_cube],
-                dynamic_map=keys(*SIM, "scene_pose_inv", "top"),
+                children=[
+                    move("BackOverCube", "over_cube_pose"),
+                    move("SetDown", "grasp_pose", speed=0.2),
+                    *gripper("OpenForRepick", robot, OPEN),
+                    move("LeaveCube", "over_cube_pose", speed=0.2),
+                    locate_cube,
+                ],
+                dynamic_map=keys(*SIM, "scene_pose_inv", "top", "over_cube_pose", "grasp_pose"),
                 resume_target="Pick",
                 max_retries=2,
             ),

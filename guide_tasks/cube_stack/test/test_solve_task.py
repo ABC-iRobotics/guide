@@ -36,6 +36,7 @@ class World:
         self.misses = self.slips = self.slides = 0
         self.failing_moves = []
         self.prompts, self.moves, self.saved = [], [], None
+        self.scattered = 0  # cubes let go of from height
 
     def landing(self, cube, x, y):
         below = [
@@ -47,6 +48,8 @@ class World:
         """Let go of `cube`: it lands on the highest cube under it, or the table. Slid
         off, or dropped from more than 2 cm, it ends up 8 cm aside."""
         x, y, z = self.cubes[cube]
+        if z - self.landing(cube, x, y) > 0.02:
+            self.scattered += 1
         if self.slides or z - self.landing(cube, x, y) > 0.02:
             self.slides = max(0, self.slides - 1)
             x += 0.08
@@ -165,6 +168,14 @@ def test_route_3_a_cube_dropped_on_the_way_is_picked_up_again(world):
 
     assert run(world).status == DemoStatus.PERFECT
     assert world.tower() and world.moves.count("MoveToGrasp") == 4
+
+
+def test_route_3_with_no_way_to_the_tower_the_cube_is_set_down_not_dropped(world):
+    world.failing_moves = ["MoveOverSupport"] * 3  # the move and both its detours
+
+    assert run(world).status == DemoStatus.PERFECT
+    assert world.tower() and "SetDown" in world.moves
+    assert world.scattered == 0
 
 
 def test_route_4_a_placement_that_slides_off_is_redone(world):

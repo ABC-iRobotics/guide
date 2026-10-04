@@ -537,6 +537,8 @@ class SceneRecorder(Thread):
             self._logger.info(f"Finalizing dataset at {dataset_root}...")
             self.dataset.finalize()
             self.dataset = None
+            # The next recording is a new dataset, with its own guide_info.json.
+            self._info_written = False
             self._logger.info("Dataset finalized successfully.")
 
             if self._saved_subtasks:

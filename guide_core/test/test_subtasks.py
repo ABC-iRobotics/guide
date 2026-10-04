@@ -64,3 +64,20 @@ def test_saved_episodes_resolve_every_frame_to_its_subtask(tmp_path):
         0: ["red on blue"] * 2 + ["green on red"] * 3,
         1: [None, None, "yellow on green", "yellow on green"],
     }
+
+
+def test_every_dataset_of_one_recorder_gets_its_run_info(tmp_path):
+    recorder = SceneRecorder("pkg", "runs", {"dataset": {"fps": 10}})
+    recorder._logger = logging.getLogger("test_subtasks")
+    recorder.LeRobotDataset = lerobot_dataset.LeRobotDataset
+    recorder.set_output_path(str(tmp_path))
+
+    roots = []
+    for _ in range(2):  # e.g. a trial run, then the real one, in one simulator session
+        record(recorder, ["a", "a"])
+        recorder._finalize_episode()
+        roots.append(recorder.dataset.root)
+        recorder._finalize_dataset()
+
+    assert roots[0] != roots[1]
+    assert all((root / "meta" / "guide_info.json").exists() for root in roots)

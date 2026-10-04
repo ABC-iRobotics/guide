@@ -78,7 +78,7 @@ The five failures judged most likely, most likely first:
 |---|---------|-------------|-------|
 | 1 | Grasp misses (block_bin's only failure mode in 300 episodes) | finger/cube contact after the lift (`Pick` condition) | `Regrasp`: open, measure the cube again, grasp the other pair of faces, retry `Pick` (2x) |
 | 2 | An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; `MoveToCartesianPose` refuses a path under 95% before moving | `*ViaHome`: detour through the home joints, retry the move (2x per move) |
-| 3 | The cube slips out on the way to the tower | finger/cube contact above the tower (`CarryToSupport` condition) | `RepickDropped`: pick it up again from wherever it landed (2x) |
+| 3 | The cube does not get to the tower: it slips out, or the arm finds no way there | finger/cube contact above the tower (`CarryToSupport` condition), or the carry's own detours run out | `RepickDropped`: set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
 | 4 | A placed cube does not stay, or the tower is knocked | every loop pass measures the whole tower | the loop itself: rebuild from the lowest layer out of place (3 spare passes) |
 | 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again (8 attempts, then the run stops) |
 
