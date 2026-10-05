@@ -19,9 +19,30 @@ MIN_SEPARATION = 0.12
 MAX_LAYOUT_DRAWS = 200
 
 
-def subtask_prompts(order):
-    """One prompt per stacking step; `order` is the tower's colours, bottom first."""
-    return [f"Put the {top} cube on the {base} cube." for base, top in zip(order, order[1:])]
+PROCEDURE = "Stack the cubes."
+RETURN_HOME = "Return home."
+
+
+def plan(colours) -> dict:
+    """The episode's prompts at each GUIDE-EX layer, for a tower of `colours`, bottom first.
+
+    The PROCEDURE is the episode's task; each placement is a TASK ("Put the red cube on
+    the blue cube.") whose SUBTASKs are the pick and the place, with a set-down for the
+    recovery that puts an undeliverable cube back; the procedure closes with its own
+    subtask, going home. The scene's Randomize reply, the tree and the oracle all read it.
+    """
+    steps = list(zip(colours, colours[1:]))  # (support, cube) per placement
+    return {
+        "task": PROCEDURE,
+        "order": [f"/blocks/{c}_block" for c in colours],
+        "tasks": [f"Put the {top} cube on the {base} cube." for base, top in steps],
+        "subtasks": {
+            "pick": [f"Pick up the {top} cube." for _, top in steps],
+            "place": [f"Place the {top} cube on the {base} cube." for base, top in steps],
+            "set_down": [f"Set the {top} cube down." for _, top in steps],
+            "finish": RETURN_HOME,
+        },
+    }
 
 
 def separated(positions, distance):
@@ -74,7 +95,7 @@ class Scene(SceneOrchestrator):
         self.order = list(
             randomizer.draw("order", Categorical(tuple(itertools.permutations(self.colors))))
         )
-        self.task = "Stack the cubes."
+        self.task = PROCEDURE
         return randomizer
 
     def zone_target(self):
@@ -82,13 +103,7 @@ class Scene(SceneOrchestrator):
         return f"/Scene_{self._scene_id}/blocks/{order[0]}_block" if order else None
 
     def randomize_postprocess(self, result):
-        return json.dumps(
-            {
-                "task": self.task,
-                "order": [f"/blocks/{c}_block" for c in self.order],
-                "subtasks": subtask_prompts(self.order),
-            }
-        )
+        return json.dumps(plan(self.order))
 
     def is_success_preprocess(self, instructions):
         template = instructions[0]

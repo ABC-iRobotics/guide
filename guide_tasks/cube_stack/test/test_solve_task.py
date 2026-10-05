@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from cube_stack import solve_task as st
-from cube_stack.scene import subtask_prompts
+from cube_stack.scene import plan
 
 from guide_core.types.geometry import Point, Pose
 from guide_ex.core.states import DemoStatus, ExecutionResult
@@ -105,8 +105,8 @@ def world(monkeypatch):
     def clashing(self, robot, sim_namespace, scene_namespace, prim1_path, prim2_path):
         return ExecutionResult(DemoStatus.PERFECT, outputs={"has_collided": w.held == prim2_path})
 
-    def prompt(self, robot, sim_namespace, scene_id, prompt, timeout_sec=30.0):
-        w.prompts.append(prompt)
+    def prompt(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec=30.0):
+        w.prompts.append((level, prompt))
         return PERFECT
 
     def stop(self, robot, sim_namespace, scene_id, save_episode=True, timeout_sec=60.0):
@@ -120,7 +120,7 @@ def world(monkeypatch):
         SetGripperState: grip,
         IsPrimClashing: clashing,
         WaitForSeconds: lambda self, seconds, timer=None: PERFECT,
-        recording.SetSubtaskPrompt: prompt,
+        recording.SetPrompt: prompt,
         recording.StartRecording: lambda self, *a, **k: PERFECT,
         recording.StopRecording: stop,
         IsTaskSuccessful: lambda self, *a, **k: ExecutionResult(
@@ -132,20 +132,56 @@ def world(monkeypatch):
     return w
 
 
+ROBOT = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
+
+
 def run(world):
-    robot = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
-    prompts = subtask_prompts(COLOURS)
-    tree = st.build_tree(robot, prompts, len(ORDER))
-    return tree.execute(st.episode_context(robot, "/Sim_0", 0, ORDER, prompts))
+    drawn = plan(COLOURS)
+    tree = st.build_tree(ROBOT, drawn)
+    return tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn))
 
 
-def test_builds_the_tower_announcing_each_subtask(world):
+def test_builds_the_tower_announcing_each_layer(world):
     result = run(world)
 
     assert result.status == DemoStatus.PERFECT
     assert world.tower() and world.saved is True
-    prompts = subtask_prompts(COLOURS)
-    assert world.prompts == [prompts[0], *prompts]
+    drawn = plan(COLOURS)
+    tasks, sub = drawn["tasks"], drawn["subtasks"]
+    placements = [
+        prompt
+        for k in range(len(tasks))
+        for prompt in (("task", tasks[k]), ("subtask", sub["pick"][k]), ("subtask", sub["place"][k]))
+    ]
+    assert world.prompts == [
+        ("task", tasks[0]), ("subtask", sub["pick"][0]),  # before the first frame
+        *placements,
+        ("task", "Stack the cubes."), ("subtask", "Return home."),  # the procedure closes
+    ]
+
+
+def test_the_layers_are_guide_exs():
+    """The procedure stacks, each placement is a task, the pick and the place its subtasks."""
+    root = st.build_tree(ROBOT, plan(COLOURS))
+    found = {}
+
+    def walk(node):
+        found[getattr(node, "name", None)] = getattr(node, "level", None)
+        for child in [*getattr(node, "children", []), getattr(node, "true_branch", None),
+                      getattr(node, "false_branch", None), *getattr(node, "fallbacks", {}).values()]:
+            if child is not None:
+                walk(child)
+
+    walk(root)
+    L = st.Layer
+    assert {k: found[k] for k in ("StackingDemonstration", "BuildTower", "NextCube", "PutOn", "Pick",
+                                  "Place", "Regrasp", "RepickDropped", "Finish", "LocateCube",
+                                  "CarryToSupport", "Release")} == {
+        "StackingDemonstration": L.PROCEDURE, "BuildTower": L.PROCEDURE, "NextCube": L.TASK,
+        "PutOn": L.TASK, "Pick": L.SUBTASK, "Place": L.SUBTASK, "Regrasp": L.SUBTASK,
+        "RepickDropped": L.SUBTASK, "Finish": L.SUBTASK, "LocateCube": L.SEQUENCE,
+        "CarryToSupport": L.SEQUENCE, "Release": L.SEQUENCE,
+    }
 
 
 def test_route_1_a_missed_grasp_is_regrasped(world):
@@ -193,33 +229,48 @@ def test_route_5_beyond_recovery_the_episode_fails(world):
 
 
 @pytest.mark.parametrize("trouble", [{}, {"misses": 1}, {"slips": 1}, {"slides": 2}])
-def test_the_oracle_names_the_subtask_the_demonstration_announces(world, monkeypatch, trouble):
-    """Asked from the scene alone, the oracle agrees with the tree: at every announcement
-    (re-announcements after a cube slid off included) and all the while a cube is carried."""
-    from cube_stack.oracle import SubtaskOracle
+def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world, monkeypatch, trouble):
+    """Asked from the scene alone, the oracle agrees with the tree at both levels: at every
+    announcement (re-announcements after a regrasp or a cube that slid off included) and
+    all the while a cube is carried. The set-down recovery is a decision the scene does
+    not show; the oracle is not asked to see it."""
+    from cube_stack.oracle import SceneOracle
 
     for name, value in trouble.items():
         setattr(world, name, value)
-    robot = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
-    prompts = subtask_prompts(COLOURS)
-    oracle = SubtaskOracle(robot, "/Sim_0", 0, ORDER, prompts)
+    drawn = plan(COLOURS)
+    oracle = SceneOracle(ROBOT, "/Sim_0", 0, drawn)
     announced, carried = [], []
-    announce, move = recording.SetSubtaskPrompt.run, MoveToCartesianPose.run
+    announce, move = recording.SetPrompt.run, MoveToCartesianPose.run
 
-    def announce_and_ask(self, robot, sim_namespace, scene_id, prompt, timeout_sec=30.0):
-        announced.append((prompt, oracle()))
-        return announce(self, robot, sim_namespace, scene_id, prompt, timeout_sec)
+    def announce_and_ask(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec=30.0):
+        if prompt not in drawn["subtasks"]["set_down"]:
+            announced.append((prompt, oracle()[level]))
+        return announce(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec)
 
     def move_and_ask(self, robot, target_pose, speed=1.0, cartesian=False):
         result = move(self, robot, target_pose, speed, cartesian)
-        if world.held:
-            carried.append((world.prompts[-1], oracle()))
+        subtask = next((p for level, p in reversed(world.prompts) if level == "subtask"), None)
+        # The lift ends Pick: Place is announced right after it, with no motion between.
+        if world.held and self.name != "LiftCube" and subtask not in drawn["subtasks"]["set_down"]:
+            carried.append((subtask, oracle()["subtask"]))
         return result
 
-    monkeypatch.setattr(recording.SetSubtaskPrompt, "run", announce_and_ask)
+    grip = SetGripperState.run
+
+    def grip_and_ask(self, robot, gripper_goal_pos):
+        result = grip(self, robot, gripper_goal_pos)
+        if world.held:  # just closed on it, still on the table: that is the pick
+            carried.append((world.prompts[-1][1], oracle()["subtask"]))
+        return result
+
+    monkeypatch.setattr(recording.SetPrompt, "run", announce_and_ask)
     monkeypatch.setattr(MoveToCartesianPose, "run", move_and_ask)
+    monkeypatch.setattr(SetGripperState, "run", grip_and_ask)
 
     assert run(world).status == DemoStatus.PERFECT
     assert announced and all(said == asked for said, asked in announced)
     assert carried and all(said == asked for said, asked in carried)
-    assert oracle() == prompts[-1] and oracle.done
+    said = {s for s, _ in carried}
+    assert said >= set(drawn["subtasks"]["place"]) and said & set(drawn["subtasks"]["pick"])
+    assert oracle() == {"task": "Stack the cubes.", "subtask": "Return home."} and oracle.done

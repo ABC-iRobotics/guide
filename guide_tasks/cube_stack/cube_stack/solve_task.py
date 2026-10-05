@@ -1,16 +1,28 @@
 """Stack the cubes: the GUIDE-EX tree that builds the tower, recorded as one episode.
 
-The scene draws the tower's order; the tree is built for it each episode:
+The scene draws the tower's order; the tree is built for it each episode, its layers as
+GUIDE-EX means them -- the procedure is the long-horizon workflow, each placement one
+TASK with a success criterion, the pick and the place its SUBTASKs. Every TASK and
+SUBTASK announces its prompt at its level, so the dataset carries all three: the
+procedure as the episode's task, then the task and the subtask each frame was part of.
 
-    StackingDemonstration (PROCEDURE)
-      Unclutch, LocateScene, AnnounceFirstSubtask, StartRecording
-      StackCubes (TASK, loop until the tower is done)
-        NextCube (SUBTASK, condition: done?)
-          MeasureTower, TowerHeight (ChainLength)   -> done, built
-          else PutOn (SUBTASK)    "Put the red cube on the blue cube."
-            NextTop, NextSupport, NextPrompt (GetItem: order[built], ...)
-            AnnounceSubtask, LocateCube, Pick, CarryToSupport, Release
-      GoHome, CheckSuccess, StopRecording (saved only on success)
+    StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
+      Unclutch, LocateScene, AnnounceFirstTask, AnnounceFirstSubtask, StartRecording,
+      MeasureTower, TowerHeight
+      -> BuildTower (PROCEDURE, loop until the tower is done)
+           NextCube (TASK, condition: done?)
+             MeasureTower, TowerHeight (ChainLength)   -> done, built
+             done -> Finish (SUBTASK "Return home.")
+                       GoHome, CheckSuccess, StopRecording (saved only on success)
+             else -> PutOn (TASK "Put the red cube on the blue cube.")
+                       NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
+                       AnnounceTask, LocateCube (SEQUENCE)
+                       Pick (SUBTASK "Pick up the red cube.")
+                       Place (SUBTASK "Place the red cube on the blue cube.")
+                         CarryToSupport, Release (SEQUENCE)
+
+A loop of TASKs is the procedure's own work, so BuildTower is a PROCEDURE-level branch of
+the root: a composite's children sit strictly below it, branches up to its level.
 
 Recovery routes, for the failures most likely in this task (most likely first):
 
@@ -24,10 +36,11 @@ Recovery routes, for the failures most likely in this task (most likely first):
    a detour through the home joints before it is tried again: from there a straight
    descent is feasible over the whole spawn region (mapped with MoveIt), whereas a
    rest *pose* lets the planner leave the arm in any posture.
-3. The cube does not get to the tower: it slips out (CarryToSupport checks the fingers
-   above the tower), or the arm finds no way there. RepickDropped sets it down where it
-   was picked -- opening wherever the arm is would drop it from height onto the tower --
-   and picks it up again from wherever it is.
+3. The Place subtask fails: the cube slips out (CarryToSupport checks the fingers above
+   the tower), or the arm finds no way there or down onto it. RepickDropped -- its own
+   subtask, "Set the red cube down." -- sets it down where it was picked (opening
+   wherever the arm is would drop it from height onto the tower) and resumes at Pick,
+   from wherever the cube is.
 4. A placed cube does not stay, or the tower is knocked. Nothing in PutOn trusts a
    placement: each loop pass measures the whole tower and rebuilds from the lowest
    layer that is out of place, within REBUILDS extra passes.
@@ -71,7 +84,7 @@ from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility.collection import GetItem
 from guide_ex.utility.exception import NodeException
 from guide_ex.utility.pose import ChainLength, InvertPose, TransformPose
-from guide_ex.utility.recording import SetSubtaskPrompt, StartRecording, StopRecording
+from guide_ex.utility.recording import SetPrompt, StartRecording, StopRecording
 from guide_ex.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
 from guide_ex.utility.wait import WaitForSeconds
 from guide_msgs import srv
@@ -222,8 +235,23 @@ def via_home(name, resume, *then, needs=()):
     )
 
 
-def build_tree(robot, prompts, n_cubes):
-    """The episode's tree. `prompts[0]` is announced before recording starts."""
+def announce(alias, level, key=None, text=None):
+    """SetPrompt at `level` ("task"/"subtask"): the prompt read from context `key`, or `text`."""
+    dynamic = keys("robot", "sim_namespace", "scene_id")
+    if key:
+        dynamic["prompt"] = key
+    return SetPrompt(
+        alias=alias,
+        dynamic_map=dynamic,
+        static_args={"level": level, **({"prompt": text} if text else {})},
+    )
+
+
+def build_tree(robot, plan):
+    """The episode's tree, layered as GUIDE-EX means the layers (see the module docstring):
+    the PROCEDURE stacks the cubes, each placement is a TASK, the pick and the place are
+    its SUBTASKs. Each TASK and SUBTASK announces its prompt as it starts, at its level."""
+    n_cubes = len(plan["order"])
     locate_cube = CompositeNode(
         name="LocateCube",
         level=Layer.SEQUENCE,
@@ -233,9 +261,10 @@ def build_tree(robot, prompts, n_cubes):
 
     pick = CompositeNode(
         name="Pick",
-        level=Layer.SEQUENCE,
-        dynamic_map=keys(*SIM, "robot_prim", "top", "cube_pose"),
+        level=Layer.SUBTASK,
+        dynamic_map=keys(*SIM, "scene_id", "robot_prim", "top", "cube_pose", "pick"),
         children=[
+            announce("AnnouncePick", "subtask", key="pick"),
             above("OverCubePose", "cube_pose", OVER_CUBE, "over_cube_pose"),
             move("MoveOverCube", "over_cube_pose"),
             above("GraspPose", "cube_pose", GRASP, "grasp_pose"),
@@ -293,31 +322,32 @@ def build_tree(robot, prompts, n_cubes):
         },
     )
 
+    place = CompositeNode(
+        name="Place",
+        level=Layer.SUBTASK,
+        dynamic_map=keys(*SIM, "scene_id", "robot_prim", "scene_pose_inv", "top", "support", "place"),
+        children=[announce("AnnouncePlace", "subtask", key="place"), carry, release],
+    )
+
     put_on = CompositeNode(
         name="PutOn",
-        level=Layer.SUBTASK,
+        level=Layer.TASK,
         dynamic_map=keys(
-            *SIM,
-            "scene_id",
-            "robot_prim",
-            "scene_pose_inv",
-            "order",
-            "prompts",
-            "built",
+            *SIM, "scene_id", "robot_prim", "scene_pose_inv", "order", "built",
+            "tasks", "picks", "places", "set_downs",
         ),
         children=[
             # `built` cubes stand: the next one goes on the last of them.
             item("NextTop", "order", "top"),
             item("NextSupport", "order", "support", shift=-1),
-            item("NextPrompt", "prompts", "prompt", shift=-1),
-            SetSubtaskPrompt(
-                alias="AnnounceSubtask",
-                dynamic_map=keys("robot", "sim_namespace", "scene_id", "prompt"),
-            ),
+            item("NextTask", "tasks", "task_prompt", shift=-1),
+            item("NextPick", "picks", "pick", shift=-1),
+            item("NextPlace", "places", "place", shift=-1),
+            item("NextSetDown", "set_downs", "set_down", shift=-1),
+            announce("AnnounceTask", "task", key="task_prompt"),
             locate_cube,
             pick,
-            carry,
-            release,
+            place,
         ],
         fallbacks={
             # Route 1: the other pair of faces, on a freshly measured cube.
@@ -343,68 +373,86 @@ def build_tree(robot, prompts, n_cubes):
             # Route 3: the cube did not get to the tower -- it slipped out, or the arm found
             # no way there. Set it down where it was picked (if it is still held: opening
             # anywhere else drops it from height), then pick it up again from wherever it is.
-            "CarryToSupport": RecoveryNode(
+            "Place": RecoveryNode(
                 name="RepickDropped",
                 level=Layer.SUBTASK,
                 children=[
+                    announce("AnnounceSetDown", "subtask", key="set_down"),
                     move("BackOverCube", "over_cube_pose"),
                     move("SetDown", "grasp_pose", speed=0.2),
                     *gripper("OpenForRepick", robot, OPEN),
                     move("LeaveCube", "over_cube_pose", speed=0.2),
                     locate_cube,
                 ],
-                dynamic_map=keys(*SIM, "scene_pose_inv", "top", "over_cube_pose", "grasp_pose"),
+                dynamic_map=keys(
+                    *SIM, "scene_id", "scene_pose_inv", "top", "over_cube_pose", "grasp_pose", "set_down"
+                ),
                 resume_target="Pick",
                 max_retries=2,
             ),
         },
     )
 
-    tower_keys = keys(
-        *SIM,
-        "scene_id",
-        "robot_prim",
-        "scene_pose_inv",
-        "order",
-        "prompts",
+    recording = keys("robot", "sim_namespace", "scene_id")
+    # Outside every task: the procedure takes the task level back and goes home.
+    finish = CompositeNode(
+        name="Finish",
+        level=Layer.SUBTASK,
+        dynamic_map=keys("robot", "sim_namespace", "scene_id", "procedure", "finish"),
+        children=[
+            announce("AnnounceProcedure", "task", key="procedure"),
+            announce("AnnounceFinish", "subtask", key="finish"),
+            home("MoveHome"),
+            WaitForSeconds(alias="WaitForTower", static_args={"seconds": 2.0}),
+            IsTaskSuccessful(
+                alias="CheckSuccess",
+                dynamic_map=recording,
+                output_map={"success": "task_success", "reason": "task_reason"},
+            ),
+            # Saved only if the scene sees the tower; anything else is discarded.
+            StopRecording(
+                dynamic_map={**recording, "save_episode": "task_success"},
+                static_args={"timeout_sec": 300.0},
+            ),
+        ],
     )
-    # Route 4: the loop. Each pass measures the tower and stacks the next cube onto
-    # the highest one still in place, so a failed placement is just the next pass.
-    stack_cubes = CompositeNode(
-        name="StackCubes",
-        level=Layer.TASK,
+
+    tower_keys = keys(
+        *SIM, "scene_id", "robot_prim", "scene_pose_inv", "order",
+        "procedure", "tasks", "picks", "places", "set_downs", "finish",
+    )
+    # Route 4: the loop. Each pass measures the tower and stacks the next cube onto the
+    # highest one still in place, so a failed placement is just the next pass. A loop of
+    # TASKs is the procedure's own work, so it sits at PROCEDURE level -- as a branch of
+    # the root, since a composite's children sit strictly below it.
+    build_tower = CompositeNode(
+        name="BuildTower",
+        level=Layer.PROCEDURE,
         dynamic_map=tower_keys,
         children=[
             CompositeNode(
                 name="NextCube",
-                level=Layer.SUBTASK,
+                level=Layer.TASK,
                 dynamic_map=tower_keys,
                 children=measure_tower(),
                 mode="condition",
                 condition_expr="done",
+                true_branch=finish,
                 false_branch=put_on,
             )
         ],
         mode="loop",
         condition_expr="done",
-        # One pass per placement, one to see the tower done, and the spare passes.
+        # One pass per placement, one to see the tower done and finish, the spare passes.
         max_loops=n_cubes + REBUILDS,
     )
 
-    recording = keys("robot", "sim_namespace", "scene_id")
     return CompositeNode(
         name="StackingDemonstration",
         level=Layer.PROCEDURE,
-        dynamic_map=keys(
-            *SIM,
-            "scene_id",
-            "scene_path",
-            "robot_prim",
-            "rest_pose",
-            "dataset_path",
-            "order",
-            "prompts",
-        ),
+        # scene_pose_inv is the root's own: LocateScene measures it.
+        dynamic_map=keys(*(k for k in tower_keys if k != "scene_pose_inv"),
+                         "scene_path", "rest_pose", "dataset_path"),
         children=[
             CompositeNode(
                 name="Unclutch",
@@ -436,43 +484,26 @@ def build_tree(robot, prompts, n_cubes):
                     ),
                 ],
             ),
-            # Before the first frame, so the whole episode carries a subtask.
-            SetSubtaskPrompt(
-                alias="AnnounceFirstSubtask",
-                dynamic_map=recording,
-                static_args={"prompt": prompts[0]},
-            ),
+            # Before the first frame, so the whole episode carries a task and a subtask.
+            announce("AnnounceFirstTask", "task", text=plan["tasks"][0]),
+            announce("AnnounceFirstSubtask", "subtask", text=plan["subtasks"]["pick"][0]),
             # The episode starts once the arm is at rest, not at randomization.
             StartRecording(
                 dynamic_map={**recording, "path": "dataset_path"},
                 static_args={"timeout_sec": 240.0},
             ),
-            stack_cubes,
-            CompositeNode(
-                name="GoHome",
-                level=Layer.SUBTASK,
-                dynamic_map=keys("robot"),
-                children=[
-                    home("MoveHome"),
-                    WaitForSeconds(alias="WaitForTower", static_args={"seconds": 2.0}),
-                ],
-            ),
-            IsTaskSuccessful(
-                alias="CheckSuccess",
-                dynamic_map=recording,
-                output_map={"success": "task_success", "reason": "task_reason"},
-            ),
-            # Saved only if the scene sees the tower; anything else is discarded.
-            StopRecording(
-                dynamic_map={**recording, "save_episode": "task_success"},
-                static_args={"timeout_sec": 300.0},
-            ),
+            *measure_tower(),
         ],
+        mode="condition",
+        condition_expr="not done",
+        true_branch=build_tower,
+        false_branch=NodeException(name="AlreadyStacked"),
     )
 
 
-def episode_context(robot, sim_namespace, scene_id, order, prompts, path=""):
-    """What the tree starts from: the robot, where things are, and the drawn plan."""
+def episode_context(robot, sim_namespace, scene_id, plan, path=""):
+    """What the tree starts from: the robot, where things are, and the drawn plan with its
+    prompts at every layer (scene.plan)."""
     return {
         "robot": robot,
         "sim_namespace": sim_namespace,
@@ -486,8 +517,13 @@ def episode_context(robot, sim_namespace, scene_id, order, prompts, path=""):
             orientation=Rotation(R.from_euler("xyz", [np.pi, 0.0, 0.0])),
         ),
         "dataset_path": path,
-        "order": order,
-        "prompts": prompts,
+        "order": plan["order"],
+        "procedure": plan["task"],
+        "tasks": plan["tasks"],
+        "picks": plan["subtasks"]["pick"],
+        "places": plan["subtasks"]["place"],
+        "set_downs": plan["subtasks"]["set_down"],
+        "finish": plan["subtasks"]["finish"],
     }
 
 
@@ -504,10 +540,8 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path=""):
     # Let the layout settle (the bins drop onto the floor) before solving.
     time.sleep(5)
 
-    tree = build_tree(robot, plan["subtasks"], len(plan["order"]))
-    result = tree.execute(
-        episode_context(robot, sim_namespace, scene_id, plan["order"], plan["subtasks"], path)
-    )
+    tree = build_tree(robot, plan)
+    result = tree.execute(episode_context(robot, sim_namespace, scene_id, plan, path))
 
     if result.status == DemoStatus.PERFECT and result.outputs.get("task_success"):
         log.info(f"\033[92m[SUCCESS] Scene {scene_id}: tower built.\033[0m")
@@ -603,7 +637,7 @@ def main():
         ("is_success", srv.CheckSuccess, "IsSuccess"),
         ("start_recording", srv.StartRecording, "start_recording"),
         ("stop_recording", srv.StopRecording, "stop_recording"),
-        ("set_subtask", srv.SetSubtask, "set_subtask"),
+        ("set_prompt", srv.SetPrompt, "set_prompt"),
         ("finalize_recording", srv.FinalizeRecording, "finalize_recording"),
     ]:
         client = robot.node.create_client(

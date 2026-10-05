@@ -51,19 +51,41 @@ subtask annotation.
 
 ## Tree
 
-Built from reusable GUIDE-EX nodes only; nothing in it is specific to cubes or towers:
+Built from reusable GUIDE-EX nodes only; nothing in it is specific to cubes or towers.
+Its layers are GUIDE-EX's: the procedure stacks the cubes, each placement is a TASK (one
+job with a success criterion), the pick and the place are its SUBTASKs. Every TASK and
+SUBTASK announces its prompt (`SetPrompt`) as it starts:
 
 ```
-StackingDemonstration (PROCEDURE)
-  Unclutch, LocateScene, AnnounceFirstSubtask, StartRecording
-  StackCubes (TASK, loop until the tower is done)
-    NextCube (SUBTASK, condition: done?)
-      MeasureTower (GetPrimPoses), TowerHeight (ChainLength)   -> built, done
-      else PutOn (SUBTASK)    "Put the red cube on the blue cube."
-        NextTop, NextSupport, NextPrompt (GetItem: order[built], order[built - 1], ...)
-        AnnounceSubtask (SetSubtaskPrompt), LocateCube, Pick, CarryToSupport, Release
-  GoHome, CheckSuccess, StopRecording (saved only on success)
+StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
+  Unclutch, LocateScene, AnnounceFirstTask, AnnounceFirstSubtask, StartRecording,
+  MeasureTower, TowerHeight
+  -> BuildTower (PROCEDURE, loop until the tower is done)
+       NextCube (TASK, condition: done?)
+         MeasureTower (GetPrimPoses), TowerHeight (ChainLength)   -> built, done
+         done -> Finish (SUBTASK "Return home."): GoHome, CheckSuccess, StopRecording
+         else -> PutOn (TASK "Put the red cube on the blue cube.")
+                   NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
+                   AnnounceTask, LocateCube (SEQUENCE)
+                   Pick (SUBTASK "Pick up the red cube.")
+                   Place (SUBTASK "Place the red cube on the blue cube."):
+                     CarryToSupport, Release (SEQUENCE)
+                   recoveries: Regrasp (Pick), RepickDropped "Set the red cube down." (Place)
 ```
+
+A loop of TASKs is the procedure's own work, so `BuildTower` is a PROCEDURE-level branch
+of the root (a composite's children sit strictly below it, branches up to its level).
+
+The prompts per episode (`cube_stack.scene.plan`; 4 colours in a drawn order, so 12
+possible tasks):
+
+| Layer | Prompt |
+|---|---|
+| procedure | `Stack the cubes.` |
+| task (3 per episode) | `Put the <cube> cube on the <support> cube.` |
+| subtask | `Pick up the <cube> cube.`, `Place the <cube> cube on the <support> cube.` |
+| subtask, recovery | `Set the <cube> cube down.` |
+| subtask, after the last task | `Return home.` (the procedure is the task then) |
 
 Rest, detours and the final home are the home *joint configuration*
 (`MoveToJointConfiguration`): a 7-DoF arm reaches a pose in many postures and each
@@ -78,7 +100,7 @@ The five failures judged most likely, most likely first:
 |---|---------|-------------|-------|
 | 1 | Grasp misses (block_bin's only failure mode in 300 episodes) | finger/cube contact after the lift (`Pick` condition) | `Regrasp`: open, measure the cube again, grasp the other pair of faces, retry `Pick` (2x) |
 | 2 | An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; `MoveToCartesianPose` refuses a path under 95% before moving | `*ViaHome`: detour through the home joints, retry the move (2x per move) |
-| 3 | The cube does not get to the tower: it slips out, or the arm finds no way there | finger/cube contact above the tower (`CarryToSupport` condition), or the carry's own detours run out | `RepickDropped`: set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
+| 3 | The Place subtask fails: the cube slips out, or the arm finds no way there or down onto it | finger/cube contact above the tower (`CarryToSupport` condition), or the moves' own detours run out | `RepickDropped` (subtask "Set the red cube down."): set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
 | 4 | A placed cube does not stay, or the tower is knocked | every loop pass measures the whole tower | the loop itself: rebuild from the lowest layer out of place (3 spare passes) |
 | 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again (8 attempts, then the run stops) |
 
@@ -99,10 +121,16 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
 
 Per camera (top, base, wrist): RGB, depth (`*_depth`, uint16 mm) and instance
 segmentation (`*_instance`, one fixed colour per tracked object, legend in
-`meta/guide_info.json`). Each frame's `task` is `Stack the cubes.`; the subtasks are
-`style: subtask` rows of the `language_persistent` column, each active from its frame
-until the next, e.g. read with
-`lerobot.datasets.language_render.active_at(t, persistent=row, style="subtask")`.
+`meta/guide_info.json`). Every layer's prompt is recorded:
+
+- each frame's `task` is the GUIDE-EX task under way (`Put the red cube on the blue
+  cube.`); outside every task, the procedure (`Stack the cubes.`);
+- the subtasks are `style: subtask` rows of the `language_persistent` column, each active
+  from its frame until the next;
+- the procedure is a `style: procedure` row there too -- GUIDE's own style, so register it
+  first (`lerobot.datasets.language.PERSISTENT_STYLES.add("procedure")`).
+
+Read a row with `lerobot.datasets.language_render.active_at(t, persistent=row, style="subtask")`.
 `meta/guide_episodes.jsonl` holds each episode's zone, seed and drawn values.
 
 ## Maintainer
