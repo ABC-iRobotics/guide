@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from guide_ex.core.states import DemoStatus, Layer
 from guide_ex.utility.recording import (
     PauseRecording,
-    SetSubtaskPrompt,
+    SetPrompt,
     StartRecording,
     StopRecording,
 )
@@ -95,17 +95,17 @@ def test_both_are_utility_nodes_wired_through_the_context():
     assert robot.calls[0][1].id == 1
 
 
-def test_subtask_prompt_goes_to_its_own_service_with_scene_and_text():
+def test_a_prompt_goes_to_its_own_service_with_scene_level_and_text():
     robot = FakeRobot()
-    node = SetSubtaskPrompt(
+    node = SetPrompt(
         dynamic_map={"robot": "robot", "sim_namespace": "sim_namespace", "scene_id": "scene_id"},
-        static_args={"prompt": "Put the red cube on the blue cube."},
+        static_args={"level": "subtask", "prompt": "Pick up the red cube."},
     )
 
     result = node.execute({"robot": robot, "sim_namespace": "/Sim_0", "scene_id": 2})
 
-    assert SetSubtaskPrompt.level == Layer.UTILITY
+    assert SetPrompt.level == Layer.UTILITY
     assert result.status == DemoStatus.PERFECT
-    assert robot.created == ["/Sim_0/set_subtask"]
+    assert robot.created == ["/Sim_0/set_prompt"]
     request = robot.calls[0][1]
-    assert (request.id, request.prompt) == (2, "Put the red cube on the blue cube.")
+    assert (request.id, request.level, request.prompt) == (2, "subtask", "Pick up the red cube.")

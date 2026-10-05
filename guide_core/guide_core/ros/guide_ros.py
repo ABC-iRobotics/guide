@@ -61,7 +61,7 @@ from guide_msgs.srv import (
     PauseRecording,
     Randomize,
     RegisterScene,
-    SetSubtask,
+    SetPrompt,
     StartRecording,
     StopRecording,
 )
@@ -157,11 +157,11 @@ class GUIDEROS2Interface(Node):
             callback_group=self._reentrant_group,
         )
 
-        # Subtask prompt: stamped on every frame recorded after it
-        self._set_subtask = self.create_service(
-            srv_type=SetSubtask,
-            srv_name="set_subtask",
-            callback=self._set_subtask_callback,
+        # Task / subtask prompt: stamped on every frame recorded after it
+        self._set_prompt = self.create_service(
+            srv_type=SetPrompt,
+            srv_name="set_prompt",
+            callback=self._set_prompt_callback,
             callback_group=self._reentrant_group,
         )
 
@@ -387,13 +387,13 @@ class GUIDEROS2Interface(Node):
         finally:
             return response
 
-    def _set_subtask_callback(
-        self, request: SetSubtask.Request, response: SetSubtask.Response
-    ) -> SetSubtask.Response:
-        response = SetSubtask.Response()
+    def _set_prompt_callback(
+        self, request: SetPrompt.Request, response: SetPrompt.Response
+    ) -> SetPrompt.Response:
+        response = SetPrompt.Response()
         try:
-            self._logger.info(f"Subtask of scene {request.id}: {request.prompt!r}")
-            self._backend._scene_manager.set_subtask(request.id, request.prompt)
+            self._logger.info(f"{request.level.capitalize()} of scene {request.id}: {request.prompt!r}")
+            self._backend._scene_manager.set_prompt(request.id, request.level, request.prompt)
             response.success = True
         except Exception as e:
             response.message = str(e)

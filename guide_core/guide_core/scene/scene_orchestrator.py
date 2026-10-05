@@ -87,9 +87,11 @@ class SceneOrchestrator(ABC):
         else:
             self._logger = logger
 
+        # The procedure-level prompt, drawn at randomization.
         self.task = ""
-        # The subtask being worked on, set through SceneManager.set_subtask; "" = none.
-        self.subtask = ""
+        # The GUIDE-EX task and subtask being worked on, set through
+        # SceneManager.set_prompt; "" = none. The task is each frame's LeRobot task.
+        self.prompts = {"task": "", "subtask": ""}
 
         # Getting init.yaml
         package_name = self.__class__.__module__.split(".")[0]
@@ -1047,8 +1049,10 @@ class SceneOrchestrator(ABC):
             "timestamp": current_step,
             "observation": observation,
             "action": action,
-            "task": self.task,
-            "subtask": self.subtask,
+            # The frame's LeRobot task is the GUIDE-EX task under way; outside every task,
+            # the procedure. The procedure and the subtask go in as language prompts.
+            "task": self.prompts["task"] or self.task,
+            "prompts": {"procedure": self.task, "subtask": self.prompts["subtask"]},
         }
 
     def clear_recording_history(self):

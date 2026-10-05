@@ -524,20 +524,24 @@ class SceneManager:
             scene.state = SceneState.PAUSED
             scene.recorder.clear_start_recording()
 
-    def set_subtask(self, scene_id: int, prompt: str) -> None:
-        """Stamp every frame recorded from now on with this subtask prompt.
+    def set_prompt(self, scene_id: int, level: str, prompt: str) -> None:
+        """Stamp every frame recorded from now on with this ``task`` or ``subtask`` prompt.
 
-        It holds until the next prompt or the end of the episode (stop_recording clears
-        it); the recorder turns the changes into the dataset's subtask annotation.
+        It holds until the next prompt of its level or the end of the episode
+        (stop_recording clears both); the recorder turns the changes into the dataset's
+        language annotation. "" clears the level.
         """
-        self._scenes[scene_id].subtask = prompt
+        scene = self._scenes[scene_id]
+        if level not in scene.prompts:
+            raise ValueError(f"unknown prompt level {level!r}; expected one of {sorted(scene.prompts)}")
+        scene.prompts[level] = prompt
 
     def stop_recording(self, scene_id: int, save_episode: bool = True) -> bool:
         """End the episode, saving or discarding it. Returns False if nothing was recording."""
         with self._locks[scene_id]:
             scene = self._scenes[scene_id]
-            # A subtask belongs to its episode; the next one starts without.
-            scene.subtask = ""
+            # Prompts belong to their episode; the next one starts without.
+            scene.prompts = dict.fromkeys(scene.prompts, "")
             if scene.state in (SceneState.IDLE, SceneState.FINALIZING):
                 # No episode is open, and the signal below would sit in the queue of a
                 # writer that is not reading it: the caller would wait forever.

@@ -40,7 +40,7 @@ class SlowCaptureScene:
         self.state = SceneState.RECORDING
         self.recorder = Recorder()
         self.capturing, self.release = threading.Event(), threading.Event()
-        self.subtask = "Put the red cube on the blue cube."
+        self.prompts = {"task": "Put the red cube on the blue cube.", "subtask": "Pick up the red cube."}
 
     def record_step(self, step):
         self.capturing.set()

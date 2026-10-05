@@ -19,6 +19,7 @@ class FakeScene:
     def __init__(self):
         self.state = SceneState.IDLE
         self.recorder = SceneRecorder("pkg", "task", {})
+        self.prompts = {"task": "", "subtask": ""}
 
     def set_render_products_enabled(self, enabled):
         pass
