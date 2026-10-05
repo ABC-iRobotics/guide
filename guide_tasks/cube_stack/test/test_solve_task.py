@@ -20,7 +20,7 @@ from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
 from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility import recording
-from guide_ex.utility.stacking import is_on_top
+from guide_ex.utility.pose import is_at_offset
 from guide_ex.utility.wait import WaitForSeconds
 
 COLOURS = ["blue", "red", "green", "yellow"]  # this episode's order, bottom first
@@ -57,7 +57,7 @@ class World:
 
     def tower(self):
         poses = [Pose(position=Point(self.cubes[p])) for p in ORDER]
-        return all(is_on_top(u, lo, 0.05, 0.02, 0.01) for lo, u in zip(poses, poses[1:]))
+        return all(is_at_offset(u, lo, (0, 0, 0.05), (0.02, 0.02, 0.01)) for lo, u in zip(poses, poses[1:]))
 
 
 @pytest.fixture
