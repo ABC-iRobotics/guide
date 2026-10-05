@@ -418,48 +418,61 @@ def test_a_stream_reports_how_often_rtc_actually_engaged():
     assert stream.rtc_tail_total / stream.rtc_engaged == 3
 
 
-def test_the_holder_tells_the_highest_source_and_hands_back_when_it_clears():
+RED_ON_BLUE = "Put the red cube on the blue cube."
+
+
+def test_the_holder_tells_task_and_subtask_and_falls_back_to_the_procedure():
     holder = ep.InstructionHolder("Stack the cubes.")
-    assert holder.prompt() == "Stack the cubes."  # no subtask yet: the bare task
+    assert holder.prompt() == "Stack the cubes."  # nothing held: the procedure alone
 
-    holder.set("planner", "Put the red cube on the blue cube.")
-    holder.set("oracle", "Put the green cube on the blue cube.")
-    assert holder.prompt() == "Stack the cubes. Put the green cube on the blue cube."
-    holder.set("planner", "Put the yellow cube on the blue cube.")  # below the oracle: unheard
-    assert holder.active() == ("oracle", "Put the green cube on the blue cube.")
+    holder.set("oracle", task=RED_ON_BLUE, subtask="Pick up the red cube.")
+    assert holder.prompt() == "Put the red cube on the blue cube. Pick up the red cube."
+    holder.set("oracle", subtask="Return home.")  # outside every task
+    assert holder.prompt() == "Stack the cubes. Return home."
 
-    holder.set("operator", "Put the red cube on the green cube.")  # a person overrides both
-    assert holder.active()[0] == "operator"
+    procedural = ep.InstructionHolder("Stack the cubes.", "{procedure} {task} {subtask}")
+    procedural.set("oracle", task=RED_ON_BLUE, subtask="Pick up the red cube.")
+    assert procedural.prompt() == "Stack the cubes. Put the red cube on the blue cube. Pick up the red cube."
+
+
+def test_the_holder_decides_each_level_by_source_and_hands_back_when_one_clears():
+    holder = ep.InstructionHolder("Stack the cubes.")
+    holder.set("planner", task=RED_ON_BLUE, subtask="Pick up the red cube.")
+    holder.set("oracle", task=RED_ON_BLUE, subtask="Place the red cube on the blue cube.")
+    assert holder.active()["subtask"] == ("oracle", "Place the red cube on the blue cube.")
+
+    holder.set("operator", subtask="Pick up the red cube.")  # a person overrides one level
+    assert holder.active() == {"task": ("oracle", RED_ON_BLUE), "subtask": ("operator", "Pick up the red cube.")}
     holder.clear("operator")
     holder.clear("oracle")
-    assert holder.active() == ("planner", "Put the yellow cube on the blue cube.")
-    assert [h["source"] for h in holder.history] == ["planner", "oracle", "operator", "oracle", "planner"]
+    assert holder.active()["subtask"] == ("planner", "Pick up the red cube.")
+    assert [h["subtask"][0] for h in holder.history] == ["planner", "oracle", "operator", "oracle", "planner"]
     with pytest.raises(ValueError):
-        holder.set("someone", "x")
+        holder.set("someone", subtask="x")
 
 
 def test_a_new_instruction_drops_the_actions_planned_for_the_old_one():
     holder = ep.InstructionHolder("Stack.")
-    holder.set("oracle", "A")
+    holder.set("oracle", task="T.", subtask="A")
     stream = make_stream(lead=0, task=holder.prompt)
 
     first = [stream.next_action({}, step) for step in range(3)]
-    holder.set("oracle", "B")
+    holder.set("oracle", task="T.", subtask="B")
     after = stream.next_action({}, 3)
 
     assert first == [(1, 0), (1, 1), (1, 2)]
     assert after == (2, 0)  # chunk 1's remaining 7 actions were planned for A
-    assert stream.told == ["Stack. A", "Stack. B"] and stream.switches == 1
+    assert stream.told == ["T. A", "T. B"] and stream.switches == 1
     stream.close()
 
 
 def test_with_rtc_a_new_instruction_blends_in_instead():
     holder = ep.InstructionHolder("Stack.")
-    holder.set("oracle", "A")
+    holder.set("oracle", task="T.", subtask="A")
     stream = make_stream(lead=0, task=holder.prompt, rtc=object())
 
     stream.next_action({}, 0)
-    holder.set("oracle", "B")
+    holder.set("oracle", task="T.", subtask="B")
 
     assert stream.next_action({}, 1) == (1, 1)  # the queue runs on; the next chunk is B's
     assert stream.switches == 1
@@ -468,16 +481,16 @@ def test_with_rtc_a_new_instruction_blends_in_instead():
 
 def test_the_feed_answers_before_the_first_chunk_and_keeps_the_last_answer_on_failure():
     holder = ep.InstructionHolder("Stack.")
-    answers = iter(["A"])
+    answers = iter([{"task": "T.", "subtask": "A"}])
 
     def source():
         return next(answers)  # then StopIteration: a failed measurement
 
     warnings = []
     feed = ep.SubtaskFeed(holder, "oracle", source, 0.01, type("L", (), {"warn": lambda s, m: warnings.append(m)})())
-    assert holder.prompt() == "Stack. A"
+    assert holder.prompt() == "T. A"
     import time as _time
 
     _time.sleep(0.05)
     feed.close()
-    assert holder.prompt() == "Stack. A" and warnings
+    assert holder.prompt() == "T. A" and warnings

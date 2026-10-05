@@ -338,61 +338,71 @@ def rtc_config_from_args(args):
     )
 
 
-# guide_dataset_tools' prompt view: a policy trained on it must be told the task and the
-# subtask exactly the way its frames were labelled.
+# guide_dataset_tools' prompt view: a policy trained on it must be told the GUIDE-EX task
+# and subtask exactly the way its frames were labelled. {procedure} is also available.
 PROMPT_TEMPLATE = "{task} {subtask}"
 
 
 class InstructionHolder:
-    """What the policy is told, read by ``ChunkStream`` before every chunk: the task, and
-    the subtask of the highest-priority source that currently has one.
+    """What the policy is told, read by ``ChunkStream`` before every chunk: the procedure's
+    prompt and the GUIDE-EX task and subtask the highest-priority sources hold, joined by
+    ``template``. With no task held, the procedure stands in for it -- what the recordings
+    carry outside every task.
 
     Sources, highest first: ``operator`` (a person's override), ``oracle`` (the scene's
-    own state; simulation only), ``planner`` (a learned one). A source overrides those
-    below it only while it holds a subtask; clearing it hands control back down. Every
-    change of what the policy is told lands in ``history`` with its source.
+    own state; simulation only), ``planner`` (a learned one), decided per level: an
+    operator can override the subtask and leave the oracle's task. A source overrides
+    those below it only while it holds that level; clearing it hands control back down.
+    Every change of what the policy is told lands in ``history`` with its sources.
     """
 
     SOURCES = ("operator", "oracle", "planner")
+    LEVELS = ("task", "subtask")
 
-    def __init__(self, task: str, template: str = PROMPT_TEMPLATE):
-        self.task, self.template = task, template
+    def __init__(self, procedure: str, template: str = PROMPT_TEMPLATE):
+        self.procedure, self.template = procedure, template
         self.history: list[dict] = []
-        self._subtasks: dict[str, str] = {}
+        self._held: dict[str, dict[str, str]] = {level: {} for level in self.LEVELS}
         self._lock = threading.Lock()
         self._t0 = time.monotonic()
 
-    def _active(self) -> tuple:
-        return next(((s, self._subtasks[s]) for s in self.SOURCES if s in self._subtasks), (None, None))
+    def _active(self) -> dict:
+        return {
+            level: next(((s, held[s]) for s in self.SOURCES if s in held), None)
+            for level, held in self._held.items()
+        }
 
-    def set(self, source: str, subtask: str | None) -> None:
-        """``subtask`` from ``source``; None or "" withdraws it."""
+    def set(self, source: str, task: str | None = None, subtask: str | None = None) -> None:
+        """``source``'s task and subtask; None or "" withdraws that level from it."""
         if source not in self.SOURCES:
-            raise ValueError(f"unknown subtask source {source!r}")
+            raise ValueError(f"unknown instruction source {source!r}")
         with self._lock:
             before = self._active()
-            if subtask:
-                self._subtasks[source] = subtask
-            else:
-                self._subtasks.pop(source, None)
+            for level, text in (("task", task), ("subtask", subtask)):
+                if text:
+                    self._held[level][source] = text
+                else:
+                    self._held[level].pop(source, None)
             after = self._active()
             if after != before:
-                self.history.append(
-                    {"seconds": round(time.monotonic() - self._t0, 2), "source": after[0], "subtask": after[1]}
-                )
+                self.history.append({"seconds": round(time.monotonic() - self._t0, 2), **{
+                    level: (None, None) if held is None else held for level, held in after.items()
+                }})
 
     def clear(self, source: str) -> None:
-        """Withdraw ``source``'s subtask: the next source down is heard again."""
-        self.set(source, None)
+        """Withdraw everything ``source`` holds: the sources below are heard again."""
+        self.set(source)
 
-    def active(self) -> tuple:
-        """(source, subtask) the policy is told now; (None, None) for the bare task."""
+    def active(self) -> dict:
+        """{level: (source, text) or None} the policy is told now."""
         with self._lock:
             return self._active()
 
     def prompt(self) -> str:
-        _, subtask = self.active()
-        return self.task if subtask is None else self.template.format(task=self.task, subtask=subtask)
+        held = self.active()
+        task = held["task"][1] if held["task"] else self.procedure
+        subtask = held["subtask"][1] if held["subtask"] else ""
+        return " ".join(self.template.format(procedure=self.procedure, task=task, subtask=subtask).split())
 
 
 class SubtaskFeed:
@@ -411,7 +421,8 @@ class SubtaskFeed:
 
     def _ask(self) -> None:
         try:
-            self.holder.set(self.name, self.source())
+            answer = self.source()  # {"task": ..., "subtask": ...}, or just the subtask
+            self.holder.set(self.name, **(answer if isinstance(answer, dict) else {"subtask": answer}))
         except Exception as exc:  # noqa: BLE001 -- a failed measurement keeps the last subtask
             self.logger.warn(f"{self.name} subtask source failed, keeping the last one: {exc}")
 

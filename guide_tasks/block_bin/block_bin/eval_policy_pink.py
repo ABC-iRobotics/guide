@@ -714,8 +714,9 @@ def run_episode(
 
     sleep_sim(robot, 0.5)  # let the randomized scene settle, as solve_task does
 
-    # The instruction is the holder's: the bare task, or task + subtask once a source
-    # (the oracle; an operator on subtask_override) has one. Read before every chunk.
+    # The instruction is the holder's: the bare procedure prompt (the scene's task), or the
+    # GUIDE-EX task + subtask once a source (the oracle; an operator on subtask_override)
+    # holds them. Read before every chunk.
     holder = InstructionHolder(task, args.prompt_template)
     control.holder = holder
     oracle = feed = None
@@ -1298,10 +1299,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--oracle",
         metavar="PACKAGE",
         default="",
-        help="Tell the policy task + subtask, the subtask read off the scene by PACKAGE's "
+        help="Tell the policy the GUIDE-EX task + subtask, read off the scene by PACKAGE's "
         "oracle (PACKAGE.oracle.make_oracle, e.g. cube_stack) -- for a policy trained on a "
         "prompt view. An operator overrides it on <namespace>/subtask_override "
-        "(std_msgs/String; an empty string hands back).",
+        "(std_msgs/String: '<subtask>' or '<task> || <subtask>'; an empty string hands back).",
     )
     parser.add_argument(
         "--oracle-period", type=float, default=0.5, help="Wall seconds between oracle readings."
@@ -1309,8 +1310,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prompt-template",
         default=PROMPT_TEMPLATE,
-        help="How task and subtask are joined; must match the training prompt view "
-        "(default %(default)r).",
+        help="How {procedure}, {task} and {subtask} are joined; must match the training "
+        "prompt view (default %(default)r).",
     )
     parser.add_argument("--device", type=str, default=None, help="cuda, cpu (default: policy's)")
     add_rtc_arguments(parser)
@@ -1485,9 +1486,12 @@ def setup_evaluation(args) -> SimpleNamespace:
     control = RunControl()
     args.sim_namespace = sim_namespace
 
-    def override(message):  # an operator's subtask outranks the oracle; "" hands back
+    def override(message):
+        """An operator outranks the oracle: "<subtask>", or "<task> || <subtask>" for both
+        levels; "" hands back."""
         if control.holder is not None:
-            control.holder.set("operator", message.data.strip() or None)
+            task, _, subtask = message.data.rpartition("||")
+            control.holder.set("operator", task=task.strip() or None, subtask=subtask.strip() or None)
             robot.node.get_logger().info(f'Told now: "{control.holder.prompt()}"')
 
     robot.override_subscription = robot.node.create_subscription(

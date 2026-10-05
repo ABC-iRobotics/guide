@@ -1,27 +1,44 @@
-# GUIDE subtask planner: a lerobot TrainingRecipe for the language runtime on lerobot main
+# GUIDE planner: a lerobot TrainingRecipe for the language runtime on lerobot main
 # (0.6.2.dev and later). lerobot 0.6.0 refuses it: there every branch needs a text target,
 # and `act` is action-only on purpose.
 #
-# One model, two jobs, on GUIDE's prompt contract:
-#   plan  (high_level, text target): from the cameras, the task and the subtask just
-#         completed, say the subtask to do now. This is the planner that sets the subtasks:
-#         at inference its answer is the `planner` source of the evaluation's
-#         InstructionHolder, which the oracle (simulation) and an operator outrank.
-#   act   (low_level, action flow): act on "<task> <subtask>" -- the string the prompt view
-#         puts in `task` (guide_dataset_build --prompt-view) and the holder tells the policy.
-#         SmolVLA trained on the prompt view is exactly this half, so a planner trained here
-#         drives that SmolVLA unchanged.
+# GUIDE records a prompt per GUIDE-EX layer: each TASK's is the frame's task (${task},
+# "Put the red cube on the blue cube."; the procedure's outside every task), the
+# PROCEDURE's a `procedure`-style row ("Stack the cubes."), each SUBTASK's a `subtask` row
+# ("Pick up the red cube."). `procedure` is GUIDE's own style; register it in the training
+# process before the recipe is resolved:
+#     from lerobot.datasets import language
+#     language.EXTENDED_STYLES.add("procedure"); language.PERSISTENT_STYLES.add("procedure")
 #
-# Data: GUIDE recordings as recorded (language_persistent, style=subtask), not a view: the
-# recipe resolves each frame's subtask itself. Policy: one with a text head (pi0.5-class);
-# set it with --policy.recipe_path (EO-1 / WALL-X) or the policy's equivalent.
+# One model, three jobs, on GUIDE's prompt contract:
+#   plan_task     (high_level, text target): the procedure and the subtask just done ->
+#                 the task now. The planner that sets the tasks.
+#   plan_subtask  (high_level, text target): the task and the subtask just done -> the
+#                 subtask now. The planner that sets the subtasks: at inference its answers
+#                 are the `planner` source of the evaluation's InstructionHolder, which the
+#                 oracle (simulation) and an operator outrank.
+#   act           (low_level, action flow): act on "<task> <subtask>" -- the string the
+#                 prompt view puts in `task` (guide_dataset_build --prompt-view) and the
+#                 holder tells the policy. SmolVLA trained on the prompt view is exactly
+#                 this half, so a planner trained here drives that SmolVLA unchanged.
 #
-# Inference: run `plan` when the arm opens after a placement or every few seconds, and keep
-# its answer until the next run -- the holder only re-tells the policy on a change.
+# Inference: run plan_task when a task ends, plan_subtask when a subtask ends (the arm
+# lifts a cube, opens over the tower) or every few seconds; keep each answer until the
+# next run -- the holder only re-tells the policy on a change.
 
 blend:
-  plan:
-    weight: 0.3
+  plan_task:
+    weight: 0.15
+    bindings:
+      procedure: "active_at(t, style=procedure)"
+      done: "nth_prev(style=subtask, offset=1)"
+    messages:
+      - {role: user, content: "${procedure}", stream: high_level, if_present: procedure}
+      - {role: user, content: "Done: ${done}", stream: high_level, if_present: done}
+      - {role: assistant, content: "${task}", stream: high_level, target: true}
+
+  plan_subtask:
+    weight: 0.15
     bindings:
       done: "nth_prev(style=subtask, offset=1)"
     messages:
