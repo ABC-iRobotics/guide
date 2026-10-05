@@ -190,3 +190,36 @@ def test_route_5_beyond_recovery_the_episode_fails(world):
 
     assert run(world).status == DemoStatus.FAILURE
     assert world.saved is None  # never stopped by the tree: generation discards it
+
+
+@pytest.mark.parametrize("trouble", [{}, {"misses": 1}, {"slips": 1}, {"slides": 2}])
+def test_the_oracle_names_the_subtask_the_demonstration_announces(world, monkeypatch, trouble):
+    """Asked from the scene alone, the oracle agrees with the tree: at every announcement
+    (re-announcements after a cube slid off included) and all the while a cube is carried."""
+    from cube_stack.oracle import SubtaskOracle
+
+    for name, value in trouble.items():
+        setattr(world, name, value)
+    robot = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
+    prompts = subtask_prompts(COLOURS)
+    oracle = SubtaskOracle(robot, "/Sim_0", 0, ORDER, prompts)
+    announced, carried = [], []
+    announce, move = recording.SetSubtaskPrompt.run, MoveToCartesianPose.run
+
+    def announce_and_ask(self, robot, sim_namespace, scene_id, prompt, timeout_sec=30.0):
+        announced.append((prompt, oracle()))
+        return announce(self, robot, sim_namespace, scene_id, prompt, timeout_sec)
+
+    def move_and_ask(self, robot, target_pose, speed=1.0, cartesian=False):
+        result = move(self, robot, target_pose, speed, cartesian)
+        if world.held:
+            carried.append((world.prompts[-1], oracle()))
+        return result
+
+    monkeypatch.setattr(recording.SetSubtaskPrompt, "run", announce_and_ask)
+    monkeypatch.setattr(MoveToCartesianPose, "run", move_and_ask)
+
+    assert run(world).status == DemoStatus.PERFECT
+    assert announced and all(said == asked for said, asked in announced)
+    assert carried and all(said == asked for said, asked in carried)
+    assert oracle() == prompts[-1] and oracle.done

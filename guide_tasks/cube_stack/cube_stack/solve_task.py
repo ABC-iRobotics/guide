@@ -183,6 +183,25 @@ def locate(name, prim, out):
     ]
 
 
+def measure_tower():
+    """The tower as it stands: `built` cubes of `order` on each other from the bottom,
+    `done` once all are. The demonstration's loop and the subtask oracle both read it."""
+    return [
+        GetPrimPoses(
+            alias="MeasureTower",
+            dynamic_map={**keys(*SIM), "prim_paths": "order"},
+            output_map={"poses": "tower_poses"},
+        ),
+        # The tower is a chain of cubes, each one cube edge above the last.
+        ChainLength(
+            alias="TowerHeight",
+            dynamic_map={"poses": "tower_poses"},
+            static_args={"offset": (0.0, 0.0, CUBE), "tolerance": STACKED},
+            output_map={"length": "built", "complete": "done"},
+        ),
+    ]
+
+
 def home(alias):
     return MoveToJointConfiguration(
         alias=alias,
@@ -360,20 +379,7 @@ def build_tree(robot, prompts, n_cubes):
                 name="NextCube",
                 level=Layer.SUBTASK,
                 dynamic_map=tower_keys,
-                children=[
-                    GetPrimPoses(
-                        alias="MeasureTower",
-                        dynamic_map={**keys(*SIM), "prim_paths": "order"},
-                        output_map={"poses": "tower_poses"},
-                    ),
-                    # The tower is a chain of cubes, each one cube edge above the last.
-                    ChainLength(
-                        alias="TowerHeight",
-                        dynamic_map={"poses": "tower_poses"},
-                        static_args={"offset": (0.0, 0.0, CUBE), "tolerance": STACKED},
-                        output_map={"length": "built", "complete": "done"},
-                    ),
-                ],
+                children=measure_tower(),
                 mode="condition",
                 condition_expr="done",
                 false_branch=put_on,

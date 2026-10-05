@@ -75,14 +75,18 @@ class FakePolicy:
         return self.calls
 
 
-def make_stream(lead, latency=0.0):
-    """A ChunkStream whose prediction is a counter, optionally slow."""
+def make_stream(lead, latency=0.0, task="task", rtc=None):
+    """A ChunkStream whose prediction is a counter, optionally slow; `stream.told` lists
+    the instruction each chunk was planned under."""
     import time as _time
 
-    stream = ep.ChunkStream(FakePolicy(), None, None, None, "task", "franka", lead)
+    stream = ep.ChunkStream(FakePolicy(), None, None, None, task, "franka", lead)
+    stream.rtc = rtc
+    stream.told = []
 
-    def predict(_frame, _prev_tail=None):
+    def predict(_frame, _prev_tail=None, task=None):
         _time.sleep(latency)
+        stream.told.append(task)
         call = stream.policy.predict_action_chunk(None)
         # _predict returns the chunk in both spaces since RTC: what the arm executes and
         # what the model produced. The fake keeps them identical.
@@ -412,3 +416,68 @@ def test_a_stream_reports_how_often_rtc_actually_engaged():
     stream.rtc_engaged += 1
     stream.rtc_tail_total += 3
     assert stream.rtc_tail_total / stream.rtc_engaged == 3
+
+
+def test_the_holder_tells_the_highest_source_and_hands_back_when_it_clears():
+    holder = ep.InstructionHolder("Stack the cubes.")
+    assert holder.prompt() == "Stack the cubes."  # no subtask yet: the bare task
+
+    holder.set("planner", "Put the red cube on the blue cube.")
+    holder.set("oracle", "Put the green cube on the blue cube.")
+    assert holder.prompt() == "Stack the cubes. Put the green cube on the blue cube."
+    holder.set("planner", "Put the yellow cube on the blue cube.")  # below the oracle: unheard
+    assert holder.active() == ("oracle", "Put the green cube on the blue cube.")
+
+    holder.set("operator", "Put the red cube on the green cube.")  # a person overrides both
+    assert holder.active()[0] == "operator"
+    holder.clear("operator")
+    holder.clear("oracle")
+    assert holder.active() == ("planner", "Put the yellow cube on the blue cube.")
+    assert [h["source"] for h in holder.history] == ["planner", "oracle", "operator", "oracle", "planner"]
+    with pytest.raises(ValueError):
+        holder.set("someone", "x")
+
+
+def test_a_new_instruction_drops_the_actions_planned_for_the_old_one():
+    holder = ep.InstructionHolder("Stack.")
+    holder.set("oracle", "A")
+    stream = make_stream(lead=0, task=holder.prompt)
+
+    first = [stream.next_action({}, step) for step in range(3)]
+    holder.set("oracle", "B")
+    after = stream.next_action({}, 3)
+
+    assert first == [(1, 0), (1, 1), (1, 2)]
+    assert after == (2, 0)  # chunk 1's remaining 7 actions were planned for A
+    assert stream.told == ["Stack. A", "Stack. B"] and stream.switches == 1
+    stream.close()
+
+
+def test_with_rtc_a_new_instruction_blends_in_instead():
+    holder = ep.InstructionHolder("Stack.")
+    holder.set("oracle", "A")
+    stream = make_stream(lead=0, task=holder.prompt, rtc=object())
+
+    stream.next_action({}, 0)
+    holder.set("oracle", "B")
+
+    assert stream.next_action({}, 1) == (1, 1)  # the queue runs on; the next chunk is B's
+    assert stream.switches == 1
+    stream.close()
+
+
+def test_the_feed_answers_before_the_first_chunk_and_keeps_the_last_answer_on_failure():
+    holder = ep.InstructionHolder("Stack.")
+    answers = iter(["A"])
+
+    def source():
+        return next(answers)  # then StopIteration: a failed measurement
+
+    warnings = []
+    feed = ep.SubtaskFeed(holder, "oracle", source, 0.01, type("L", (), {"warn": lambda s, m: warnings.append(m)})())
+    assert holder.prompt() == "Stack. A"
+    import time as _time
+
+    _time.sleep(0.05)
+    feed.close()
+    assert holder.prompt() == "Stack. A" and warnings
