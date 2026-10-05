@@ -68,9 +68,9 @@ StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
                    NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                    AnnounceTask, LocateCube (SEQUENCE)
                    Pick (SUBTASK "Pick up the red cube.")
-                   Place (SUBTASK "Place the red cube on the blue cube."):
+                   Place (SUBTASK "Place it on the blue cube."):
                      CarryToSupport, Release (SEQUENCE)
-                   recoveries: Regrasp (Pick), RepickDropped "Set the red cube down." (Place)
+                   recoveries: Regrasp (Pick), RepickDropped "Set it down." (Place)
 ```
 
 A loop of TASKs is the procedure's own work, so `BuildTower` is a PROCEDURE-level branch
@@ -83,8 +83,8 @@ possible tasks):
 |---|---|
 | procedure | `Stack the cubes.` |
 | task (3 per episode) | `Put the <cube> cube on the <support> cube.` |
-| subtask | `Pick up the <cube> cube.`, `Place the <cube> cube on the <support> cube.` |
-| subtask, recovery | `Set the <cube> cube down.` |
+| subtask | `Pick up the <cube> cube.`, `Place it on the <support> cube.` |
+| subtask, recovery | `Set it down.` |
 | subtask, after the last task | `Return home.` (the procedure is the task then) |
 
 Rest, detours and the final home are the home *joint configuration*
@@ -100,7 +100,7 @@ The five failures judged most likely, most likely first:
 |---|---------|-------------|-------|
 | 1 | Grasp misses (block_bin's only failure mode in 300 episodes) | finger/cube contact after the lift (`Pick` condition) | `Regrasp`: open, measure the cube again, grasp the other pair of faces, retry `Pick` (2x) |
 | 2 | An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; `MoveToCartesianPose` refuses a path under 95% before moving | `*ViaHome`: detour through the home joints, retry the move (2x per move) |
-| 3 | The Place subtask fails: the cube slips out, or the arm finds no way there or down onto it | finger/cube contact above the tower (`CarryToSupport` condition), or the moves' own detours run out | `RepickDropped` (subtask "Set the red cube down."): set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
+| 3 | The Place subtask fails: the cube slips out, or the arm finds no way there or down onto it | finger/cube contact above the tower (`CarryToSupport` condition), or the moves' own detours run out | `RepickDropped` (subtask "Set it down."): set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
 | 4 | A placed cube does not stay, or the tower is knocked | every loop pass measures the whole tower | the loop itself: rebuild from the lowest layer out of place (3 spare passes) |
 | 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again (8 attempts, then the run stops) |
 

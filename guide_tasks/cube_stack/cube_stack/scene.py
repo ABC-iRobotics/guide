@@ -20,16 +20,19 @@ MAX_LAYOUT_DRAWS = 200
 
 
 PROCEDURE = "Stack the cubes."
+SET_DOWN = "Set it down."
 RETURN_HOME = "Return home."
 
 
 def plan(colours) -> dict:
     """The episode's prompts at each GUIDE-EX layer, for a tower of `colours`, bottom first.
 
-    The PROCEDURE is the episode's task; each placement is a TASK ("Put the red cube on
-    the blue cube.") whose SUBTASKs are the pick and the place, with a set-down for the
-    recovery that puts an undeliverable cube back; the procedure closes with its own
-    subtask, going home. The scene's Randomize reply, the tree and the oracle all read it.
+    The PROCEDURE is the episode's procedure prompt; each placement is a TASK ("Put the red
+    cube on the blue cube.") whose SUBTASKs are the pick and the place, with a set-down for
+    the recovery that puts an undeliverable cube back; the procedure closes with its own
+    subtask, going home. A subtask says only what it adds to its task: the pick names the
+    cube, the place only where -- whatever is in the gripper -- and the set-down neither.
+    The scene's Randomize reply, the tree and the oracle all read it.
     """
     steps = list(zip(colours, colours[1:]))  # (support, cube) per placement
     return {
@@ -38,8 +41,8 @@ def plan(colours) -> dict:
         "tasks": [f"Put the {top} cube on the {base} cube." for base, top in steps],
         "subtasks": {
             "pick": [f"Pick up the {top} cube." for _, top in steps],
-            "place": [f"Place the {top} cube on the {base} cube." for base, top in steps],
-            "set_down": [f"Set the {top} cube down." for _, top in steps],
+            "place": [f"Place it on the {base} cube." for base, _ in steps],
+            "set_down": [SET_DOWN] * len(steps),
             "finish": RETURN_HOME,
         },
     }

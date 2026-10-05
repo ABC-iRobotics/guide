@@ -14,8 +14,9 @@ def test_the_plan_has_a_prompt_per_layer_bottom_up():
     assert drawn["order"] == ["/blocks/blue_block", "/blocks/red_block", "/blocks/green_block"]
     assert drawn["tasks"] == ["Put the red cube on the blue cube.", "Put the green cube on the red cube."]
     assert drawn["subtasks"]["pick"] == ["Pick up the red cube.", "Pick up the green cube."]
-    assert drawn["subtasks"]["place"] == ["Place the red cube on the blue cube.", "Place the green cube on the red cube."]
-    assert drawn["subtasks"]["set_down"][1] == "Set the green cube down."
+    # The place says where, not what: the task already says which cube.
+    assert drawn["subtasks"]["place"] == ["Place it on the blue cube.", "Place it on the red cube."]
+    assert drawn["subtasks"]["set_down"] == ["Set it down."] * 2
     assert drawn["subtasks"]["finish"] == "Return home."
 
 

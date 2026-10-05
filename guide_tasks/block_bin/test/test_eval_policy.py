@@ -438,8 +438,8 @@ def test_the_holder_tells_task_and_subtask_and_falls_back_to_the_procedure():
 def test_the_holder_decides_each_level_by_source_and_hands_back_when_one_clears():
     holder = ep.InstructionHolder("Stack the cubes.")
     holder.set("planner", task=RED_ON_BLUE, subtask="Pick up the red cube.")
-    holder.set("oracle", task=RED_ON_BLUE, subtask="Place the red cube on the blue cube.")
-    assert holder.active()["subtask"] == ("oracle", "Place the red cube on the blue cube.")
+    holder.set("oracle", task=RED_ON_BLUE, subtask="Place it on the blue cube.")
+    assert holder.active()["subtask"] == ("oracle", "Place it on the blue cube.")
 
     holder.set("operator", subtask="Pick up the red cube.")  # a person overrides one level
     assert holder.active() == {"task": ("oracle", RED_ON_BLUE), "subtask": ("operator", "Pick up the red cube.")}

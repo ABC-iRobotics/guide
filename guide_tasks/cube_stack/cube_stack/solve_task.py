@@ -18,7 +18,7 @@ procedure as the episode's task, then the task and the subtask each frame was pa
                        NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                        AnnounceTask, LocateCube (SEQUENCE)
                        Pick (SUBTASK "Pick up the red cube.")
-                       Place (SUBTASK "Place the red cube on the blue cube.")
+                       Place (SUBTASK "Place it on the blue cube.")
                          CarryToSupport, Release (SEQUENCE)
 
 A loop of TASKs is the procedure's own work, so BuildTower is a PROCEDURE-level branch of
@@ -38,7 +38,7 @@ Recovery routes, for the failures most likely in this task (most likely first):
    rest *pose* lets the planner leave the arm in any posture.
 3. The Place subtask fails: the cube slips out (CarryToSupport checks the fingers above
    the tower), or the arm finds no way there or down onto it. RepickDropped -- its own
-   subtask, "Set the red cube down." -- sets it down where it was picked (opening
+   subtask, "Set it down." -- sets it down where it was picked (opening
    wherever the arm is would drop it from height onto the tower) and resumes at Pick,
    from wherever the cube is.
 4. A placed cube does not stay, or the tower is knocked. Nothing in PutOn trusts a
