@@ -95,11 +95,11 @@ def test_both_are_utility_nodes_wired_through_the_context():
     assert robot.calls[0][1].id == 1
 
 
-def test_a_prompt_goes_to_its_own_service_with_scene_level_and_text():
+def test_task_and_subtask_go_to_their_service_in_one_request():
     robot = FakeRobot()
     node = SetPrompt(
         dynamic_map={"robot": "robot", "sim_namespace": "sim_namespace", "scene_id": "scene_id"},
-        static_args={"level": "subtask", "prompt": "Pick up the red cube."},
+        static_args={"task": "Put the red cube on the blue cube.", "subtask": "Pick up the red cube."},
     )
 
     result = node.execute({"robot": robot, "sim_namespace": "/Sim_0", "scene_id": 2})
@@ -108,4 +108,5 @@ def test_a_prompt_goes_to_its_own_service_with_scene_level_and_text():
     assert result.status == DemoStatus.PERFECT
     assert robot.created == ["/Sim_0/set_prompt"]
     request = robot.calls[0][1]
-    assert (request.id, request.level, request.prompt) == (2, "subtask", "Pick up the red cube.")
+    assert (request.id, request.task, request.subtask) == (
+        2, "Put the red cube on the blue cube.", "Pick up the red cube.")

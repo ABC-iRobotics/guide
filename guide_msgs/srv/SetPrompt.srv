@@ -1,16 +1,16 @@
-# What the robot works on from now on, as a natural-language prompt, at a GUIDE-EX layer:
-#   level "task"    -- one complete job, e.g. "Put the red cube on the blue cube."; it is
-#                      every following frame's LeRobot task.
-#   level "subtask" -- a part of the task, e.g. "Pick up the red cube."; it is recorded as
-#                      LeRobot's `subtask` language style.
-# Every frame the scene records after this carries it, until the next prompt of the same
-# level or the end of the episode. An empty prompt is not recorded: a level is replaced,
-# never cleared (an empty task leaves the frames to the procedure). The procedure-level
-# prompt ("Stack the cubes.") is drawn by the scene's randomization and recorded as GUIDE's
-# `procedure` language style.
+# What the robot works on from now on, as natural-language prompts at the GUIDE-EX layers:
+#   task    -- one complete job, e.g. "Put the red cube on the blue cube."; it is every
+#              following frame's LeRobot task.
+#   subtask -- a part of the task, e.g. "Pick up the red cube."; it is recorded as
+#              LeRobot's `subtask` language style.
+# Both are applied at once, so no frame pairs a new task with the last task's subtask; an
+# empty field leaves its level as it is. Every frame the scene records after this carries
+# them, until the next prompt of the same level or the end of the episode. The
+# procedure-level prompt ("Stack the cubes.") is drawn by the scene's randomization and
+# recorded as GUIDE's `procedure` language style.
 int32 id
-string level
-string prompt
+string task
+string subtask
 ---
 bool success
 string message

@@ -392,8 +392,8 @@ class GUIDEROS2Interface(Node):
     ) -> SetPrompt.Response:
         response = SetPrompt.Response()
         try:
-            self._logger.info(f"{request.level.capitalize()} of scene {request.id}: {request.prompt!r}")
-            self._backend._scene_manager.set_prompt(request.id, request.level, request.prompt)
+            self._logger.info(f"Prompts of scene {request.id}: task {request.task!r}, subtask {request.subtask!r}")
+            self._backend._scene_manager.set_prompt(request.id, request.task, request.subtask)
             response.success = True
         except Exception as e:
             response.message = str(e)

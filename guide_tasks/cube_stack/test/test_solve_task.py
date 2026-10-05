@@ -105,8 +105,8 @@ def world(monkeypatch):
     def clashing(self, robot, sim_namespace, scene_namespace, prim1_path, prim2_path):
         return ExecutionResult(DemoStatus.PERFECT, outputs={"has_collided": w.held == prim2_path})
 
-    def prompt(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec=30.0):
-        w.prompts.append((level, prompt))
+    def prompt(self, robot, sim_namespace, scene_id, task="", subtask="", timeout_sec=30.0):
+        w.prompts += [(level, p) for level, p in (("task", task), ("subtask", subtask)) if p]
         return PERFECT
 
     def stop(self, robot, sim_namespace, scene_id, save_episode=True, timeout_sec=60.0):
@@ -148,10 +148,13 @@ def test_builds_the_tower_announcing_each_layer(world):
     assert world.tower() and world.saved is True
     drawn = plan(COLOURS)
     tasks, sub = drawn["tasks"], drawn["subtasks"]
+    # PutOn sets its task and first subtask in one call; Pick then announces itself (a
+    # no-op here, but it is what puts the pick back after a set-down recovery).
     placements = [
         prompt
         for k in range(len(tasks))
-        for prompt in (("task", tasks[k]), ("subtask", sub["pick"][k]), ("subtask", sub["place"][k]))
+        for prompt in (("task", tasks[k]), ("subtask", sub["pick"][k]),
+                       ("subtask", sub["pick"][k]), ("subtask", sub["place"][k]))
     ]
     assert world.prompts == [
         ("task", tasks[0]), ("subtask", sub["pick"][0]),  # before the first frame
@@ -243,10 +246,11 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
     announced, carried = [], []
     announce, move = recording.SetPrompt.run, MoveToCartesianPose.run
 
-    def announce_and_ask(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec=30.0):
-        if prompt not in drawn["subtasks"]["set_down"]:
-            announced.append((prompt, oracle()[level]))
-        return announce(self, robot, sim_namespace, scene_id, level, prompt, timeout_sec)
+    def announce_and_ask(self, robot, sim_namespace, scene_id, task="", subtask="", timeout_sec=30.0):
+        for level, prompt in (("task", task), ("subtask", subtask)):
+            if prompt and prompt not in drawn["subtasks"]["set_down"]:
+                announced.append((prompt, oracle()[level]))
+        return announce(self, robot, sim_namespace, scene_id, task, subtask, timeout_sec)
 
     def move_and_ask(self, robot, target_pose, speed=1.0, cartesian=False):
         result = move(self, robot, target_pose, speed, cartesian)

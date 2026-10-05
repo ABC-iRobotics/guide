@@ -54,11 +54,12 @@ subtask annotation.
 Built from reusable GUIDE-EX nodes only; nothing in it is specific to cubes or towers.
 Its layers are GUIDE-EX's: the procedure stacks the cubes, each placement is a TASK (one
 job with a success criterion), the pick and the place are its SUBTASKs. Every TASK and
-SUBTASK announces its prompt (`SetPrompt`) as it starts:
+SUBTASK announces its prompt (`SetPrompt`) as it starts; a TASK sets its first subtask in
+the same call, so no frame pairs a new task with the last task's subtask:
 
 ```
 StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
-  Unclutch, LocateScene, AnnounceFirstTask, AnnounceFirstSubtask, StartRecording,
+  Unclutch, LocateScene, AnnounceFirst (task + subtask), StartRecording,
   MeasureTower, TowerHeight
   -> BuildTower (PROCEDURE, loop until the tower is done)
        NextCube (TASK, condition: done?)
@@ -66,7 +67,7 @@ StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
          done -> Finish (SUBTASK "Return home."): GoHome, CheckSuccess, StopRecording
          else -> PutOn (TASK "Put the red cube on the blue cube.")
                    NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
-                   AnnounceTask, LocateCube (SEQUENCE)
+                   AnnounceTask (task + pick), LocateCube (SEQUENCE)
                    Pick (SUBTASK "Pick up the red cube.")
                    Place (SUBTASK "Place it on the blue cube."):
                      CarryToSupport, Release (SEQUENCE)

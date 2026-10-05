@@ -155,37 +155,37 @@ class SetPrompt(BaseNode):
         super().__init__("SetPrompt", alias, dynamic_map, static_args, output_map)
 
     def run(
-        self, robot, sim_namespace: str, scene_id: int, level: str, prompt: str,
+        self, robot, sim_namespace: str, scene_id: int, task: str = "", subtask: str = "",
         timeout_sec: float = 30.0,
     ) -> ExecutionResult:
         """
-        Tells the scene what the robot works on from now on, at a GUIDE-EX layer.
+        Tells the scene what the robot works on from now on, at the GUIDE-EX layers.
 
-        A TASK composite announces itself with level "task" (e.g. "Put the red cube on
-        the blue cube."), each of its SUBTASK composites with "subtask" (e.g. "Pick up
-        the red cube."). Every frame recorded after this carries the prompt, until the
-        next prompt of the same level or the end of the episode: the task as the frames'
+        A TASK composite announces its task (e.g. "Put the red cube on the blue cube.")
+        together with its first subtask, each SUBTASK composite its subtask (e.g. "Pick up
+        the red cube."). The two change at once, so no frame pairs a new task with the
+        last task's subtask. Every frame recorded after this carries them, until the next
+        prompt of the same level or the end of the episode: the task as the frames'
         LeRobot task, the subtask as LeRobot's subtask annotation (the procedure is
-        recorded beside them as GUIDE's ``procedure`` style). Sending the prompt that is
+        recorded beside them as GUIDE's ``procedure`` style). Sending the prompts that are
         already active changes nothing, so a retried node may announce itself again.
 
         Args:
             robot (Node): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene being recorded.
-            level (str): "task" or "subtask".
-            prompt (str): The prompt, in natural language. Empty is not recorded: a level
-                is replaced by its next prompt, never cleared.
+            task (str): The task, in natural language; empty leaves it as it is.
+            subtask (str): The subtask; empty leaves it as it is.
             timeout_sec (float): Per-attempt service timeout.
         Returns:
-            ExecutionResult: PERFECT once the scene has the prompt, FAILURE otherwise.
+            ExecutionResult: PERFECT once the scene has the prompts, FAILURE otherwise.
         """
         return _call_recording_service(
             robot,
             "set_prompt",
             srv.SetPrompt,
             sim_namespace,
-            srv.SetPrompt.Request(id=scene_id, level=level, prompt=prompt),
+            srv.SetPrompt.Request(id=scene_id, task=task, subtask=subtask),
             timeout_sec,
-            f"Set {level} of scene {scene_id} to {prompt!r}",
+            f"Set the prompts of scene {scene_id} to task {task!r}, subtask {subtask!r}",
         )

@@ -7,7 +7,7 @@ SUBTASK announces its prompt at its level, so the dataset carries all three: the
 procedure as the episode's task, then the task and the subtask each frame was part of.
 
     StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
-      Unclutch, LocateScene, AnnounceFirstTask, AnnounceFirstSubtask, StartRecording,
+      Unclutch, LocateScene, AnnounceFirst (task + subtask), StartRecording,
       MeasureTower, TowerHeight
       -> BuildTower (PROCEDURE, loop until the tower is done)
            NextCube (TASK, condition: done?)
@@ -235,16 +235,13 @@ def via_home(name, resume, *then, needs=()):
     )
 
 
-def announce(alias, level, key=None, text=None):
-    """SetPrompt at `level` ("task"/"subtask"): the prompt read from context `key`, or `text`."""
+def announce(alias, task_key=None, subtask_key=None, task="", subtask=""):
+    """SetPrompt: the task and/or subtask read from context keys, or given as text. Both
+    change at once, so a new task never meets the last task's subtask on a frame."""
     dynamic = keys("robot", "sim_namespace", "scene_id")
-    if key:
-        dynamic["prompt"] = key
-    return SetPrompt(
-        alias=alias,
-        dynamic_map=dynamic,
-        static_args={"level": level, **({"prompt": text} if text else {})},
-    )
+    dynamic.update({k: v for k, v in (("task", task_key), ("subtask", subtask_key)) if v})
+    static = {k: v for k, v in (("task", task), ("subtask", subtask)) if v}
+    return SetPrompt(alias=alias, dynamic_map=dynamic, static_args=static)
 
 
 def build_tree(robot, plan):
@@ -264,7 +261,7 @@ def build_tree(robot, plan):
         level=Layer.SUBTASK,
         dynamic_map=keys(*SIM, "scene_id", "robot_prim", "top", "cube_pose", "pick"),
         children=[
-            announce("AnnouncePick", "subtask", key="pick"),
+            announce("AnnouncePick", subtask_key="pick"),
             above("OverCubePose", "cube_pose", OVER_CUBE, "over_cube_pose"),
             move("MoveOverCube", "over_cube_pose"),
             above("GraspPose", "cube_pose", GRASP, "grasp_pose"),
@@ -326,7 +323,7 @@ def build_tree(robot, plan):
         name="Place",
         level=Layer.SUBTASK,
         dynamic_map=keys(*SIM, "scene_id", "robot_prim", "scene_pose_inv", "top", "support", "place"),
-        children=[announce("AnnouncePlace", "subtask", key="place"), carry, release],
+        children=[announce("AnnouncePlace", subtask_key="place"), carry, release],
     )
 
     put_on = CompositeNode(
@@ -344,7 +341,7 @@ def build_tree(robot, plan):
             item("NextPick", "picks", "pick", shift=-1),
             item("NextPlace", "places", "place", shift=-1),
             item("NextSetDown", "set_downs", "set_down", shift=-1),
-            announce("AnnounceTask", "task", key="task_prompt"),
+            announce("AnnounceTask", task_key="task_prompt", subtask_key="pick"),
             locate_cube,
             pick,
             place,
@@ -377,7 +374,7 @@ def build_tree(robot, plan):
                 name="RepickDropped",
                 level=Layer.SUBTASK,
                 children=[
-                    announce("AnnounceSetDown", "subtask", key="set_down"),
+                    announce("AnnounceSetDown", subtask_key="set_down"),
                     move("BackOverCube", "over_cube_pose"),
                     move("SetDown", "grasp_pose", speed=0.2),
                     *gripper("OpenForRepick", robot, OPEN),
@@ -400,8 +397,7 @@ def build_tree(robot, plan):
         level=Layer.SUBTASK,
         dynamic_map=keys("robot", "sim_namespace", "scene_id", "procedure", "finish"),
         children=[
-            announce("AnnounceProcedure", "task", key="procedure"),
-            announce("AnnounceFinish", "subtask", key="finish"),
+            announce("AnnounceFinish", task_key="procedure", subtask_key="finish"),
             home("MoveHome"),
             WaitForSeconds(alias="WaitForTower", static_args={"seconds": 2.0}),
             IsTaskSuccessful(
@@ -485,8 +481,7 @@ def build_tree(robot, plan):
                 ],
             ),
             # Before the first frame, so the whole episode carries a task and a subtask.
-            announce("AnnounceFirstTask", "task", text=plan["tasks"][0]),
-            announce("AnnounceFirstSubtask", "subtask", text=plan["subtasks"]["pick"][0]),
+            announce("AnnounceFirst", task=plan["tasks"][0], subtask=plan["subtasks"]["pick"][0]),
             # The episode starts once the arm is at rest, not at randomization.
             StartRecording(
                 dynamic_map={**recording, "path": "dataset_path"},

@@ -524,17 +524,18 @@ class SceneManager:
             scene.state = SceneState.PAUSED
             scene.recorder.clear_start_recording()
 
-    def set_prompt(self, scene_id: int, level: str, prompt: str) -> None:
-        """Stamp every frame recorded from now on with this ``task`` or ``subtask`` prompt.
+    def set_prompt(self, scene_id: int, task: str = "", subtask: str = "") -> None:
+        """Stamp every frame recorded from now on with this task and/or subtask prompt.
 
-        It holds until the next prompt of its level or the end of the episode
-        (stop_recording clears both); the recorder turns the changes into the dataset's
-        language annotation. "" clears the level.
+        Both change under the scene lock the capture takes, so no frame pairs a new task
+        with the last one's subtask; "" leaves a level as it is. A prompt holds until the
+        next one of its level or the end of the episode (stop_recording clears both).
         """
-        scene = self._scenes[scene_id]
-        if level not in scene.prompts:
-            raise ValueError(f"unknown prompt level {level!r}; expected one of {sorted(scene.prompts)}")
-        scene.prompts[level] = prompt
+        with self._locks[scene_id]:
+            prompts = self._scenes[scene_id].prompts
+            for level, prompt in (("task", task), ("subtask", subtask)):
+                if prompt:
+                    prompts[level] = prompt
 
     def stop_recording(self, scene_id: int, save_episode: bool = True) -> bool:
         """End the episode, saving or discarding it. Returns False if nothing was recording."""
