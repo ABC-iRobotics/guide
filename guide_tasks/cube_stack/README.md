@@ -64,7 +64,8 @@ StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
   -> BuildTower (PROCEDURE, loop until the tower is done)
        NextCube (TASK, condition: done?)
          MeasureTower (GetPrimPoses), TowerHeight (ChainLength)   -> built, done
-         done -> Finish (SUBTASK "Return home."): GoHome, CheckSuccess, StopRecording
+         done -> Finish (TASK "Return home."): AnnounceFinish (task + subtask),
+                   GoHome (SUBTASK "Return home."), CheckSuccess, StopRecording
          else -> PutOn (TASK "Put the red cube on the blue cube.")
                    NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                    AnnounceTask (task + pick), LocateCube (SEQUENCE)
@@ -86,7 +87,7 @@ possible tasks):
 | task (3 per episode) | `Put the <cube> cube on the <support> cube.` |
 | subtask | `Pick up the <cube> cube.`, `Place it on the <support> cube.` |
 | subtask, recovery | `Set it down.` |
-| subtask, after the last task | `Return home.` (the procedure is the task then) |
+| task and subtask, after the last placement | `Return home.` (the closing task; the procedure is never a task) |
 
 Rest, detours and the final home are the home *joint configuration*
 (`MoveToJointConfiguration`): a 7-DoF arm reaches a pose in many postures and each
@@ -125,7 +126,7 @@ segmentation (`*_instance`, one fixed colour per tracked object, legend in
 `meta/guide_info.json`). Every layer's prompt is recorded:
 
 - each frame's `task` is the GUIDE-EX task under way (`Put the red cube on the blue
-  cube.`); outside every task, the procedure (`Stack the cubes.`);
+  cube.`, then the closing `Return home.`); the procedure is never a task;
 - the subtasks are `style: subtask` rows of the `language_persistent` column, each active
   from its frame until the next;
 - the procedure is a `style: procedure` row there too -- GUIDE's own style, so register it

@@ -29,9 +29,10 @@ def plan(colours) -> dict:
 
     The PROCEDURE is the episode's procedure prompt; each placement is a TASK ("Put the red
     cube on the blue cube.") whose SUBTASKs are the pick and the place, with a set-down for
-    the recovery that puts an undeliverable cube back; the procedure closes with its own
-    subtask, going home. A subtask says only what it adds to its task: the pick names the
-    cube, the place only where -- whatever is in the gripper -- and the set-down neither.
+    the recovery that puts an undeliverable cube back; a closing TASK goes home, its prompt
+    (``finish``) the same at both levels -- the procedure is never a frame's task. A subtask
+    says only what it adds to its task: the pick names the cube, the place only where --
+    whatever is in the gripper -- and the set-down neither.
     The scene's Randomize reply, the tree and the oracle all read it.
     """
     steps = list(zip(colours, colours[1:]))  # (support, cube) per placement

@@ -1049,8 +1049,9 @@ class SceneOrchestrator(ABC):
             "timestamp": current_step,
             "observation": observation,
             "action": action,
-            # The frame's LeRobot task is the GUIDE-EX task under way; outside every task,
-            # the procedure. The procedure and the subtask go in as language prompts.
+            # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
+            # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
+            # go in as language prompts.
             "task": self.prompts["task"] or self.task,
             "prompts": {"procedure": self.task, "subtask": self.prompts["subtask"]},
         }

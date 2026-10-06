@@ -4,7 +4,8 @@ The scene draws the tower's order; the tree is built for it each episode, its la
 GUIDE-EX means them -- the procedure is the long-horizon workflow, each placement one
 TASK with a success criterion, the pick and the place its SUBTASKs. Every TASK and
 SUBTASK announces its prompt at its level, so the dataset carries all three: the
-procedure as the episode's task, then the task and the subtask each frame was part of.
+procedure beside every frame, then the task and the subtask each frame was part of. The
+procedure is never a frame's task: after the last placement a closing TASK takes over.
 
     StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
       Unclutch, LocateScene, AnnounceFirst (task + subtask), StartRecording,
@@ -12,8 +13,10 @@ procedure as the episode's task, then the task and the subtask each frame was pa
       -> BuildTower (PROCEDURE, loop until the tower is done)
            NextCube (TASK, condition: done?)
              MeasureTower, TowerHeight (ChainLength)   -> done, built
-             done -> Finish (SUBTASK "Return home.")
-                       GoHome, CheckSuccess, StopRecording (saved only on success)
+             done -> Finish (TASK "Return home.")
+                       AnnounceFinish (task + subtask)
+                       GoHome (SUBTASK "Return home."): MoveHome, WaitForTower
+                       CheckSuccess, StopRecording (saved only on success)
              else -> PutOn (TASK "Put the red cube on the blue cube.")
                        NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                        AnnounceTask, LocateCube (SEQUENCE)
@@ -391,15 +394,20 @@ def build_tree(robot, plan):
     )
 
     recording = keys("robot", "sim_namespace", "scene_id")
-    # Outside every task: the procedure takes the task level back and goes home.
+    # The closing TASK: once the tower stands, go home and let the scene judge it. The
+    # procedure is never a task, so this one has its own prompt, as its one subtask does.
     finish = CompositeNode(
         name="Finish",
-        level=Layer.SUBTASK,
-        dynamic_map=keys("robot", "sim_namespace", "scene_id", "procedure", "finish"),
+        level=Layer.TASK,
+        dynamic_map=keys("robot", "sim_namespace", "scene_id", "finish"),
         children=[
-            announce("AnnounceFinish", task_key="procedure", subtask_key="finish"),
-            home("MoveHome"),
-            WaitForSeconds(alias="WaitForTower", static_args={"seconds": 2.0}),
+            announce("AnnounceFinish", task_key="finish", subtask_key="finish"),
+            CompositeNode(
+                name="GoHome",
+                level=Layer.SUBTASK,
+                dynamic_map=keys("robot"),
+                children=[home("MoveHome"), WaitForSeconds(alias="WaitForTower", static_args={"seconds": 2.0})],
+            ),
             IsTaskSuccessful(
                 alias="CheckSuccess",
                 dynamic_map=recording,
@@ -415,7 +423,7 @@ def build_tree(robot, plan):
 
     tower_keys = keys(
         *SIM, "scene_id", "robot_prim", "scene_pose_inv", "order",
-        "procedure", "tasks", "picks", "places", "set_downs", "finish",
+        "tasks", "picks", "places", "set_downs", "finish",
     )
     # Route 4: the loop. Each pass measures the tower and stacks the next cube onto the
     # highest one still in place, so a failed placement is just the next pass. A loop of
@@ -513,7 +521,6 @@ def episode_context(robot, sim_namespace, scene_id, plan, path=""):
         ),
         "dataset_path": path,
         "order": plan["order"],
-        "procedure": plan["task"],
         "tasks": plan["tasks"],
         "picks": plan["subtasks"]["pick"],
         "places": plan["subtasks"]["place"],

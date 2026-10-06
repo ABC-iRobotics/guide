@@ -27,7 +27,8 @@ DEFAULT_FPS = 10
 
 
 #: Where each GUIDE-EX layer's prompt is recorded. The TASK's ("Put the red cube on the blue
-#: cube.") is each frame's LeRobot ``task`` -- the PROCEDURE's outside every task. The
+#: cube.") is each frame's LeRobot ``task`` (a tree that announces no task, like block_bin's,
+#: leaves the scene's own prompt there; cube_stack's announces one on every frame). The
 #: PROCEDURE's ("Stack the cubes.") and the SUBTASK's ("Pick up the red cube.") are
 #: ``language_persistent`` styles: ``subtask`` is LeRobot's, ``procedure`` is GUIDE's,
 #: registered with LeRobot by ``register_guide_styles`` wherever it is written or resolved.

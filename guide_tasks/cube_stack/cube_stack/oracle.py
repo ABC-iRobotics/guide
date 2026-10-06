@@ -10,8 +10,8 @@ would be doing, at both layers below the procedure:
 * the SUBTASK: Place once that cube is held and lifted off the table (the demonstration's
   Pick ends with the lift), Pick before. A cube knocked off sends both back.
 
-Once the tower stands, the procedure takes the task level back and the subtask is going
-home -- what the recordings carry. The recovery subtask (setting an undeliverable cube
+Once the tower stands, the closing task and its subtask are both going home -- what the
+recordings carry. The recovery subtask (setting an undeliverable cube
 down) is a decision, not a state, so the oracle never names it. Nothing here moves the arm.
 
 It is the ``oracle`` source of the evaluation's InstructionHolder: it stands in for a
@@ -77,7 +77,7 @@ class SceneOracle:
             standing, next_held = built, out.get("next_held", False)
         self.done = standing == len(self.plan["order"])
         if self.done:
-            return {"task": self.plan["task"], "subtask": self.plan["subtasks"]["finish"]}
+            return {"task": self.plan["subtasks"]["finish"], "subtask": self.plan["subtasks"]["finish"]}
         k = standing - 1  # the placement under way: order[standing] onto order[k]
         lifted = poses[standing].position.to_numpy()[2] - poses[0].position.to_numpy()[2] > CUBE / 2
         role = "place" if next_held and lifted else "pick"

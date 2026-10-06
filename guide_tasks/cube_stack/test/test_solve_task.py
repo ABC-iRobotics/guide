@@ -159,7 +159,7 @@ def test_builds_the_tower_announcing_each_layer(world):
     assert world.prompts == [
         ("task", tasks[0]), ("subtask", sub["pick"][0]),  # before the first frame
         *placements,
-        ("task", "Stack the cubes."), ("subtask", "Return home."),  # the procedure closes
+        ("task", "Return home."), ("subtask", "Return home."),  # the closing task, never the procedure
     ]
 
 
@@ -178,11 +178,11 @@ def test_the_layers_are_guide_exs():
     walk(root)
     L = st.Layer
     assert {k: found[k] for k in ("StackingDemonstration", "BuildTower", "NextCube", "PutOn", "Pick",
-                                  "Place", "Regrasp", "RepickDropped", "Finish", "LocateCube",
+                                  "Place", "Regrasp", "RepickDropped", "Finish", "GoHome", "LocateCube",
                                   "CarryToSupport", "Release")} == {
         "StackingDemonstration": L.PROCEDURE, "BuildTower": L.PROCEDURE, "NextCube": L.TASK,
         "PutOn": L.TASK, "Pick": L.SUBTASK, "Place": L.SUBTASK, "Regrasp": L.SUBTASK,
-        "RepickDropped": L.SUBTASK, "Finish": L.SUBTASK, "LocateCube": L.SEQUENCE,
+        "RepickDropped": L.SUBTASK, "Finish": L.TASK, "GoHome": L.SUBTASK, "LocateCube": L.SEQUENCE,
         "CarryToSupport": L.SEQUENCE, "Release": L.SEQUENCE,
     }
 
@@ -277,4 +277,4 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
     assert carried and all(said == asked for said, asked in carried)
     said = {s for s, _ in carried}
     assert said >= set(drawn["subtasks"]["place"]) and said & set(drawn["subtasks"]["pick"])
-    assert oracle() == {"task": "Stack the cubes.", "subtask": "Return home."} and oracle.done
+    assert oracle() == {"task": "Return home.", "subtask": "Return home."} and oracle.done
