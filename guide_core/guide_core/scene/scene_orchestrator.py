@@ -50,10 +50,6 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
 
 class SceneOrchestrator(ABC):
 
-    # Where SceneManager placed this scene's prim in the world (set_offset); the recorded
-    # end-effector position is taken back into the scene frame with it.
-    _offset = (0.0, 0.0, 0.0)
-
     _config: dict
     _usd_path: str
     bounding_box: dict
@@ -222,8 +218,29 @@ class SceneOrchestrator(ABC):
 
         assert self.origin is not None
 
-    def set_offset(self, offset):
-        self._offset = tuple(float(v) for v in offset)
+    def _named_xform(self, robot_path: str, name: str | None):
+        """XFormPrim view of the prim called `name` under `robot_path` (the robot prim itself
+        for ""), or None (logged) if there is no such prim. None for a None name."""
+        if name is None:
+            return None
+        import omni.usd
+        from isaacsim.core.prims import XFormPrim
+        from pxr import Usd
+
+        stage = omni.usd.get_context().get_stage()
+        path = f"{robot_path}/{name}" if name else robot_path
+        if not stage.GetPrimAtPath(path).IsValid():
+            root = stage.GetPrimAtPath(robot_path)
+            prims = Usd.PrimRange(root) if root.IsValid() else []
+            matches = [p for p in prims if p.GetName() == name]
+            if not matches:
+                self._logger.warning(f"No prim named '{name}' under '{robot_path}'")
+                return None
+            path = str(matches[0].GetPath())
+        view = XFormPrim(prim_paths_expr=path, name=f"{path.replace('/', '_')}_view")
+        view.initialize()
+        self._logger.info(f"Created XFormPrim view for {path}")
+        return view
 
     def create_robot_graphs(self):
         robot_list: List[Dict] = []
@@ -754,6 +771,7 @@ class SceneOrchestrator(ABC):
 
         self.robots_views = {}
         self.ee_views = {}
+        self.base_views = {}
         self.obs_masks = {}  # robot_name -> attr -> { 'indices': [], 'keys': [] }
         self.act_masks = {}  # robot_name -> attr -> { 'indices': [], 'keys': [] }
 
@@ -799,60 +817,14 @@ class SceneOrchestrator(ABC):
                 self.robots_views[r_name] = view
                 self._logger.info(f"Robot view '{r_name}': dof_names={view.dof_names}")
 
-                # Setup end-effector view if configured
-                ee_name = robot_cfg.get("end_effector_name")
-                if ee_name:
-                    import omni.usd
-
-                    # The old batched XFormPrimView is isaacsim.core.prims.XFormPrim
-                    # (also matches multiple prims via prim_paths_expr).
-                    from isaacsim.core.prims import XFormPrim
-
-                    stage = omni.usd.get_context().get_stage()
-
-                    # Try direct path first
-                    ee_path = f"{prim_path}/{ee_name}"
-                    actual_ee_path = None
-
-                    if stage.GetPrimAtPath(ee_path).IsValid():
-                        actual_ee_path = ee_path
-                    else:
-                        # Fallback: search the stage for a prim with this name under the robot root
-                        robot_prim = stage.GetPrimAtPath(prim_path)
-                        if robot_prim.IsValid():
-                            from pxr import Usd
-
-                            for prim in Usd.PrimRange(robot_prim):
-                                if prim.GetName() == ee_name:
-                                    actual_ee_path = str(prim.GetPath())
-                                    break
-
-                    if actual_ee_path:
-                        try:
-                            ee_view = XFormPrim(
-                                prim_paths_expr=actual_ee_path,
-                                name=f"{r_name}_ee_view_{self._scene_id}",
-                            )
-
-                            # Safely initialize without assuming handles_initialized exists
-                            if hasattr(ee_view, "handles_initialized"):
-                                if not ee_view.handles_initialized:
-                                    ee_view.initialize()
-                            else:
-                                ee_view.initialize()
-
-                            self.ee_views[r_name] = ee_view
-                            self._logger.info(
-                                f"Created XFormPrimView for end_effector: {actual_ee_path}"
-                            )
-                        except Exception as e:
-                            self._logger.warning(
-                                f"Failed to create ee_view for {actual_ee_path}: {e}"
-                            )
-                    else:
-                        self._logger.warning(
-                            f"Could not find any prim matching end_effector_name '{ee_name}' under '{prim_path}'"
-                        )
+                # The end effector, and the base its pose is recorded in (base_name; the
+                # robot prim itself when unset), each as an XFormPrim view.
+                ee_view = self._named_xform(prim_path, robot_cfg.get("end_effector_name"))
+                if ee_view is not None:
+                    self.ee_views[r_name] = ee_view
+                    self.base_views[r_name] = self._named_xform(
+                        prim_path, robot_cfg.get("base_name")
+                    ) or self._named_xform(prim_path, "")
 
         def find_dof_index(dof_names, j_name):
             """Find DOF index by exact match or suffix match (e.g. 'joint1' matches 'fr3_joint1')."""
@@ -1004,16 +976,12 @@ class SceneOrchestrator(ABC):
                         curr_pos = curr_pos[0]
                         curr_rot = curr_rot[0]
 
-                    # Into the scene frame: SceneManager parks Scene_i at -origin plus a y
-                    # stride for scenes after the first, so the world position is a metre up
-                    # (block_bin's origin [0, 0, -1.0]) and, on Scene_1, ten metres along y.
-                    # Scene_i is the robot's parent and MoveIt's planning frame. The deltas
-                    # below are unaffected (a constant cancels) and so is the rotation (the
-                    # offset is a pure translation).
-                    curr_pos = np.asarray(curr_pos, dtype=float) - np.asarray(self._offset)
-
-                    # Isaac Sim quaternions are usually [w, x, y, z]
-                    r_curr = R.from_quat([curr_rot[1], curr_rot[2], curr_rot[3], curr_rot[0]])
+                    # In the robot's base frame, wherever the scene or the robot sits in the
+                    # world (Isaac quaternions are [w, x, y, z]).
+                    base_pos, base_rot = self.base_views[cartesian_robot].get_world_poses()
+                    r_base = R.from_quat(np.asarray(base_rot).reshape(-1, 4)[0], scalar_first=True)
+                    curr_pos = r_base.inv().apply(np.asarray(curr_pos, float) - np.ravel(base_pos))
+                    r_curr = r_base.inv() * R.from_quat(curr_rot, scalar_first=True)
                     abs_rotvec = r_curr.as_rotvec()
 
                     # Calculate deltas based on last recorded data
@@ -1025,18 +993,15 @@ class SceneOrchestrator(ABC):
                         obs_delta_pos = np.zeros(3)
                         obs_delta_rotvec = np.zeros(3)
                     else:
-                        last_curr_pos, last_curr_rot = self._last_recorded_obs_pose
+                        last_curr_pos, r_last_curr = self._last_recorded_obs_pose
 
                         # Observation Delta (current - last_current)
                         obs_delta_pos = curr_pos - last_curr_pos
-                        r_last_curr = R.from_quat(
-                            [last_curr_rot[1], last_curr_rot[2], last_curr_rot[3], last_curr_rot[0]]
-                        )
                         obs_delta_r = r_curr * r_last_curr.inv()
                         obs_delta_rotvec = obs_delta_r.as_rotvec()
 
                     # Store current for the next step
-                    self._last_recorded_obs_pose = (curr_pos.copy(), curr_rot.copy())
+                    self._last_recorded_obs_pose = (curr_pos.copy(), r_curr)
 
                     # Add absolute pose to observation
                     observation["x"] = float(curr_pos[0])

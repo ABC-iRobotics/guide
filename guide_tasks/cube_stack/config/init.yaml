@@ -25,6 +25,8 @@ robots:
   franka :
     path: '/fr3'
     end_effector_name: 'fr3_hand_tcp'
+    # The recorded end-effector pose (observation.state x..wz) is relative to this prim.
+    base_name: 'fr3_link0'
     default_joint_states:
       - 0.0
       - -0.785398
