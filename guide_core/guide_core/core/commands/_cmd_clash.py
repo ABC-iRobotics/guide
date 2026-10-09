@@ -170,7 +170,7 @@ def _cmd_is_prim_clashing(
             except Exception:
                 target_scope = ""
 
-        res = self._check_bounding_box_collision(
+        res = self._cmd_check_bounding_box_collision(
             prim_path, target_scope, tol, check_containment=False
         )
 
