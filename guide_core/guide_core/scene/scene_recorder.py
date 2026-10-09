@@ -576,10 +576,10 @@ class SceneRecorder(Thread):
         return prov
 
     def _finalize_dataset(self) -> str:
-        written = ""
+        dataset_dir = ""
         if self.dataset is not None:
             dataset_root = self.dataset.root
-            written = str(dataset_root)
+            dataset_dir = str(dataset_root)
             self._logger.info(f"Finalizing dataset at {dataset_root}...")
             self.dataset.finalize()
             self.dataset = None
@@ -629,4 +629,4 @@ class SceneRecorder(Thread):
         self.start_recording_event.clear()
         self.stop_recording_event.set()
         self.idle_event.set()
-        return written
+        return dataset_dir

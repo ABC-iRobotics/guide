@@ -54,6 +54,15 @@ def test_finalizing_reports_the_written_dataset(tmp_path):
     assert r._finalize_dataset() == ""  # nothing recorded since
 
 
+def test_finalizing_with_saved_prompts_still_reports_the_dataset(tmp_path, monkeypatch):
+    r = recorder()
+    r.dataset = SimpleNamespace(root=tmp_path, finalize=lambda: None)
+    r._saved_language = {0: {"task": "t"}}
+    monkeypatch.setattr("guide_core.scene.scene_recorder.write_language", lambda *a, **k: True)
+
+    assert r._finalize_dataset() == str(tmp_path)
+
+
 def test_the_recorder_thread_reports_every_finalize(monkeypatch):
     r = recorder()
     monkeypatch.setattr(r, "_attach_file_log", lambda: None)  # no log file in ~/.ros
