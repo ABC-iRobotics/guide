@@ -108,11 +108,27 @@ def test_shutdown_finalizes_every_scene_and_says_what_it_wrote(isaac_import):
     me = SimpleNamespace(
         _scenes=[SimpleNamespace(state=None, recorder=r) for r in recorders],
         _locks=[threading.Lock(), threading.Lock()],
+        _logger=MagicMock(),
     )
     me.wait_finalized = MethodType(manager.wait_finalized, me)
 
     assert manager.finalize_all_recordings(me) == [(0, "/scratch/d0"), (1, "")]
     assert recorders[0].controls == ["clear", "SHUTDOWN"]
+
+
+def test_shutdown_warns_about_a_dataset_it_could_not_wait_for(isaac_import):
+    manager = isaac_import("guide_core.scene.scene_manager").SceneManager
+    recorders = [FakeRecorder("/scratch/d0"), FakeRecorder(None)]
+    me = SimpleNamespace(
+        _scenes=[SimpleNamespace(state=None, recorder=r) for r in recorders],
+        _locks=[threading.Lock(), threading.Lock()],
+        _logger=MagicMock(),
+    )
+    me.wait_finalized = MethodType(manager.wait_finalized, me)
+
+    assert manager.finalize_all_recordings(me) == [(0, "/scratch/d0")]
+    (warning,) = me._logger.warning.call_args_list
+    assert "1" in warning.args[0] and "cut off" in warning.args[0]
 
 
 def ros_class(isaac_import):
@@ -220,3 +236,28 @@ def test_the_loop_leaves_as_soon_as_a_command_shut_isaac_down(isaac_import):
     runtime.IsaacSimRuntime.run_loop(me)
 
     me._gate_render.assert_not_called()  # Isaac is closed: touch nothing more
+
+
+def test_shutdown_still_closes_isaac_when_finalizing_fails(isaac_import, monkeypatch):
+    module = isaac_import("guide_core.ros.guide_ros")
+    order = []
+    monkeypatch.setattr(module.rclpy, "try_shutdown", lambda: order.append("ros"))
+
+    def broken():
+        raise AttributeError("recorder is None")
+
+    me = SimpleNamespace(
+        _backend=SimpleNamespace(
+            _scene_manager=SimpleNamespace(finalize_all_recordings=broken),
+            call=lambda name, timeout=None: order.append(name),
+        ),
+        _logger=MagicMock(),
+        _tasks=None,
+        _shutdown_lock=threading.Lock(),
+        _shutting_down=False,
+    )
+
+    module.GUIDEROS2Interface.shutdown(me)
+
+    assert order == ["shutdown", "ros"]
+    me._logger.error.assert_called_once()

@@ -100,3 +100,18 @@ def test_the_end_effector_is_recorded_relative_to_the_robot_base(isaac_import):
 
     assert np.allclose([obs[k] for k in ("x", "y", "z")], [0.4, 0.0, 0.4])
     assert np.allclose([obs[k] for k in ("wx", "wy", "wz")], 0.0, atol=1e-9)
+
+
+def test_shutdown_closes_isaac_even_when_stopping_fails(command_module):
+    stage = command_module("_cmd_stage")
+    h = host(
+        state=IsaacState.ERROR,
+        _cmd_stop=MagicMock(side_effect=RuntimeError("no world")),
+        simulation_app=MagicMock(),
+    )
+
+    with pytest.raises(RuntimeError):
+        stage._cmd_shutdown(h)
+
+    h.simulation_app.close.assert_called_once()
+    assert h.state == IsaacState.UNINITIALIZED

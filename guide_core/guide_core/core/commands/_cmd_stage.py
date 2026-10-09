@@ -77,15 +77,17 @@ def _cmd_stop(self) -> None:
 
 
 def _cmd_shutdown(self) -> None:
-    self._cmd_stop()
+    try:
+        self._cmd_stop()
+    finally:
+        # The main loop only ends once Isaac is closed, even if stopping failed.
+        self.state = SHUTTING_DOWN
 
-    self.state = SHUTTING_DOWN
+        self.simulation_app.close()
+        self._world = None
+        self._stage = None
 
-    self.simulation_app.close()
-    self._world = None
-    self._stage = None
-
-    self.state = UNINITIALIZED
+        self.state = UNINITIALIZED
 
 
 def __setup_stage(self, stage_config, root) -> None:

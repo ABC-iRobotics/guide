@@ -216,11 +216,14 @@ class GUIDEROS2Interface(Node):
                 return
             self._shutting_down = True
         self._logger.info("Shutting down: finalizing every scene...")
-        for scene_id, path in self._backend._scene_manager.finalize_all_recordings():
-            if path:
-                self._announce_finalized(scene_id, path)
-        if self._tasks:
-            self._tasks.shutdown()
+        try:
+            for scene_id, path in self._backend._scene_manager.finalize_all_recordings():
+                if path:
+                    self._announce_finalized(scene_id, path)
+            if self._tasks:
+                self._tasks.shutdown()
+        except Exception as e:  # Isaac must still close and ROS end, or only SIGKILL stops us
+            self._logger.error(f"Shutdown: finalizing or stopping tasks failed: {e}")
         try:
             self._backend.call("shutdown", 60.0)  # closes Isaac; run_runtime_loop returns
         finally:

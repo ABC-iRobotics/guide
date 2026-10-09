@@ -4,6 +4,7 @@ import importlib
 import inspect
 import json
 from pathlib import Path
+import time
 from threading import Lock
 from typing import Any, Dict, List, Tuple
 
@@ -521,8 +522,12 @@ class SceneManager:
         """The dataset the last finalize wrote ("" = nothing recorded), or None on timeout."""
         return self._scenes[scene_id].recorder.wait_finalized(timeout)
 
-    def finalize_all_recordings(self) -> list:
-        """Finalize every scene for shutdown; [(scene_id, dataset dir or "")] of those that finished."""
+    def finalize_all_recordings(self, timeout: float = 120.0) -> list:
+        """Finalize every scene for shutdown; [(scene_id, dataset dir or "")] of those that finished.
+
+        The recorders finalize in parallel, so `timeout` is one shared deadline; a scene still
+        writing at the deadline is logged as cut off and left out.
+        """
         for scene_id in range(len(self._scenes)):
             with self._locks[scene_id]:
                 self._scenes[scene_id].state = SceneState.FINALIZING
@@ -531,7 +536,11 @@ class SceneManager:
                 self._scenes[scene_id].recorder.put_record_data("SHUTDOWN")
                 self._scenes[scene_id].recorder.set_start_recording()
 
+        deadline = time.monotonic() + timeout
         for scene_id in range(len(self._scenes)):
-            self._scenes[scene_id].recorder.wait_shutdown(15.0)
+            self._scenes[scene_id].recorder.wait_shutdown(max(0.0, deadline - time.monotonic()))
         finished = [(i, self.wait_finalized(i, 0)) for i in range(len(self._scenes))]
+        for i, path in finished:
+            if path is None:
+                self._logger.warning(f"Scene {i}: its dataset was cut off by the shutdown.")
         return [(i, path) for i, path in finished if path is not None]
