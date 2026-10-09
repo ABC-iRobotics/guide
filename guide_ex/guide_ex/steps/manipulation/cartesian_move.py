@@ -138,7 +138,6 @@ class MoveWithCartesianVelocity(BaseNode):
                 )
                 if success:
                     break
-            success = robot.send_action(action=twist_msg, cartesian=True, wait_for_execution=False)
             # Nothing here times the motion or stops it after the command is sent.
         else:
             robot.send_action(velocity_command)
