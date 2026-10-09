@@ -3,22 +3,17 @@
 Deferred work, newest first. Feature-specific lists live next to their design notes
 (e.g. [docs/design/zoned-randomization-todo.md](docs/design/zoned-randomization-todo.md)).
 
-## Record each robot's data relative to its own base
+## Several robots in one scene, each with its own base
 
-**Now:** the recorder stores the end-effector pose in the **scene frame**: the world pose minus
-the scene's placement (`SceneOrchestrator.record_step`, `_offset` from
-`SceneManager.add_scene`). The FR3 base sits at about (-0.307, 0.000, 0.013) in that frame
-(the launch places it at `xyz="-0.3 0 0"` under `Scene_i`).
+**Now:** the recorder writes one cartesian robot per scene (`dataset.cartesian_velocity_robot`,
+else the first robot with an end effector): `observation.state` x..wz is its end effector as
+its own base sees it (`robots.<name>.base_name`, `SceneOrchestrator.record_step`).
 
-**Wanted:** the origin of each robot's data is **that robot's base** (`fr3_link0`); with
-several robots in a scene, each one's data is relative to its own base.
+**Wanted:** every robot in a scene recorded the same way, each relative to its own base.
 
 Notes for whoever implements it:
-- Express the pose in the base frame with the full transform (rotation too), not a
-  translation: a second robot may be mounted rotated. Rotate the deltas (`action` x..wz)
-  into the same frame.
-- `record_step` records one cartesian robot (`dataset.cartesian_velocity_robot`); several
-  robots need per-robot feature names (e.g. `<robot>.x`).
-- Read the base pose from the articulation root at registration, once per robot, and write it
-  into `guide_info.json` so the frame is documented in the dataset.
-- Inference must use the same frame (block_bin_eval's `BASE_OFFSET` assumes the scene frame).
+- Per-robot feature names (e.g. `<robot>.x` … `<robot>.wz`) in `observation.state` and
+  `action`, and per-robot `_last_recorded_obs_pose` for the deltas.
+- `base_views` / `ee_views` are already per robot; `record_step` picks only one of them.
+- Inference must read each robot's pose in its own base frame (block_bin_eval's
+  `BASE_OFFSET` still assumes the scene frame of the datasets recorded before this change).
