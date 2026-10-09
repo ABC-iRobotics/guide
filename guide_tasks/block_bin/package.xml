@@ -11,6 +11,7 @@
   <depend>guide_ex</depend>
   <depend>guide_msgs</depend>
   <depend>irob_lerobot_ros</depend>
+  <exec_depend>franka_fr3_moveit_config</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
