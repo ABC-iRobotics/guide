@@ -251,7 +251,10 @@ class SceneRecorder(Thread):
         try:
             while not self.stop_flag.is_set():
                 self._logger.info("Writer loop waiting for start recording event...")
-                self.start_recording_event.wait()
+                # Wake for a queued item too: a FINALIZE still writing clears the start event
+                # that a SHUTDOWN queued meanwhile set, which would leave it waiting forever.
+                while not self.start_recording_event.wait(1.0) and self.record_queue.empty():
+                    pass
                 if self.stop_flag.is_set():
                     self._logger.info("Stop flag set. Breaking writer loop.")
                     break

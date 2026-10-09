@@ -90,8 +90,8 @@ class GUIDEROS2Interface(Node):
         self._backend = backend
         # Fetches, builds and launches tasks for Register (guide_core.ros.task_bringup).
         self._tasks = tasks
-        self._shutdown_lock = Lock()
-        self._shutting_down = False
+        self._shutdown_lock = Lock()  # taken once, never released: shutdown runs once
+        self._announced = set()  # dataset dirs already on dataset_finalized
 
         self._has_clock = False
         self._reentrant_group = ReentrantCallbackGroup()
@@ -212,10 +212,8 @@ class GUIDEROS2Interface(Node):
     def shutdown(self) -> None:
         """The one way this simulator stops -- /shutdown, Ctrl-C and SIGTERM alike: finalize
         every scene (announcing what was written), stop the task launches, close Isaac, end ROS."""
-        with self._shutdown_lock:
-            if self._shutting_down:
-                return
-            self._shutting_down = True
+        if not self._shutdown_lock.acquire(blocking=False):
+            return
         self._logger.info("Shutting down: finalizing every scene...")
         try:
             for scene_id, path in self._backend._scene_manager.finalize_all_recordings():
@@ -226,7 +224,9 @@ class GUIDEROS2Interface(Node):
         except Exception as e:  # Isaac must still close and ROS end, or only SIGKILL stops us
             self._logger.error(f"Shutdown: finalizing or stopping tasks failed: {e}")
         try:
-            self._backend.call("shutdown", 60.0)  # closes Isaac; run_runtime_loop returns
+            # Closes Isaac, which under the default fast_shutdown ends the process there and then;
+            # try_shutdown only runs when close() returns (fast_shutdown off, or close failing).
+            self._backend.call("shutdown", 60.0)
         finally:
             rclpy.try_shutdown()
 
@@ -239,6 +239,10 @@ class GUIDEROS2Interface(Node):
         return response
 
     def _announce_finalized(self, scene_id: int, path: str) -> None:
+        if path in self._announced:
+            return
+        if path:  # "nothing recorded" is announced every time
+            self._announced.add(path)
         self._finalized_pub.publish(String(data=json.dumps({"scene": scene_id, "path": path})))
 
     def _randomize_callback(

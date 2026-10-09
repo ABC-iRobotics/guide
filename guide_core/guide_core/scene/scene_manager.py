@@ -3,8 +3,8 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Tuple
 
@@ -12,6 +12,9 @@ from guide_core.core.runtime import IsaacSimRuntime
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
 from guide_core.scene.scene_recorder import DEFAULT_FPS
 from guide_core.types.scene_state import SceneState
+
+# Shutdown waits this long for every scene's dataset, inside the container's 180 s stop grace.
+SHUTDOWN_FINALIZE_S = 120.0
 
 
 class SceneManager:
@@ -23,6 +26,7 @@ class SceneManager:
         self._locks = {}
         self._sim_id = sim_id
         self._logger = logger
+        self._shutting_down = False
 
     def get_scene_usd_path(self, scene_id: int):
         scene = self._scenes[scene_id]
@@ -512,6 +516,8 @@ class SceneManager:
 
     def finalize_recording(self, scene_id: int):
         with self._locks[scene_id]:
+            if self._shutting_down:
+                raise RuntimeError("shutting down: finalize_all_recordings owns the datasets")
             self._scenes[scene_id].state = SceneState.FINALIZING
             self._scenes[scene_id].recorder.clear_stop_recording()
             self._scenes[scene_id].recorder.clear_finalized()
@@ -522,12 +528,13 @@ class SceneManager:
         """The dataset the last finalize wrote ("" = nothing recorded), or None on timeout."""
         return self._scenes[scene_id].recorder.wait_finalized(timeout)
 
-    def finalize_all_recordings(self, timeout: float = 120.0) -> list:
+    def finalize_all_recordings(self) -> list:
         """Finalize every scene for shutdown; [(scene_id, dataset dir or "")] of those that finished.
 
-        The recorders finalize in parallel, so `timeout` is one shared deadline; a scene still
-        writing at the deadline is logged as cut off and left out.
+        The recorders finalize in parallel, so SHUTDOWN_FINALIZE_S is one shared deadline; a
+        scene still writing at the deadline is logged as cut off and left out.
         """
+        self._shutting_down = True  # a solver's finalize_recording would clear our finalized events
         for scene_id in range(len(self._scenes)):
             with self._locks[scene_id]:
                 self._scenes[scene_id].state = SceneState.FINALIZING
@@ -536,7 +543,7 @@ class SceneManager:
                 self._scenes[scene_id].recorder.put_record_data("SHUTDOWN")
                 self._scenes[scene_id].recorder.set_start_recording()
 
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + SHUTDOWN_FINALIZE_S
         for scene_id in range(len(self._scenes)):
             self._scenes[scene_id].recorder.wait_shutdown(max(0.0, deadline - time.monotonic()))
         finished = [(i, self.wait_finalized(i, 0)) for i in range(len(self._scenes))]

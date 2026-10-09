@@ -79,6 +79,20 @@ def test_the_recorder_thread_reports_every_finalize(monkeypatch):
     assert r.wait_shutdown(10)
 
 
+def test_a_shutdown_queued_after_a_finalize_is_not_lost(monkeypatch):
+    # The FINALIZE's tail clears the start event a SHUTDOWN queued meanwhile relied on.
+    r = recorder()
+    monkeypatch.setattr(r, "_attach_file_log", lambda: None)
+    r.start()
+    r.put_record_data("FINALIZE")
+    r.set_start_recording()
+    assert r.wait_finalized(10) == ""
+
+    r.put_record_data("SHUTDOWN")  # start_recording_event left clear
+
+    assert r.wait_shutdown(5)
+
+
 class FakeRecorder:
     def __init__(self, path):
         self.path, self.controls = path, []
@@ -129,6 +143,20 @@ def test_shutdown_warns_about_a_dataset_it_could_not_wait_for(isaac_import):
     assert manager.finalize_all_recordings(me) == [(0, "/scratch/d0")]
     (warning,) = me._logger.warning.call_args_list
     assert "1" in warning.args[0] and "cut off" in warning.args[0]
+
+
+def test_no_solver_finalizes_once_shutdown_owns_the_datasets(isaac_import):
+    manager = isaac_import("guide_core.scene.scene_manager").SceneManager
+    recorder = FakeRecorder("/scratch/d0")
+    me = SimpleNamespace(
+        _scenes=[SimpleNamespace(state=None, recorder=recorder)], _locks=[threading.Lock()], _logger=MagicMock(),
+    )
+    me.wait_finalized = MethodType(manager.wait_finalized, me)
+    manager.finalize_all_recordings(me)
+
+    with pytest.raises(RuntimeError, match="shutting down"):
+        manager.finalize_recording(me, 0)
+    assert recorder.controls == ["clear", "SHUTDOWN"]  # its finalized event untouched
 
 
 def ros_class(isaac_import):
@@ -240,11 +268,22 @@ def test_a_recorder_that_never_finishes_fails_finalize(isaac_import):
 
 def test_announcements_are_json_with_scene_and_path(isaac_import):
     published = []
-    me = SimpleNamespace(_finalized_pub=SimpleNamespace(publish=published.append))
+    me = SimpleNamespace(_finalized_pub=SimpleNamespace(publish=published.append), _announced=set())
 
     ros_class(isaac_import)._announce_finalized(me, 1, "/s/d2")
 
     assert json.loads(published[0].data) == {"scene": 1, "path": "/s/d2"}
+
+
+def test_a_dataset_is_announced_once_and_nothing_recorded_every_time(isaac_import):
+    published = []
+    me = SimpleNamespace(_finalized_pub=SimpleNamespace(publish=published.append), _announced=set())
+    announce = ros_class(isaac_import)._announce_finalized
+
+    for path in ("/s/d2", "/s/d2", "", ""):
+        announce(me, 1, path)
+
+    assert [json.loads(m.data)["path"] for m in published] == ["/s/d2", "", ""]
 
 
 def test_shutdown_runs_once_finalize_announce_tasks_isaac_ros(isaac_import, monkeypatch):
@@ -259,7 +298,6 @@ def test_shutdown_runs_once_finalize_announce_tasks_isaac_ros(isaac_import, monk
         _logger=MagicMock(),
         _tasks=SimpleNamespace(shutdown=lambda: order.append("tasks")),
         _shutdown_lock=threading.Lock(),
-        _shutting_down=False,
         _announce_finalized=lambda i, p: order.append(("announce", i, p)),
     )
 
@@ -307,7 +345,6 @@ def test_shutdown_still_closes_isaac_when_finalizing_fails(isaac_import, monkeyp
         _logger=MagicMock(),
         _tasks=None,
         _shutdown_lock=threading.Lock(),
-        _shutting_down=False,
     )
 
     module.GUIDEROS2Interface.shutdown(me)

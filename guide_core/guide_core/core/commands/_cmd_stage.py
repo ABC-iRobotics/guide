@@ -80,7 +80,9 @@ def _cmd_shutdown(self) -> None:
     try:
         self._cmd_stop()
     finally:
-        # The main loop only ends once Isaac is closed, even if stopping failed.
+        # Close Isaac even if stopping failed. With SimulationApp's default fast_shutdown, Kit
+        # ends the process inside close(): the lines after it (and run_loop's break) only run
+        # when close() returns (fast_shutdown off, or close failing).
         self.state = SHUTTING_DOWN
 
         self.simulation_app.close()
