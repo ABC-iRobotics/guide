@@ -60,28 +60,3 @@ class MoveToJointConfiguration(BaseNode):
         return ExecutionResult(
             status=DemoStatus.PERFECT,
         )
-
-
-# TODO: Implement MoveToJointTrajectory with similar structure, but handling trajectory format and execution logic
-class MoveToJointTrajectory(BaseNode):
-    level = Layer.STEP
-
-    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("JointTrajectoryMove", alias, dynamic_map, static_args, output_map)
-
-    def run(self, robot: Robot, trajectory: Dict[str, list], speed: float = 1.0) -> ExecutionResult:
-        """
-        Executes a joint trajectory move following the specified trajectory at the given speed.
-
-        Args:
-            trajectory (Dict[str, list]): A dictionary mapping joint names to lists of target positions over time.
-            speed (float): The speed at which to execute the move (default: 1.0).
-        Returns:
-            ExecutionResult: The result of the move execution.
-        """
-        # Implementation would be similar to MoveToJointConfiguration but would need to handle the trajectory format
-        # and ensure that the robot's action type is set to JOINT_TRAJECTORY. This is a placeholder for now.
-        return ExecutionResult(
-            status=DemoStatus.FAILURE,
-            error_message="Joint trajectory moves are not yet implemented.",
-        )
