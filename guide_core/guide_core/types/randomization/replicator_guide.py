@@ -246,8 +246,8 @@ def fire(
     rep.utils.send_og_event(state["event"])
     # With the orchestrator running, the graph evaluates on every app update. The event is
     # queued and consumed on the *next* evaluation: one update delivers it, the second runs
-    # the randomizers it triggered (verified with scripts/spike_diag.py). orchestrator.step()
-    # would do the same but stalls ~6 s every other call.
+    # the randomizers it triggered (verified with scripts/spike_diag.py, at commit 6f8adb5).
+    # orchestrator.step() would do the same but stalls ~6 s every other call.
     for _ in range(2):
         omni.kit.app.get_app().update()
     t2 = time.perf_counter()

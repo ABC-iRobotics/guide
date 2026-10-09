@@ -2,7 +2,7 @@
 
 Branch `spike/replicator-yaml` (throwaway). Isaac Sim 6.0.1, `omni.replicator.core` 1.13.27,
 `omni.replicator.replicator_yaml` 2.0.12. Headless measurements via
-`guide_core/scripts/spike_replicator.py` (results: `spike_replicator.json`,
+`guide_core/scripts/spike_replicator.py` (removed from the tree; read it at commit 6f8adb5) (results: `spike_replicator.json`,
 `spike_replicator_2scenes.json`, `spike_legacy.json`); the window demo via
 `spike_show.py`; the trigger-latency probe via `spike_diag.py`. Measured 2026-09-14.
 
