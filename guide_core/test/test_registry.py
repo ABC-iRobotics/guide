@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from guide_core.core.registry import attach_cmd_functions
+from guide_core.core._registry import attach_cmd_functions
 
 
 class Host:
