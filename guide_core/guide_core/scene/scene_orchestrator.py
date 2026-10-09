@@ -50,6 +50,10 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
 
 class SceneOrchestrator(ABC):
 
+    # Where SceneManager placed this scene's prim in the world (set_offset); the recorded
+    # end-effector position is taken back into the scene frame with it.
+    _offset = (0.0, 0.0, 0.0)
+
     _config: dict
     _usd_path: str
     bounding_box: dict
@@ -217,6 +221,9 @@ class SceneOrchestrator(ABC):
         self.origin = self._config.get("origin", [0.0, 0.0, 0.0])
 
         assert self.origin is not None
+
+    def set_offset(self, offset):
+        self._offset = tuple(float(v) for v in offset)
 
     def create_robot_graphs(self):
         robot_list: List[Dict] = []
@@ -996,6 +1003,14 @@ class SceneOrchestrator(ABC):
                     if curr_pos.ndim > 1:
                         curr_pos = curr_pos[0]
                         curr_rot = curr_rot[0]
+
+                    # Into the scene frame: SceneManager parks Scene_i at -origin plus a y
+                    # stride for scenes after the first, so the world position is a metre up
+                    # (block_bin's origin [0, 0, -1.0]) and, on Scene_1, ten metres along y.
+                    # Scene_i is the robot's parent and MoveIt's planning frame. The deltas
+                    # below are unaffected (a constant cancels) and so is the rotation (the
+                    # offset is a pure translation).
+                    curr_pos = np.asarray(curr_pos, dtype=float) - np.asarray(self._offset)
 
                     # Isaac Sim quaternions are usually [w, x, y, z]
                     r_curr = R.from_quat([curr_rot[1], curr_rot[2], curr_rot[3], curr_rot[0]])
