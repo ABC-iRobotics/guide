@@ -290,6 +290,24 @@ cube_stack.tar.gz
 | Image | contains NVIDIA Isaac Sim; EULA accepted via `OMNI_KIT_ACCEPT_EULA=YES` | headless start | the team accepts NVIDIA's EULA for each deployment | images stay local / private |
 | Kit | crash reporter off (`init.yaml` `extra_args`) | — | (removed: crash dumps to NVIDIA) | configuration |
 
+**Deferred hardening: running without root** (decided 2026-10-09: keep root for now). Root is
+needed only because Register runs `rosdep install` (apt). Dropping it takes:
+1. Register runs `rosdep check` instead and fails with the missing system packages. That is
+   the same rule outside Docker. A task's system packages then come with the image, or with
+   a task image built `FROM guide:deploy`.
+2. Build and run as `guide` (uid 1000): `sudo` only for the build's apt block, none in deploy;
+   workspace `/home/guide/ros2_ws`.
+3. `guide` owns the venv (pip, Kit's cache and logs), `~/.guide/tasks`, `~/.ros` and
+   `/scratch`. A new named volume inherits the image's ownership.
+4. Host output folders belong to uid 1000 (or a shared group). The `chown` and its row
+   above go away.
+5. The secret is mounted with `uid=1000,mode=0400`.
+6. The service spec sets `--user 1000:1000`.
+
+Cost: a task that needs a new system package needs an image update. Not options with swarm:
+rootless Docker (no overlay networks); `userns-remap` (daemon-wide, untested with the NVIDIA
+runtime). Later still: a read-only root filesystem and `--cap-drop ALL`.
+
 ## 13. Build order
 
 ```mermaid
