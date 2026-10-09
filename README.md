@@ -15,8 +15,11 @@ This repository contains the full GUIDE framework and serves as the main entry p
 - `guide_core`: Core simulation orchestration and ROS 2 bridging.
 - `guide_ex`: Task execution and composite node structure for logic flow.
 - `guide_msgs`: Standardized message interfaces.
-- `guide_tasks`: Contains specific tasks (e.g., `block_bin`).
-- `modules`: Vendored dependencies (e.g., `pymoveit2`, `irob_lerobot_ros`).
+- `guide_tasks`: The demonstration tasks `block_bin` (put a block in a bin) and `cube_stack`
+  (stack the cubes). Policy-evaluation tools for `block_bin` are in the separate
+  `block_bin_eval` package, outside this repository.
+- `modules`: Git-ignored; holds the separately cloned dependencies `pymoveit2` and
+  `irob_lerobot_ros` (see [Installation](#installation), step 2).
 
 ## Prerequisites
 
@@ -44,7 +47,7 @@ git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 **2. Clone GUIDE's vendored modules.** The `.gitmodules` gitlinks are not committed, so
 `--recurse-submodules` pulls nothing; clone them explicitly:
 ```bash
-cd ~/ros2_ws/src/guide/modules
+mkdir -p ~/ros2_ws/src/guide/modules && cd ~/ros2_ws/src/guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
 git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 ```
@@ -54,6 +57,8 @@ git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
 PINS=src/guide/modules/isaac6-safe-pins.txt
+# Constraints protecting Isaac Sim 6.0.1's exact pins (not tracked: modules/ is git-ignored):
+printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
 
 # PyTorch first — match the wheel index to your CUDA version (cu130 shown):
 uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
@@ -81,21 +86,23 @@ source install/setup.bash                 # or setup.zsh
 
 ## Usage
 
-Launch GUIDE from the `guide_core` package. This will start a singleton Isaac Sim instance, 
-and a ROS 2 node that can register new scenes as needed.
+Launch GUIDE from the `guide_core` package. This starts a singleton Isaac Sim instance
+through the `.venv` interpreter (accepting the Isaac EULA automatically) and a ROS 2 node
+that can register new scenes as needed.
 
 ```bash
 ros2 launch guide_core bringup.launch.py
 ```
+> The first launch spends ~2 minutes compiling RTX shaders before the viewport appears.
 
-Launch a task from the `guide_tasks` package. For example, the `block_bin` pick-and-place
-demonstration task (the launch file starts Isaac Sim through the `.venv` interpreter and
-accepts the Isaac EULA automatically):
+Register a task's scene with the simulator, then launch the task from `guide_tasks`. For
+example, the `block_bin` pick-and-place demonstration task (its launch file starts MoveIt and
+the task's solver node, under the `.venv` interpreter, for each scene):
 
 ```bash
+ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin'}"
 ros2 launch block_bin bringup.launch.py
 ```
-> The first launch spends ~2 minutes compiling RTX shaders before the viewport appears.
 
 In a separate terminal, trigger demonstration generation via a ROS 2 service. `path` is the
 directory the dataset is written under (leave empty for the default `~/dataset`); `zones` and
@@ -116,16 +123,26 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
   "{path: '', zones: [-1], counts: [5]}"
 ```
 Counts are *successful* episodes: a failed attempt is discarded and retried, so the episode
-count is exact regardless of the task's success rate. The dataset is saved to
-`<path>/<task>_<timestamp>/` in the LeRobot format.
+count is exact regardless of the task's success rate. The dataset is saved in the LeRobot
+format to `<path>/dataset_<sim id>_<scene id>_<YYYY_MM_DD_HH_MM_SS>/`.
 *(Exact launch commands and service calls depend on the instantiated task configuration.)*
 
 ### Zoned randomization
 
 A task can partition its position-randomization region into a grid of square **zones**, so a
 dataset can be stratified over the workspace instead of sampled uniformly — useful for
-measuring where a policy fails, or for deliberately balancing coverage. Enable it on the
-position spec in the task's `config/randomize.yaml`:
+measuring where a policy fails, or for deliberately balancing coverage. Enable it in the
+task's `config/randomize.yaml`. In the Replicator dialect (both shipped tasks), a `guide.zone`
+node after the group randomizer tiles a named uniform position distribution; `block_bin`'s:
+
+```yaml
+    guide.zone:
+      distribution: blocks_position     # region = that distribution's lower/upper
+      path_pattern: '/blocks/[^/]+$'    # narrowed to the zone target per episode
+      resolution: 0.1                   # 0.1 m cells -> 5 columns x 4 rows = 20 zones
+```
+
+In an instruction-list file, the grid goes on the position spec:
 
 ```yaml
 position:
@@ -138,10 +155,11 @@ position:
     resolution: 0.1     # 0.1 m cells -> 5 columns x 4 rows = 20 zones
 ```
 
-Zones are numbered row-major, 0-indexed from the `(min-x, min-y)` corner. The scene chooses
+Zones are numbered row-major, 0-indexed from the `(min-x, min-y)` corner of the region, in the
+frame the region is given in (for both shipped tasks, the `/blocks` prim's). The scene chooses
 *which* prim gets placed in the requested zone by overriding `zone_target()` (in `block_bin`,
-the color-selected block; the other blocks stay free as disturbances). At most one
-grid-enabled instruction per scene.
+the color-selected block; the other blocks stay free as disturbances). At most one grid
+per scene.
 
 The grid is inert unless a request asks for a zone, so a gridded task still generates ordinary
 free demonstrations exactly as before. See [`docs/design/zoned-randomization.md`](docs/design/zoned-randomization.md)
@@ -152,13 +170,16 @@ for the full design.
 Alongside the LeRobot files, GUIDE writes a reproducibility sidecar into `<dataset>/meta/`:
 
 - `guide_info.json` — run-level constants: master seed, grid layout, curated scene config
-  (robots, cameras, USD asset) and provenance (ROS distro, Python, Isaac Sim and GUIDE versions).
+  (robots, cameras, USD asset) and provenance (ROS distro, Python and Isaac Sim versions, GUIDE
+  commit).
 - `guide_episodes.jsonl` — one line per *saved* episode: its seed, every drawn randomization
   value, the task string, target/goal prims, the zone and its cell bounds, the robot's starting
   joint configuration, and the main object's pose.
 
-Together these let any episode be replayed exactly: feeding a stored record back as the
-randomization injection reproduces the scene verbatim.
+For an instruction-list `randomize.yaml`, feeding a stored record back as the randomization
+injection (`SceneOrchestrator.randomize(inject=...)`) reproduces the scene verbatim. The
+Replicator-dialect files of `block_bin` and `cube_stack` draw their poses inside Replicator,
+which the injection does not reach.
 
 ## Troubleshooting
 
