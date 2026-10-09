@@ -377,14 +377,6 @@ class IsaacSimRuntime:
         self._logger.debug("Importing command functions...")
         attach_cmd_functions(self, debug=self._debug)
 
-    def _check_assets(self) -> None:
-        assert self.state in [INITIALIZING, STOPPED, READY, PAUSED]
-
-        assets_root_path = get_assets_root_path()
-        if assets_root_path is None:
-            carb.log_error("Could not find Isaac Sim assets folder")
-            self.state = ERROR
-
     def _create_world(self) -> None:
         try:
             self._logger.debug("Creating World...")
