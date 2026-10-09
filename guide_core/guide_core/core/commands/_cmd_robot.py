@@ -57,12 +57,15 @@ def _cmd_create_clock(self, namespace: str = "", path: str | None = None) -> Non
     clock._publisher = True
     clock._subscriber = False
 
-    clock._node_namespace = namespace
     if path is not None:
         clock._og_path = path
 
     print("Creating clock")
     _finalize_graph(clock)
+    # make_graph ignores _node_namespace (Isaac 6.0.1), so the clock would stay on /clock.
+    og.Controller.edit(
+        clock._og_path, {og.Controller.Keys.SET_VALUES: [("PublishClock.inputs:nodeNamespace", namespace)]}
+    )
 
 
 def _cmd_create_robot_control(

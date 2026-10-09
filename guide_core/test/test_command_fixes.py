@@ -115,3 +115,23 @@ def test_shutdown_closes_isaac_even_when_stopping_fails(command_module):
 
     h.simulation_app.close.assert_called_once()
     assert h.state == IsaacState.UNINITIALIZED
+
+
+def test_the_clock_publishes_under_the_sim_namespace(command_module, monkeypatch):
+    """Ros2ClockGraph.make_graph ignores _node_namespace, so it is set on PublishClock afterwards."""
+    for name in (
+        "omni.graph", "omni.graph.core", "isaacsim.core.api", "isaacsim.core.api.robots",
+        "isaacsim.core.utils.types", "isaacsim.ros2", "isaacsim.ros2.ui",
+        "isaacsim.ros2.ui.og_rtx_sensors", "isaacsim.ros2.ui.og_utils",
+        "isaacsim.sensors", "isaacsim.sensors.camera",
+    ):
+        monkeypatch.setitem(sys.modules, name, MagicMock())
+    robot = command_module("_cmd_robot")
+    robot._finalize_graph = MagicMock()
+    robot.og = MagicMock()
+
+    robot._cmd_create_clock(host(state=IsaacState.READY), namespace="Sim_3")
+
+    (path, edits), _ = robot.og.Controller.edit.call_args
+    assert path == robot.Ros2ClockGraph.return_value._og_path
+    assert edits[robot.og.Controller.Keys.SET_VALUES] == [("PublishClock.inputs:nodeNamespace", "Sim_3")]
