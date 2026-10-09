@@ -1,8 +1,10 @@
 """Register a task by name, directory or S3 archive: fetch it, build it, launch its bringup."""
 
 import os
+import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,17 +23,23 @@ def make_bundle(root: Path, name="my_task", reqs=False) -> Path:
     return root
 
 
+def installed(prefix: Path, name: str) -> Path:
+    """The share dir of a package installed under prefix, with a bringup launch."""
+    share = prefix / "share" / name
+    (share / "launch").mkdir(parents=True)
+    (share / "launch" / "bringup.launch.py").write_text("")
+    return share
+
+
 @pytest.fixture
 def nothing_installed(monkeypatch):
-    monkeypatch.setattr(tb, "is_installed", lambda name: False)
-    monkeypatch.setattr(tb, "has_bringup", lambda name: True)
+    monkeypatch.setattr(tb, "share_dir", lambda name: None)
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setenv("AMENT_PREFIX_PATH", os.environ.get("AMENT_PREFIX_PATH", ""))
 
 
 def test_an_installed_package_is_used_as_is(monkeypatch, tmp_path):
-    monkeypatch.setattr(tb, "is_installed", lambda name: name == "block_bin")
-    monkeypatch.setattr(tb, "has_bringup", lambda name: True)
+    monkeypatch.setattr(tb, "share_dir", {"block_bin": installed(tmp_path / "opt", "block_bin")}.get)
     ran = []
     assert tb.TaskBringup(0, tmp_path, run=ran.append).prepare("block_bin") == ("block_bin", "block_bin")
     assert ran == []
@@ -42,7 +50,7 @@ def test_a_bundle_is_built_with_its_dependencies(nothing_installed, monkeypatch,
     monkeypatch.setenv("GUIDE_PINS", "/pins.txt")
     ran = []
 
-    assert tb.TaskBringup(0, tmp_path / "work", run=ran.append).prepare(str(bundle)) == ("my_task", "my_task")
+    assert tb.TaskBringup(0, tmp_path / "work", run=ran.append).prepare(str(bundle)) == ("my_task", None)
 
     assert [cmd[:2] for cmd in ran] == [["rosdep", "install"], ["uv", "pip"], ["colcon", "--log-base"]]
     assert ran[1][-2:] == ["-c", "/pins.txt"]
@@ -53,6 +61,42 @@ def test_a_bundle_without_requirements_skips_pip(nothing_installed, tmp_path):
     ran = []
     tb.TaskBringup(0, tmp_path / "work", run=ran.append).prepare(str(make_bundle(tmp_path / "b")))
     assert [cmd[0] for cmd in ran] == ["rosdep", "colcon"]
+
+
+@pytest.mark.parametrize("prefix, built", [("image_install", True), ("work/install", False)])
+def test_a_bundle_is_built_unless_this_overlay_has_it(nothing_installed, monkeypatch, tmp_path, prefix, built):
+    # A copy installed elsewhere (the image's own) is not this bundle's code.
+    monkeypatch.setattr(tb, "share_dir", {"my_task": installed(tmp_path / prefix, "my_task")}.get)
+    ran = []
+
+    reply = tb.TaskBringup(0, tmp_path / "work", run=ran.append).prepare(str(make_bundle(tmp_path / "b")))
+
+    assert reply == ("my_task", "my_task")
+    assert bool(ran) == built
+
+
+def test_a_failed_build_step_says_why():
+    with pytest.raises(RuntimeError, match="boom"):
+        tb._run([sys.executable, "-c", "import sys; sys.exit('boom')"])
+
+
+def test_shutdown_waits_on_one_deadline_and_skips_launches_already_gone(monkeypatch, tmp_path):
+    def gone(pid, sig):
+        raise ProcessLookupError
+
+    def wait(timeout):
+        waits.append(timeout)
+        time.sleep(timeout)
+        raise subprocess.TimeoutExpired("ros2 launch", timeout)
+
+    waits = []
+    monkeypatch.setattr(os, "killpg", gone)
+    tasks = tb.TaskBringup(0, tmp_path)
+    tasks._launches = [SimpleNamespace(pid=1, poll=lambda: None, wait=wait) for _ in range(2)]
+
+    tasks.shutdown(timeout=0.2)
+
+    assert waits[0] == pytest.approx(0.2, abs=0.05) and waits[1] < 0.05
 
 
 def test_a_bundle_holds_at_most_one_task(tmp_path):
@@ -88,7 +132,7 @@ def test_an_s3_bundle_is_downloaded_and_unpacked(nothing_installed, tmp_path):
     work = tmp_path / "work"
     tasks = tb.TaskBringup(0, work, run=lambda cmd: None, s3=FakeS3())
 
-    assert tasks.prepare("s3://tasks/v1/my_task.tar.gz") == ("my_task", "my_task")
+    assert tasks.prepare("s3://tasks/v1/my_task.tar.gz") == ("my_task", None)
     assert (work / "src" / "my_task" / "my_task" / "my_task" / "scene.py").is_file()
 
 
@@ -143,5 +187,5 @@ def test_a_new_s3_bundle_replaces_the_old_one(nothing_installed, tmp_path):
 
     tasks = tb.TaskBringup(0, tmp_path / "work", run=lambda cmd: None, s3=FakeS3())
     tasks.prepare("s3://tasks/my_task.tar.gz")
-    assert tasks.prepare("s3://tasks/my_task.tar.gz") == ("my_task", "my_task")
+    assert tasks.prepare("s3://tasks/my_task.tar.gz") == ("my_task", None)
     assert not (tmp_path / "work" / "src" / "my_task" / "stale.txt").exists()

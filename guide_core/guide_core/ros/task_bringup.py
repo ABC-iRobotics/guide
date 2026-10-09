@@ -13,6 +13,7 @@ which this process and every launch then use.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import shutil
@@ -20,13 +21,16 @@ import signal
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 
 DEFAULT_WORKDIR = Path.home() / ".guide" / "tasks"
 
 
 def _run(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"{cmd[0]} failed: {(result.stderr or result.stdout).strip()[-2000:]}")
 
 
 def split_s3(url: str) -> tuple[str, str]:
@@ -44,20 +48,14 @@ def s3_client():
     return boto3.client("s3", config=Config(s3={"addressing_style": "path"}))
 
 
-def is_installed(name: str) -> bool:
+def share_dir(name: str) -> Path | None:
+    """The installed package's share directory; None if it is not installed."""
     from ament_index_python.packages import get_package_share_directory
 
     try:
-        get_package_share_directory(name)
-        return True
+        return Path(get_package_share_directory(name))
     except (LookupError, ValueError):  # PackageNotFoundError is a KeyError
-        return False
-
-
-def has_bringup(name: str) -> bool:
-    from ament_index_python.packages import get_package_share_directory
-
-    return (Path(get_package_share_directory(name)) / "launch" / "bringup.launch.py").is_file()
+        return None
 
 
 def task_package(bundle: Path) -> str | None:
@@ -85,15 +83,18 @@ class TaskBringup:
 
     def prepare(self, path: str) -> tuple[str, str | None]:
         """What to register, and the package whose bringup can be launched for it (or None)."""
-        if not path.startswith("s3://") and is_installed(path):
-            return path, path if has_bringup(path) else None
-        bundle = self._fetch(path)
-        pkg = task_package(bundle)
-        if pkg is None:
-            return str(bundle), None  # one of GUIDE's own scene layouts: nothing to build
-        if not is_installed(pkg):
-            self._build(bundle, pkg)
-        return pkg, pkg if has_bringup(pkg) else None
+        pkg = path
+        if path.startswith("s3://") or share_dir(path) is None:
+            bundle = self._fetch(path)
+            pkg = task_package(bundle)
+            if pkg is None:
+                return str(bundle), None  # one of GUIDE's own scene layouts: nothing to build
+            share = share_dir(pkg)
+            # Built unless this overlay has it: a copy installed elsewhere (the image's) is not this bundle.
+            if share is None or not share.resolve().is_relative_to(self.install.resolve()):
+                self._build(bundle, pkg)
+        share = share_dir(pkg)
+        return pkg, pkg if share and (share / "launch" / "bringup.launch.py").is_file() else None
 
     def _fetch(self, path: str) -> Path:
         if not path.startswith("s3://"):
@@ -153,9 +154,12 @@ class TaskBringup:
     def shutdown(self, timeout: float = 30.0) -> None:
         for p in self._launches:
             if p.poll() is None:
-                os.killpg(p.pid, signal.SIGINT)
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(p.pid, signal.SIGINT)
+        deadline = time.monotonic() + timeout
         for p in self._launches:
             try:
-                p.wait(timeout)
+                p.wait(max(0.0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
-                os.killpg(p.pid, signal.SIGKILL)
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(p.pid, signal.SIGKILL)
