@@ -124,3 +124,24 @@ def test_launch_quotes_the_package_name(tmp_path):
     assert started[0][2] == (
         "exec ros2 launch 'x; touch /tmp/pwned' bringup.launch.py sim_id:=0 first_scene:=0 num_env:=1"
     )
+
+
+def test_a_new_s3_bundle_replaces_the_old_one(nothing_installed, tmp_path):
+    old = make_bundle(tmp_path / "old")
+    (old / "stale.txt").write_text("from the old version\n")
+    new = make_bundle(tmp_path / "new")
+    archives = []
+    for src in (old, new):
+        archive = tmp_path / f"{src.name}.tar.gz"
+        with tarfile.open(archive, "w:gz") as tar:
+            tar.add(src, arcname=".")
+        archives.append(archive)
+
+    class FakeS3:
+        def download_file(self, bucket, key, dest):
+            Path(dest).write_bytes(archives.pop(0).read_bytes())
+
+    tasks = tb.TaskBringup(0, tmp_path / "work", run=lambda cmd: None, s3=FakeS3())
+    tasks.prepare("s3://tasks/my_task.tar.gz")
+    assert tasks.prepare("s3://tasks/my_task.tar.gz") == ("my_task", "my_task")
+    assert not (tmp_path / "work" / "src" / "my_task" / "stale.txt").exists()

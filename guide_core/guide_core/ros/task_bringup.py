@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -106,6 +107,7 @@ class TaskBringup:
         (self._s3 or s3_client()).download_file(bucket, key, str(archive))
         name = archive.name.removesuffix(".gz").removesuffix(".tar").removesuffix(".tgz")
         bundle = self.workdir / "src" / name
+        shutil.rmtree(bundle, ignore_errors=True)  # a re-register must not keep the old version's files
         with tarfile.open(archive) as tar:
             tar.extractall(bundle, filter="data")  # no absolute paths, no escaping links
         return bundle
