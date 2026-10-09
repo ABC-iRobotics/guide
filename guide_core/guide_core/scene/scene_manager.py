@@ -513,16 +513,25 @@ class SceneManager:
         with self._locks[scene_id]:
             self._scenes[scene_id].state = SceneState.FINALIZING
             self._scenes[scene_id].recorder.clear_stop_recording()
+            self._scenes[scene_id].recorder.clear_finalized()
             self._scenes[scene_id].recorder.put_record_data("FINALIZE")
             self._scenes[scene_id].recorder.set_start_recording()
 
-    def finalize_all_recordings(self):
+    def wait_finalized(self, scene_id: int, timeout=None):
+        """The dataset the last finalize wrote ("" = nothing recorded), or None on timeout."""
+        return self._scenes[scene_id].recorder.wait_finalized(timeout)
+
+    def finalize_all_recordings(self) -> list:
+        """Finalize every scene for shutdown; [(scene_id, dataset dir or "")] of those that finished."""
         for scene_id in range(len(self._scenes)):
             with self._locks[scene_id]:
                 self._scenes[scene_id].state = SceneState.FINALIZING
                 self._scenes[scene_id].recorder.clear_stop_recording()
+                self._scenes[scene_id].recorder.clear_finalized()
                 self._scenes[scene_id].recorder.put_record_data("SHUTDOWN")
                 self._scenes[scene_id].recorder.set_start_recording()
 
         for scene_id in range(len(self._scenes)):
             self._scenes[scene_id].recorder.wait_shutdown(15.0)
+        finished = [(i, self.wait_finalized(i, 0)) for i in range(len(self._scenes))]
+        return [(i, path) for i, path in finished if path is not None]

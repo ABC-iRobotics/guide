@@ -96,6 +96,10 @@ class SceneRecorder(Thread):
         self.idle_event = Event()
         self.stop_flag = Event()
         self.shutdown_event = Event()
+        # Set when a FINALIZE or SHUTDOWN has been written; _finalized_path is that dataset's
+        # directory, "" when nothing was recorded since the previous one.
+        self.finalized_event = Event()
+        self._finalized_path = ""
 
         self.start_recording_event.clear()
         self.stop_recording_event.set()
@@ -196,6 +200,13 @@ class SceneRecorder(Thread):
     def wait_shutdown(self, timeout=None):
         return self.shutdown_event.wait(timeout)
 
+    def clear_finalized(self):
+        self.finalized_event.clear()
+
+    def wait_finalized(self, timeout=None):
+        """The finalized dataset's directory ("" = nothing recorded), or None on timeout."""
+        return self._finalized_path if self.finalized_event.wait(timeout) else None
+
     def _attach_file_log(self):
         """Send this recorder's logs to a file (idempotent, best-effort).
 
@@ -263,13 +274,15 @@ class SceneRecorder(Thread):
                         self._discard_episode()
                     elif item == "FINALIZE":
                         self._logger.info("Received FINALIZE indicator. Finalizing dataset...")
-                        self._finalize_dataset()
+                        self._finalized_path = self._finalize_dataset()
+                        self.finalized_event.set()
                         self.idle_event.set()
                         self.start_recording_event.clear()
                         break
                     elif item == "SHUTDOWN":
                         self._logger.info("Received SHUTDOWN indicator. Finalizing and exiting...")
-                        self._finalize_dataset()
+                        self._finalized_path = self._finalize_dataset()
+                        self.finalized_event.set()
                         self.stop_flag.set()
                         break
                     elif isinstance(item, dict):
@@ -562,9 +575,11 @@ class SceneRecorder(Thread):
             pass
         return prov
 
-    def _finalize_dataset(self):
+    def _finalize_dataset(self) -> str:
+        written = ""
         if self.dataset is not None:
             dataset_root = self.dataset.root
+            written = str(dataset_root)
             self._logger.info(f"Finalizing dataset at {dataset_root}...")
             self.dataset.finalize()
             self.dataset = None
@@ -614,3 +629,4 @@ class SceneRecorder(Thread):
         self.start_recording_event.clear()
         self.stop_recording_event.set()
         self.idle_event.set()
+        return written

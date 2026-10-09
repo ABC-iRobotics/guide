@@ -6,7 +6,6 @@ imported under stubs, and every module imported meanwhile is dropped again after
 (a MagicMock left in sys.modules would follow every later test in the session).
 """
 
-import importlib
 import sys
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
@@ -14,45 +13,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from guide_core.types.isaac_state import IsaacState
-
-STUBBED = (
-    "carb",
-    "pxr",
-    "omni",
-    "omni.physx",
-    "isaacsim",
-    "isaacsim.core",
-    "isaacsim.core.prims",
-    "isaacsim.core.utils",
-    "isaacsim.core.utils.bounds",
-    "isaacsim.core.utils.prims",
-    "isaacsim.core.utils.stage",
-    "isaacsim.storage",
-    "isaacsim.storage.native",
-    "isaacsim.util",
-    "isaacsim.util.clash_detection",
-)
-
-
-@pytest.fixture
-def isaac_import():
-    """``isaac_import("guide_core.x")`` imports a module with Isaac stubbed out."""
-    before = dict(sys.modules)
-
-    def load(name):
-        for stub in STUBBED:
-            sys.modules[stub] = MagicMock()
-        sys.modules.pop(name, None)
-        return importlib.import_module(name)
-
-    yield load
-    # Drop what was imported against the stubs; real libraries (numpy, rclpy) stay.
-    stubbed_roots = {name.split(".")[0] for name in STUBBED} | {"guide_core"}
-    for name in set(sys.modules) - set(before):
-        if name.split(".")[0] in stubbed_roots:
-            del sys.modules[name]
-    sys.modules.update(before)
-
 
 @pytest.fixture
 def command_module(isaac_import):
