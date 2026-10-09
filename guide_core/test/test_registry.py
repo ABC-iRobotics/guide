@@ -44,7 +44,7 @@ def not_a_command(self):
     return "my_task_pkg"
 
 
-def test_attach_cmd_functions_filters_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_attach_cmd_functions_binds_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     pkg_name = _make_pkg(tmp_path)
     monkeypatch.syspath_prepend(str(tmp_path))
 
