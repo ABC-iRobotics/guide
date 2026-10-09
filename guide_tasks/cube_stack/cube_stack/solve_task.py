@@ -598,7 +598,7 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
             robot.callService(
                 robot.finalize_recording,
                 srv.FinalizeRecording.Request(id=scene_id),
-                timeout_sec=600.0,
+                timeout_sec=660.0,  # past GUIDE's own 600 s FINALIZE_TIMEOUT_S, so its answer arrives first
             )
             log.info("Recording dataset finalized.")
         except Exception as e:
