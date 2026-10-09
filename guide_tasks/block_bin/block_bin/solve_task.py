@@ -581,13 +581,13 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
                 attempts = 0
 
         robot.node.get_logger().info("Generation finished. Finalizing recording dataset...")
-        robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
+        robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id), timeout_sec=600.0)
         robot.node.get_logger().info("Recording dataset finalized.")
     except Exception as e:
         robot.node.get_logger().error(f"Error during generation: {e}")
         # Episodes already saved stay unreadable until the dataset is finalized.
         try:
-            robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
+            robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id), timeout_sec=600.0)
         except Exception as finalize_error:
             robot.node.get_logger().error(f"Finalize after abort failed: {finalize_error}")
     finally:
