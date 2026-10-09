@@ -294,8 +294,8 @@ class SceneRecorder(Thread):
         # the generation after generating one dataset"). Seconds make each run unique;
         # guard against an unlikely same-second collision with a numeric suffix.
         timestamp_str = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        # Dataset base dir comes from the StartRecording request's `path` (its parent
-        # directory); an empty string falls back to ~/dataset. `~` is expanded.
+        # The dataset folder is created inside the StartRecording request's `path`; an
+        # empty string falls back to ~/dataset. `~` is expanded.
         base_dir = (
             Path(self._output_path).expanduser() if self._output_path else Path.home() / "dataset"
         )

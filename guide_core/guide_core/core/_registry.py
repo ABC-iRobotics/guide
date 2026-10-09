@@ -76,8 +76,9 @@ def _find_local_commands_package(
 
 def _iter_cmd_modules(package: str, module_prefix: str = "_cmd") -> Iterable[Tuple[str, Any]]:
     """
-    Yield-eli a (module_name, module) párokat a package alatti _cmd* modulokra.
-    Modulnév szerint rendezünk -> determinisztikus.
+    Yield (module_name, module) pairs for the modules under package whose name starts
+    with module_prefix. Sorted by module name -> deterministic. A module that fails to
+    import is printed and skipped.
     """
     try:
         pkg = importlib.import_module(package)
@@ -113,16 +114,24 @@ def attach_cmd_functions(
     debug: bool = False,
 ) -> None:
     """
-    Load commands from commands_package + optional extra packages.
+    Load commands from the host's local commands package + optional extra packages.
+
+    Packages, in load order: ``<host class's package>.<local_subpackage>`` (for
+    IsaacSimRuntime: guide_core.core.commands), then the values of package_map.
 
     Conventions:
-      - Command modules: _cmd_*.py
-      - Command functions: top-level functions not starting with '_' and not '__*'
-        -> attached to the *instance* as self._cmd_<name>(...)
-      - Helper functions: top-level functions named '__*' (and always include self)
-        -> attached to the *class* as private (mangled) method, so self.__helper works
+      - Command modules: _cmd*.py, imported in name order.
+      - Every top-level function defined in such a module (imported names excluded),
+        whatever its name, is bound to the *instance* under that same name.
+      - Commands are named _cmd_<name>(self, ...): the runtime dispatches
+        call("<name>") to self._cmd_<name>.
+      - Helpers ('__*' or '_*') are bound the same way, unmangled; a module-level
+        function is not name-mangled, so self.__helper(...) finds the instance
+        attribute. A helper without self (e.g. _cmd_robot._finalize_graph) is bound
+        too, harmlessly, since its module calls it as a plain function.
 
-    Later packages override earlier ones if overwrite=True.
+    Later packages override earlier ones if overwrite=True; with overwrite=False a
+    name the host already has raises RuntimeError.
     """
 
     def dbg(msg: str) -> None:
@@ -157,10 +166,6 @@ def attach_cmd_functions(
                 # Only functions defined in this module
                 if fn.__module__ != module.__name__:
                     continue
-
-                # Only attach actual command entry-points.
-                # Helpers like "__check_valid_prim" must NOT be bound (they
-                # don't accept self).
 
                 if (not overwrite) and hasattr(host, name):
                     raise RuntimeError(

@@ -357,7 +357,8 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Stopping recording for scene {id}... (Save: {save_episode})")
 
             if self._backend._scene_manager.stop_recording(id, save_episode):
-                # Block until Consumer thread processes Poison Pill
+                # Block until the SceneRecorder thread has saved or discarded the episode
+                # (it sets the stop event on FINALIZE_EPISODE / DISCARD_EPISODE)
                 self._backend._scene_manager.wait_stop_recording_event(id)
                 response.message = "Recording stopped and scene reset successfully."
             else:

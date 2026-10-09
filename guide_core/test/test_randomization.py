@@ -1,7 +1,6 @@
 """Unit tests for guide_core.types.randomization.
 
-Pure-Python (NumPy + SciPy) — runs without Isaac Sim or ROS. Mirrors the test
-plan in SCENE_REPRODUCE_PLAN.md section 7.
+Pure-Python (NumPy + SciPy) — runs without Isaac Sim or ROS.
 """
 
 from __future__ import annotations

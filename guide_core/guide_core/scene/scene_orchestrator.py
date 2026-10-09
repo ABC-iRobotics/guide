@@ -98,7 +98,6 @@ class SceneOrchestrator(ABC):
             self._path = Path(path)
             config_file = Path(f"{path}/{config_path}")
 
-        # with resources.files(package_name).joinpath(config_path).open('r') as f:
         with config_file.open("r") as f:
             self._config = yaml.safe_load(f)
 
@@ -133,8 +132,9 @@ class SceneOrchestrator(ABC):
         # Getting success.yaml (a query; stays on the executor -- see docs/design)
         self.success_instructions = self.parse_instruction(Path(f"{path}/{success_path}"))
 
-        # Single RNG authority for this scene (master seed injected at
-        # registration, else auto from system entropy -- captured + logged).
+        # Single RNG authority for this scene: the ``master_seed`` argument if given
+        # (SceneManager.add_scene passes none), else auto from system entropy --
+        # captured + logged.
         self._seed_tree = SeedTree.create(master_seed)
         self._episode_index = 0
         self._last_context: Optional[SceneContext] = None
@@ -144,7 +144,7 @@ class SceneOrchestrator(ABC):
 
         self.state = SceneState.IDLE
 
-        # Start separate recorder process
+        # Get this scene's recorder from the separate RecorderServer process
         dataset_name = f"dataset_{self._sim_id}_{self._scene_id}"
         from guide_core.core.recorder_manager import RecorderServer
 
@@ -285,10 +285,10 @@ class SceneOrchestrator(ABC):
         separately, which is how a camera could be recorded at one resolution and
         published at another.
 
-        A camera carries up to two streams, ``rgb`` (default on) and ``depth`` (default
-        off). Only ``rgb`` reaches ROS 2; depth is captured in-process by the render
-        product's annotator and only ever lands in the dataset, like the semantic
-        labels. The dataset feature names follow from the pair:
+        A camera carries up to three streams, ``rgb`` (default on), ``depth`` and
+        ``instance`` (both default off). Only ``rgb`` reaches ROS 2; depth and instance
+        segmentation are captured in-process by the render product's annotators and only
+        ever land in the dataset. The rgb and depth feature names follow from the pair:
 
         ======  ======  ==============  ======================
         rgb     depth   rgb feature     depth feature
@@ -298,11 +298,12 @@ class SceneOrchestrator(ABC):
         false   true    --              ``<key>``
         ======  ======  ==============  ======================
 
-        A camera whose only stream is depth keeps the plain key: the suffix is there to
-        keep one camera's two streams apart, not to label the modality. ``<key>`` is the
-        ``dataset.images`` key rather than the camera name -- the two are free to differ,
-        and a camera absent from ``dataset.images`` gets no features at all, because it
-        is published for a live policy but never recorded.
+        ``instance`` follows the same rule: ``<key>_instance`` beside another stream,
+        ``<key>`` alone. A camera whose only stream is depth keeps the plain key: the
+        suffix is there to keep one camera's streams apart, not to label the modality.
+        ``<key>`` is the ``dataset.images`` key rather than the camera name -- the two are
+        free to differ, and a camera absent from ``dataset.images`` gets no features at
+        all, because it is published for a live policy but never recorded.
         """
         # dataset.images is a list of single-entry dicts: {feature key: camera name}.
         feature_key: Dict[str, str] = {}
@@ -466,7 +467,10 @@ class SceneOrchestrator(ABC):
         before the pose draws that place it; then every randomize instruction's
         PoseDist is drawn into a concrete Pose (kwargs['pose']). ``zone`` (>=0)
         restricts the ``zone_target`` prim to that grid cell; everything else is
-        free. If ``inject`` is given, drawn values come from it instead of the RNG.
+        free. Each draw ``inject`` names takes its recorded value instead of the RNG's.
+        A Replicator-dialect randomize file fires last, seeded with the same seed; its
+        named samples are recorded as ``replicator/<name>`` and ``inject`` does not
+        replay them.
         """
         if seed is not None:
             rng, used = self._seed_tree.generator(int(seed))
@@ -573,7 +577,7 @@ class SceneOrchestrator(ABC):
             if not (camera["rgb_feature"] or camera["depth_feature"] or camera["instance_feature"]):
                 continue  # published for a live policy, but not part of the dataset
 
-            # One render product per camera, shared by both annotators: rgb and depth
+            # One render product per camera, shared by its annotators: rgb and depth
             # come off the same RTX pass, so a depth camera costs no extra render.
             res = (camera["width"], camera["height"])
             rp = rep.create.render_product(f"/Scene_{self._scene_id}{camera['camera_path']}", res)
@@ -620,8 +624,9 @@ class SceneOrchestrator(ABC):
         life of the stage, whether or not anything reads it. Three 640x480 RTX passes
         per frame is most of this scene's frame budget, and the recorder consumes them
         ten times a second -- while idle, between episodes, and after a run has
-        finished it consumes them not at all. So they are off unless a capture is
-        actually about to read them (SceneManager.step) or the scene is warming up.
+        finished it consumes them not at all. So gate_render keeps them off except on
+        the frame before a capture (SceneManager.step), while the runtime is not
+        stepping, and for a scene with an instance stream, which renders every frame.
 
         Isaac's own code drives render products this way; see
         ``omni/replicator/core/scripts/annotators.py`` and
@@ -792,8 +797,8 @@ class SceneOrchestrator(ABC):
                 if ee_name:
                     import omni.usd
 
-                    # Isaac Sim 5.x: the batched XFormPrimView was unified into
-                    # XFormPrim (also matches multiple prims via prim_paths_expr).
+                    # The old batched XFormPrimView is isaacsim.core.prims.XFormPrim
+                    # (also matches multiple prims via prim_paths_expr).
                     from isaacsim.core.prims import XFormPrim
 
                     stage = omni.usd.get_context().get_stage()

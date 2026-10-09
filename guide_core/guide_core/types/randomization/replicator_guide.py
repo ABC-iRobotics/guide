@@ -3,11 +3,11 @@
 A task's ``randomize.yaml`` written in Replicator YAML (no ``instructions:`` key) is parsed
 by ``omni.replicator.replicator_yaml`` after the scene's USD is on the stage. Every key in
 that file must resolve to a callable under ``omni.replicator.core``; this module is attached
-as ``rep.guide`` so a task can name ``guide.grid`` and ``guide.axis_angle``.
+as ``rep.guide`` so a task can name ``guide.zone`` and ``guide.axis_angle``.
 
 Per episode the orchestrator seeds Replicator, points the zone randomizer at the scene's
-zone target, fires the trigger event, steps one frame and reads the named distributions'
-samples back into the ``RandomizationRecord``.
+zone target, fires the trigger event, runs two app updates and reads the named
+distributions' samples back into the ``RandomizationRecord``.
 
 Nothing here imports Isaac at module level, so the pure parts are testable.
 """
@@ -111,7 +111,7 @@ def principal_axis(axis) -> int:
 def zone(distribution: str, path_pattern: str, resolution: float = 0.1):
     """Declare the zone grid over a *named* uniform position distribution and re-draw the
     scene's zone target inside its cell. Written inside the trigger block, after the group
-    randomizer, so it evaluates after it; per episode ``draw`` narrows ``path_pattern`` to the
+    randomizer, so it evaluates after it; per episode ``fire`` narrows ``path_pattern`` to the
     target and the bounds to the cell (or the whole region for a free draw)."""
     import omni.graph.core as og
     import omni.replicator.core as rep
@@ -246,7 +246,8 @@ def fire(
     rep.utils.send_og_event(state["event"])
     # With the orchestrator running, the graph evaluates on every app update. The event is
     # queued and consumed on the *next* evaluation: one update delivers it, the second runs
-    # the randomizers it triggered (verified with scripts/spike_diag.py, at commit 6f8adb5).
+    # the randomizers it triggered (verified with guide_core/scripts/spike_diag.py, removed
+    # from the tree; read it at commit 6f8adb5).
     # orchestrator.step() would do the same but stalls ~6 s every other call.
     for _ in range(2):
         omni.kit.app.get_app().update()

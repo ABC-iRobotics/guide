@@ -189,7 +189,8 @@ class IsaacSimRuntime:
         """Creates Isaac Sim instance based on the given startup config. Initializes command queue.
 
         Args:
-            config (dict): Total config. Startup, extensions, commands.
+            config (dict): Total config: ``startup``, ``extensions`` and ``world`` sections.
+                Defaults to guide_core's ``config/init.yaml``.
         """
         self._logger.debug(f"{self.state}")
         assert self.state == UNINITIALIZED
@@ -241,9 +242,10 @@ class IsaacSimRuntime:
                     "Isaac Sim is not available (isaacsim.SimulationApp import failed)."
                 )
             # "cuda:N" -> the active_gpu index SimulationApp wants. Same N nvidia-smi
-            # shows, because CUDA_DEVICE_ORDER is pinned above. Kept single-GPU: these
-            # two cards have no peer access, and Isaac's multi-GPU renderer deadlocks
-            # on them ("Failed to begin render graph ... semaphore timed out").
+            # shows, because Kit numbers cards by PCI bus id too (see above; nothing
+            # pins CUDA_DEVICE_ORDER). Kept single-GPU: these two cards have no peer
+            # access, and Isaac's multi-GPU renderer deadlocks on them ("Failed to
+            # begin render graph ... semaphore timed out").
             render_device = str(startup_config.get("render_device", "")).strip().lower()
             if render_device.startswith("cuda:"):
                 startup_config["active_gpu"] = int(render_device.split(":")[1])
@@ -435,7 +437,8 @@ class IsaacSimRuntime:
     # Stepping interface
     # -------------------------
     def update(self, n: int = 1) -> None:
-        """Updates the application by the given number of steps. If internal state is RUNNING, it also renders.
+        """Ticks the Kit app ``n`` times via ``SimulationApp.update()``, in any state but
+        UNINITIALIZED.
 
         Args:
             n (int, optional): Number of steps. Defaults to 1.

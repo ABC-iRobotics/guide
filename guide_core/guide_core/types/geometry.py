@@ -14,7 +14,7 @@ from guide_core.types import conversion
 # These are PURE values: randomization no longer lives here. Distributions and
 # the single Randomizer (guide_core.types.randomization) own all sampling, which
 # removes the old lazy-resample defect (to_numpy()/to_ros() are deterministic and
-# a value never silently changes between reads). See SCENE_REPRODUCE_PLAN.md.
+# a value never silently changes between reads).
 
 
 def _vec3(arr) -> np.ndarray:

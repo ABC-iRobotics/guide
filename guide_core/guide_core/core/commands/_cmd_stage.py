@@ -24,8 +24,6 @@ def _cmd_clear_world(self) -> None:
     scene.clear()
     scene.add_default_ground_plane()
 
-    # self._scenes = {}
-
 
 def _cmd_add_scene(self, stage_config=None, root: str = "/World") -> None:
 
@@ -39,7 +37,7 @@ def _cmd_add_scene(self, stage_config=None, root: str = "/World") -> None:
         self.update(2)
 
         self._logger.debug("Opening USD stage...")
-        # open_stage + wait loading + returns stage
+        # reference the scene USD under `root` + wait for it to load
         self.__setup_stage(stage_config, root)
 
     except Exception as e:
@@ -51,7 +49,6 @@ def _cmd_add_scene(self, stage_config=None, root: str = "/World") -> None:
 
 
 def _cmd_start(self) -> None:
-    # ? self._sim_enabled.set()
 
     assert self.state in [READY, PAUSED, STOPPED]
 
@@ -66,7 +63,6 @@ def _cmd_add_physics_callback(self, callback_id: str, callback_fn) -> None:
 
 
 def _cmd_pause(self) -> None:
-    # ? self._sim_enabled.clear()
 
     assert self.state is RUNNING
 
@@ -85,12 +81,10 @@ def _cmd_stop(self) -> None:
 
 def _cmd_shutdown(self) -> None:
     self._cmd_stop()
-    # self._stop_evt.set()
 
     self.state = SHUTTING_DOWN
 
     self.simulation_app.close()
-    # self._scenes = {}
     self._world = None
     self._stage = None
 

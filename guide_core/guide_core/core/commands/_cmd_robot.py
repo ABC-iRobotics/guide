@@ -14,7 +14,6 @@ from isaacsim.ros2.ui.og_utils import (
 )
 from isaacsim.sensors.camera import Camera
 
-# from isaacsim.sensors.camera import Camera
 from guide_core.types.geometry import Pose
 from guide_core.types.isaac_state import IsaacState
 
@@ -347,14 +346,11 @@ def _cmd_set_joint(
             self._logger.warning(f"Failed to initialize robot: {e}")
 
     if joint_positions is not None:
-        # robot.set_joint_positions(positions=joint_positions, joint_indices=joint_indices)
         action = ArticulationAction(joint_positions=joint_positions, joint_indices=joint_indices)
         robot.apply_action(action)
     if joint_velocities is not None:
-        # robot.set_joint_velocities(velocities=joint_velocities, joint_indices=joint_indices)
         action = ArticulationAction(joint_velocities=joint_velocities, joint_indices=joint_indices)
         robot.apply_action(action)
     if joint_efforts is not None:
-        # robot.set_joint_efforts(efforts=joint_efforts, joint_indices=joint_indices)
         action = ArticulationAction(joint_efforts=joint_efforts, joint_indices=joint_indices)
         robot.apply_action(action)

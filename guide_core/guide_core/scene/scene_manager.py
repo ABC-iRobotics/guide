@@ -186,7 +186,8 @@ class SceneManager:
 
             err_msg = traceback.format_exc()
             self._logger.error(f"[SceneManager] add_scene FAILED with exception:\n{err_msg}")
-            # Return failure tuple safely over IPC instead of raising, to avoid lock pickling issues in traceback context
+            # Return a failure tuple instead of raising: _cmd_register_scene turns id -1
+            # into a RuntimeError carrying this traceback.
             return (-1, (0.0, 0.0, 0.0), {"error": err_msg})
 
     def import_class_from_path(self, package_path: str, module_file: str, class_name: str):
@@ -452,7 +453,6 @@ class SceneManager:
             # them; record_step drops the frames captured before every stream is warm.
             # Forward the requested dataset base dir to the recorder (empty => ~/dataset).
             self._scenes[scene_id].recorder.set_output_path(path)
-            # self._scenes[scene_id].recorder.clear_start_recording()
             if hasattr(self._scenes[scene_id], "clear_recording_history"):
                 self._scenes[scene_id].clear_recording_history()
 
