@@ -176,3 +176,47 @@ def test_announcements_are_json_with_scene_and_path(isaac_import):
     ros_class(isaac_import)._announce_finalized(me, 1, "/s/d2")
 
     assert json.loads(published[0].data) == {"scene": 1, "path": "/s/d2"}
+
+
+def test_shutdown_runs_once_finalize_announce_tasks_isaac_ros(isaac_import, monkeypatch):
+    module = isaac_import("guide_core.ros.guide_ros")
+    order = []
+    monkeypatch.setattr(module.rclpy, "try_shutdown", lambda: order.append("ros"))
+    scenes = SimpleNamespace(
+        finalize_all_recordings=lambda: order.append("finalize") or [(0, "/s/d0"), (1, "")]
+    )
+    me = SimpleNamespace(
+        _backend=SimpleNamespace(_scene_manager=scenes, call=lambda name, timeout=None: order.append(name)),
+        _logger=MagicMock(),
+        _tasks=SimpleNamespace(shutdown=lambda: order.append("tasks")),
+        _shutdown_lock=threading.Lock(),
+        _shutting_down=False,
+        _announce_finalized=lambda i, p: order.append(("announce", i, p)),
+    )
+
+    module.GUIDEROS2Interface.shutdown(me)
+    module.GUIDEROS2Interface.shutdown(me)  # a second Ctrl-C or request changes nothing
+
+    assert order == ["finalize", ("announce", 0, "/s/d0"), "tasks", "shutdown", "ros"]
+
+
+def test_the_shutdown_service_answers_before_shutting_down(isaac_import):
+    from std_srvs.srv import Trigger
+
+    started = threading.Event()
+    me = SimpleNamespace(shutdown=started.set)
+
+    reply = ros_class(isaac_import)._shutdown_callback(me, Trigger.Request(), Trigger.Response())
+
+    assert reply.success
+    assert started.wait(2)
+
+
+def test_the_loop_leaves_as_soon_as_a_command_shut_isaac_down(isaac_import):
+    runtime = isaac_import("guide_core.core.runtime")
+    me = SimpleNamespace(state=runtime.RUNNING, _gate_render=MagicMock())
+    me._process_commands = lambda max_per_cycle: setattr(me, "state", runtime.UNINITIALIZED)
+
+    runtime.IsaacSimRuntime.run_loop(me)
+
+    me._gate_render.assert_not_called()  # Isaac is closed: touch nothing more

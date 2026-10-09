@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import traceback
-from threading import Thread
+from threading import Lock, Thread
 from typing import Optional
 
 import rclpy
@@ -54,7 +55,9 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallb
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import String
+from std_srvs.srv import Trigger
 
 from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
@@ -74,10 +77,20 @@ FINALIZE_TIMEOUT_S = 600.0
 
 
 class GUIDEROS2Interface(Node):
-    def __init__(self, backend: GUIDESimulator, node_name: Optional[str], namespace: Optional[str]):
+    def __init__(
+        self,
+        backend: GUIDESimulator,
+        node_name: Optional[str],
+        namespace: Optional[str],
+        tasks=None,
+    ):
         super().__init__(node_name=node_name, namespace=namespace)
 
         self._backend = backend
+        # Fetches, builds and launches tasks for Register (guide_core.ros.task_bringup).
+        self._tasks = tasks
+        self._shutdown_lock = Lock()
+        self._shutting_down = False
 
         self._has_clock = False
         self._reentrant_group = ReentrantCallbackGroup()
@@ -186,6 +199,40 @@ class GUIDEROS2Interface(Node):
             "dataset_finalized",
             QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
+
+        # Stop this simulator. Ctrl-C and SIGTERM take the same path (ros_entry_point).
+        self._shutdown_service = self.create_service(
+            srv_type=Trigger,
+            srv_name="shutdown",
+            callback=self._shutdown_callback,
+            callback_group=self._reentrant_group,
+        )
+
+    def shutdown(self) -> None:
+        """The one way this simulator stops -- /shutdown, Ctrl-C and SIGTERM alike: finalize
+        every scene (announcing what was written), stop the task launches, close Isaac, end ROS."""
+        with self._shutdown_lock:
+            if self._shutting_down:
+                return
+            self._shutting_down = True
+        self._logger.info("Shutting down: finalizing every scene...")
+        for scene_id, path in self._backend._scene_manager.finalize_all_recordings():
+            if path:
+                self._announce_finalized(scene_id, path)
+        if self._tasks:
+            self._tasks.shutdown()
+        try:
+            self._backend.call("shutdown", 60.0)  # closes Isaac; run_runtime_loop returns
+        finally:
+            rclpy.try_shutdown()
+
+    def _shutdown_callback(
+        self, request: Trigger.Request, response: Trigger.Response
+    ) -> Trigger.Response:
+        Thread(target=self.shutdown).start()  # answer first: the shutdown ends this node
+        response.success = True
+        response.message = "Shutting down."
+        return response
 
     def _announce_finalized(self, scene_id: int, path: str) -> None:
         self._finalized_pub.publish(String(data=json.dumps({"scene": scene_id, "path": path})))
@@ -445,24 +492,11 @@ class GUIDEROS2Interface(Node):
 
 def launch_ros_interface(node: GUIDEROS2Interface):
     executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        executor.add_node(node)
         executor.spin()
-
-        node.destroy_node()
-        rclpy.shutdown()
-
-    except (KeyboardInterrupt, ExternalShutdownException):
-        node.get_logger().info("Shutting down cleanly... Finalizing all datasets!")
-        try:
-            if hasattr(node, "_backend") and node._backend is not None:
-                if (
-                    hasattr(node._backend, "_scene_manager")
-                    and node._backend._scene_manager is not None
-                ):
-                    node._backend._scene_manager.finalize_all_recordings()
-        except Exception as e:
-            node.get_logger().error(f"Error while finalizing datasets on shutdown: {e}")
+    except ExternalShutdownException:
+        pass  # GUIDEROS2Interface.shutdown ended ROS after finalizing every scene
 
 
 def str2bool(v):
@@ -500,8 +534,10 @@ def ros_entry_point():
     sim.init_runtime(debug=args.debug, logger=None)
     sim.init_scene_manager()
 
-    # 2. Initialize ROS 2
-    rclpy.init(args=None)
+    # 2. Initialize ROS 2. GUIDE handles the signals itself so that Ctrl-C, SIGTERM (docker stop,
+    #    ros2 launch) and /shutdown all take ros_interface.shutdown: rclpy's own handler interrupts
+    #    Isaac's loop mid-frame on SIGINT and never ends it on SIGTERM.
+    rclpy.init(args=None, signal_handler_options=SignalHandlerOptions.NO)
 
     ros_interface = GUIDEROS2Interface(sim, node_name="GUIDE", namespace=NAMESPACE)
 
@@ -517,6 +553,9 @@ def ros_entry_point():
     sim._logger = backend_logger
     sim._runtime._logger = backend_logger
     sim._scene_manager._logger = backend_logger
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: Thread(target=ros_interface.shutdown).start())
 
     ros_t = Thread(target=launch_ros_interface, args=(ros_interface,))
     ros_t.start()
