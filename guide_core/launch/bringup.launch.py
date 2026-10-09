@@ -49,7 +49,7 @@ def generate_launch_description():
                 "for policy evaluation; during demonstration generation it is pure cost "
                 "-- a second render product per camera plus ~166 MB/s of raw images over "
                 "localhost DDS that nothing reads. Read by create_camera_graphs, where it "
-                "overrides the task's publish_camera_topics.",
+                "turns topics on even when the task's publish_camera_topics is false.",
             ),
             DeclareLaunchArgument(
                 "python_executable",

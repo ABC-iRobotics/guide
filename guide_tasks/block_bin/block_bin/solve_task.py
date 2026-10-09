@@ -580,7 +580,7 @@ def generate_demos_thread(plan, scene_id, robot, path=""):
                 idx += 1
                 attempts = 0
 
-        robot.node.get_logger().info("Test completed. Finalizing recording dataset...")
+        robot.node.get_logger().info("Generation finished. Finalizing recording dataset...")
         robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
         robot.node.get_logger().info("Recording dataset finalized.")
     except Exception as e:
@@ -623,7 +623,7 @@ def handle_generate_demonstration(request, response, scene_id, robot):
 def main():
     # Create a robot configuration
     argparser = argparse.ArgumentParser(
-        description="Test ROS2Robot connection and action execution."
+        description="block_bin demonstration generator."
     )
     argparser.add_argument("--namespace", type=str, default="")
     args = argparser.parse_known_args()
