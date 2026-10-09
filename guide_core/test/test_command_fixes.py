@@ -1,9 +1,9 @@
-"""Runtime command functions, run against a fake host with Isaac stubbed out.
+"""Runtime commands and service replies, run against fakes with Isaac stubbed out.
 
 Each test pins one defect that used to slip through because the code path needs a
-running simulator to reach. The command modules import Isaac at module level, so they
-are imported under stubs that are removed again afterwards (a MagicMock left in
-sys.modules would follow every later test in the session).
+running simulator to reach. These modules import Isaac at module level, so they are
+imported under stubs, and every module imported meanwhile is dropped again afterwards
+(a MagicMock left in sys.modules would follow every later test in the session).
 """
 
 import importlib
@@ -35,27 +35,29 @@ STUBBED = (
 
 
 @pytest.fixture
-def command_module():
-    """``command_module("_cmd_x")`` imports guide_core.core.commands._cmd_x under stubs."""
-    saved = {name: sys.modules.get(name) for name in STUBBED}
-    loaded = []
+def isaac_import():
+    """``isaac_import("guide_core.x")`` imports a module with Isaac stubbed out."""
+    before = dict(sys.modules)
 
     def load(name):
         for stub in STUBBED:
             sys.modules[stub] = MagicMock()
-        full = f"guide_core.core.commands.{name}"
-        sys.modules.pop(full, None)
-        loaded.append(full)
-        return importlib.import_module(full)
+        sys.modules.pop(name, None)
+        return importlib.import_module(name)
 
     yield load
-    for name in loaded:
-        sys.modules.pop(name, None)
-    for name, module in saved.items():
-        if module is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = module
+    # Drop what was imported against the stubs; real libraries (numpy, rclpy) stay.
+    stubbed_roots = {name.split(".")[0] for name in STUBBED} | {"guide_core"}
+    for name in set(sys.modules) - set(before):
+        if name.split(".")[0] in stubbed_roots:
+            del sys.modules[name]
+    sys.modules.update(before)
+
+
+@pytest.fixture
+def command_module(isaac_import):
+    """``command_module("_cmd_x")`` imports guide_core.core.commands._cmd_x under stubs."""
+    return lambda name: isaac_import(f"guide_core.core.commands.{name}")
 
 
 def host(**attrs):
@@ -94,3 +96,25 @@ def test_a_missing_scene_usd_fails_add_scene(command_module):
     with pytest.raises(FileNotFoundError):
         stage._cmd_add_scene(h, {"usd_path_absolute": "/nowhere/block_bin.usd"}, "/Scene_0")
     assert h.state == IsaacState.ERROR
+
+
+def test_service_replies_carry_their_own_type_and_the_reason(isaac_import):
+    from guide_msgs.srv import Attribute, Randomize, StopRecording
+
+    ros = isaac_import("guide_core.ros.guide_ros").GUIDEROS2Interface
+    scenes = SimpleNamespace(stop_recording=lambda id, save: True, wait_stop_recording_event=print)
+    backend = SimpleNamespace(
+        randomize_scene=MagicMock(side_effect=RuntimeError("no scene 3")),
+        call=MagicMock(return_value=True),
+        _scene_manager=scenes,
+    )
+    me = SimpleNamespace(_backend=backend, _logger=MagicMock())
+
+    reply = ros._randomize_callback(me, Randomize.Request(id=3), None)
+    assert (reply.success, reply.message) == (False, "no scene 3")
+
+    reply = ros._attribute_request_callback(me, Attribute.Request(path="/a", attribute="b"), None)
+    assert isinstance(reply, Attribute.Response) and reply.result == "True"
+
+    reply = ros._stop_recording_callback(me, StopRecording.Request(id=0), None)
+    assert reply.success and "reset" not in reply.message

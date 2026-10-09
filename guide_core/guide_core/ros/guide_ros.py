@@ -189,7 +189,7 @@ class GUIDEROS2Interface(Node):
             response.message = output if isinstance(output, str) else ""
             response.success = output is not None
         except Exception as e:
-            response.message = e
+            response.message = str(e)
             response.success = False
         finally:
             return response
@@ -265,9 +265,9 @@ class GUIDEROS2Interface(Node):
             return response
 
     def _attribute_request_callback(
-        self, request: Randomize.Request, response: Randomize.Response
-    ) -> Randomize.Response:
-        response = Randomize.Response()
+        self, request: Attribute.Request, response: Attribute.Response
+    ) -> Attribute.Response:
+        response = Attribute.Response()
         try:
             path = request.path
             attribute = request.attribute
@@ -277,11 +277,9 @@ class GUIDEROS2Interface(Node):
                 "set_prim_attribute_value", prim_path=path, attribute_name=attribute, value=value
             )
 
-            response.message = ""
-            response.success = success
+            response.result = str(success)
         except Exception as e:
-            response.message = str(e)
-            response.success = False
+            response.result = str(e)
         finally:
             return response
 
@@ -360,7 +358,7 @@ class GUIDEROS2Interface(Node):
                 # Block until the SceneRecorder thread has saved or discarded the episode
                 # (it sets the stop event on FINALIZE_EPISODE / DISCARD_EPISODE)
                 self._backend._scene_manager.wait_stop_recording_event(id)
-                response.message = "Recording stopped and scene reset successfully."
+                response.message = "Recording stopped."
             else:
                 # Idempotent: a caller cleaning up after a failed run may stop a scene
                 # that never started, or already stopped.
