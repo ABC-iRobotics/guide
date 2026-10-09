@@ -33,11 +33,6 @@ setup(
         (os.path.join("share", package_name, os.path.dirname(f)), [f])
         for f in glob(os.path.join("assets", "**", "*"), recursive=True)
         if os.path.isfile(f)
-    ]
-    + [
-        (os.path.join("share", package_name, os.path.dirname(f).replace("../../", "")), [f])
-        for f in glob(os.path.join("../../modules", "irob_franka_ros2", "**", "*"), recursive=True)
-        if os.path.isfile(f)
     ],
     install_requires=["setuptools"],
     zip_safe=True,

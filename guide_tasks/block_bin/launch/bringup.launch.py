@@ -12,17 +12,6 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-def load_file(package_name, file_path):
-    package_path = get_package_share_directory(package_name)
-    absolute_file_path = os.path.join(package_path, file_path)
-
-    try:
-        with open(absolute_file_path) as file:
-            return file.read()
-    except OSError:  # parent of IOError, OSError *and* WindowsError where available
-        return None
-
-
 def generate_nodes(context, *args, **kwargs):
 
     num_env = int(LaunchConfiguration("num_env").perform(context))
