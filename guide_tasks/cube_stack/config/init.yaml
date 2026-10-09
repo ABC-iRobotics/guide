@@ -1,0 +1,150 @@
+# The block_bin scene, loaded from block_bin's install: same table, robot, cameras and
+# cubes. Its two bins are parked out of every camera's view by randomize.yaml.
+usd_path: 'package://block_bin/assets/block_bin.usd'
+
+# Publish the cameras as ROS 2 image topics (/cam_*). OFF for dataset generation: the
+# recorder captures images GUIDE-side via annotators, so the topics are a second render
+# product per camera plus ~166 MB/s of raw images that floods localhost DDS and starves
+# service replies. Turn ON at inference time, when a deployed policy needs live camera
+# images over ROS -- either here, or without editing this file:
+#   ros2 launch guide_core bringup.launch.py camera_topics:=true
+# (block_bin_eval's eval_policy_pink documents exactly that, and stops at start-up without the topics.)
+publish_camera_topics: false
+
+# Wire format of the rgb topics, when they are published at all.
+#   rgb       sensor_msgs/Image on <topic>            -- 640x480 rgb8, 921 kB a frame
+#   rgb_h264  sensor_msgs/CompressedImage on          -- NVENC H.264, ~1% of the bytes
+#             <topic>/compressed
+# Subscribers are not configured to match: ros2camera asks the ROS graph which of the
+# two the camera helper created. H.264 costs nothing to render and everything it saves
+# is DDS bandwidth, so it is worth turning on wherever the topics are on at all --
+# 'rgb' stays the default only because it is the format every existing tool expects.
+camera_encoding: rgb_h264
+
+robots:
+  franka :
+    path: '/fr3'
+    end_effector_name: 'fr3_hand_tcp'
+    default_joint_states:
+      - 0.0
+      - -0.785398
+      - 0.0
+      - -2.35619
+      - 0.0
+      - 1.5708
+      - 0.785398
+      - 0.0
+      - 0.0
+
+# `rgb`, `depth` and `instance` are independent streams off one render product (no
+# extra RTX pass). They decide the dataset feature names: <key>, <key>_depth and
+# <key>_instance; a camera whose only stream is depth (or instance) records <key>.
+#
+# Only `rgb` is published to ROS 2. Depth is captured in-process by the annotator and
+# goes straight into the dataset as (H, W, 1) uint16 millimetres -- the shape lerobot
+# flags as is_depth_map and encodes losslessly. `instance` is instance segmentation of
+# dataset.tracked_objects below, recorded as an RGB video with one fixed colour per
+# tracked object. Nothing subscribes to either, and 32FC1 on the wire costs more than
+# the colour image it would sit beside.
+cameras:
+  top:
+    path: '/top'
+    width: 640
+    height: 480
+    topic: '/cam_top'
+    rgb: true
+    depth: true
+    instance: true
+
+  base:
+    path: '/base'
+    width: 640
+    height: 480
+    topic: '/cam_base'
+    rgb: true
+    depth: true
+    instance: true
+
+  wrist:
+    path: '/fr3/rsd455/RSD455/Camera_OmniVision_OV9782_Color'
+    width: 640
+    height: 480
+    topic: '/cam_wrist'
+    rgb: true
+    depth: true
+    instance: true
+
+dataset:
+  # Tracked objects: the prims marked in the instance-segmentation stream (a camera's
+  # `instance: true`). The key is the object's label; the value is a prim-path pattern
+  # relative to the scene root -- the same syntax reset.yaml and randomize.yaml use for
+  # `prim_path`. Each label is painted in a fixed colour, in this order (tab10 palette:
+  # blue, orange, green, red, purple, brown, pink, ...); everything untracked is black.
+  # The label -> colour legend is written to the dataset's meta/guide_info.json.
+  #
+  # A pattern that matches several prims gives them all one label ('/blocks/*' would
+  # label every block "block") and so one colour. Each block is named separately here so
+  # the mask says which block, not just that a block is there. The blocks are listed in
+  # this order so each one's mask colour matches its name (blue, orange~yellow, green, red).
+  # The parked bins stay tracked: a bin colour in any mask would mean one is in view.
+  tracked_objects:
+    blue_block: '/blocks/blue_block'
+    yellow_block: '/blocks/yellow_block'
+    green_block: '/blocks/green_block'
+    red_block: '/blocks/red_block'
+    bin_0: '/bin_0'
+    bin_1: '/bin_1'
+    robot: '/fr3'
+  # Capture rate, in Hz. One number for three things that used to disagree: the rate
+  # SceneManager samples the scene at, the rate the ROS 2 camera topics are gated to
+  # (they publish every rendered frame otherwise -- 60 Hz), and the fps stamped into
+  # the LeRobot dataset metadata. 10 is what this task has always actually recorded at;
+  # the metadata said 30 only because the key was never set.
+  fps: 10
+  images:
+    - top: top
+    - base: base
+    - wrist: wrist
+  cartesian_velocity_robot: franka
+  observations:
+    - joint1.pos: franka.fr3_joint1.pos
+    - joint2.pos: franka.fr3_joint2.pos
+    - joint3.pos: franka.fr3_joint3.pos
+    - joint4.pos: franka.fr3_joint4.pos
+    - joint5.pos: franka.fr3_joint5.pos
+    - joint6.pos: franka.fr3_joint6.pos
+    - joint7.pos: franka.fr3_joint7.pos
+    - gripper.pos: franka.fr3_finger_joint1.pos
+    - x: x
+    - y: y
+    - z: z
+    - wx: wx
+    - wy: wy
+    - wz: wz
+  action:
+    - joint1.pos: joint_command.fr3_joint1.pos
+    - joint2.pos: joint_command.fr3_joint2.pos
+    - joint3.pos: joint_command.fr3_joint3.pos
+    - joint4.pos: joint_command.fr3_joint4.pos
+    - joint5.pos: joint_command.fr3_joint5.pos
+    - joint6.pos: joint_command.fr3_joint6.pos
+    - joint7.pos: joint_command.fr3_joint7.pos
+    - gripper.pos: joint_command.fr3_finger_joint1.pos
+    - x: x
+    - y: y
+    - z: z
+    - wx: wx
+    - wy: wy
+    - wz: wz
+
+# Scene extent around origin, metres: [[x_min, x_max], [y_min, y_max], [z_min, z_max]].
+# Scenes are tiled along y by this box when several are registered.
+limits:
+  - [-5.0, 5.0]
+  - [-5.0, 5.0]
+  - [-5.0, 5.0]
+
+origin:
+  - 0.0
+  - 0.0
+  - -1.0

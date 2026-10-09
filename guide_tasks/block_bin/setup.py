@@ -33,11 +33,6 @@ setup(
         (os.path.join("share", package_name, os.path.dirname(f)), [f])
         for f in glob(os.path.join("assets", "**", "*"), recursive=True)
         if os.path.isfile(f)
-    ]
-    + [
-        (os.path.join("share", package_name, os.path.dirname(f).replace("../../", "")), [f])
-        for f in glob(os.path.join("../../modules", "irob_franka_ros2", "**", "*"), recursive=True)
-        if os.path.isfile(f)
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -53,14 +48,6 @@ setup(
     entry_points={
         "console_scripts": [
             "solve_task = block_bin.solve_task:main",
-            "eval_policy_pink = block_bin.eval_policy_pink:main",
-            "sweep_checkpoints = block_bin.sweep_checkpoints:main",
-            "validate = block_bin.validate:main",
-            "probe_grounding = block_bin.probe_grounding:main",
-            "debug_rollout = block_bin.debug_rollout:main",
-            "replay_rollout = block_bin.replay_rollout:main",
-            "compare_runs = block_bin.compare_runs:main",
-            "study = block_bin.study:main",
         ],
     },
 )

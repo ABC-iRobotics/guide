@@ -3,8 +3,8 @@
 ``SceneContext`` is the orchestration-layer carrier that ties a scene/episode
 identity to the realized ``RandomizationRecord``. The record itself stays a pure
 value object (no scene/episode awareness); identity lives here and is what gets
-persisted (e.g. the dataset sidecar filename). Importing the record submodule
-directly keeps this dependency-light (NumPy only, no SciPy).
+persisted (e.g. ``draw_index`` and ``zone`` in ``guide_episodes.jsonl``, written by
+``SceneManager._capture_episode_meta``).
 """
 
 from __future__ import annotations

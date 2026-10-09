@@ -73,6 +73,7 @@ class FakeScene:
         self.state = SceneState.RECORDING
         self.record_frequency = record_frequency
         self.recorder = FakeRecorder()
+        self.prompts = {"task": "", "subtask": ""}
         self._config = {}
         # The real setter early-returns when nothing changed (gate_render calls it once
         # per rendered frame), so mirror that and the log becomes a list of transitions.

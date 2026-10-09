@@ -28,7 +28,7 @@ setup(
         for f in glob(os.path.join("dummy_scene", "**", "*"), recursive=True)
         if os.path.isfile(f)
     ],
-    install_requires=["setuptools", "numpy", "trimesh", "python-fcl"],
+    install_requires=["setuptools", "numpy", "python-fcl"],
     zip_safe=True,
     maintainer="András Makány",
     maintainer_email="makany.andras@uni-obuda.hu",

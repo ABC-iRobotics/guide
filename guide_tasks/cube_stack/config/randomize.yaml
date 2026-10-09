@@ -1,0 +1,83 @@
+# cube_stack randomization in Replicator YAML (guide_core/.../replicator_guide.py,
+# docs/design/replicator-front-end.md). Every key is <module>.<function> under
+# omni.replicator.core; `guide.*` is GUIDE's namespace. Paths are scene-relative: GUIDE
+# prefixes /Scene_<id>. Positions are local to each prim's parent.
+#
+# Cubes: anywhere in scene x [0.10, 0.30], y [-0.25, 0.25] -- 40-60 cm in front of the
+# robot base, where a straight top-down reach works everywhere (closer in, the forearm
+# folds into the shoulder) -- with any yaw. The numbers are in the /blocks frame, which
+# block_bin.usd turns -90 deg about z: local x = -scene y, local y = scene x.
+# Scene.randomize redraws a layout with two cubes closer than 12 cm. Replicator applies
+# every draw, so the cubes' velocities are zeroed with it: whatever a rejected layout
+# set in motion does not carry into the next.
+#
+# The tower's starting cube (Scene.zone_target) is then drawn again inside the requested
+# zone's cell, or anywhere in the region for a free draw: 0.1 m cells over the region,
+# 5 x 2 = 10 zones, row-major from the min corner (zone 0: scene x [0.1, 0.2],
+# y [0.15, 0.25]; zone 9: x [0.2, 0.3], y [-0.25, -0.15]).
+#
+# Bins: not part of the task. Parked on the room floor 3 m behind the base camera (they
+# are dynamic bodies) and hidden: the wrist camera looks forward along the table, so no
+# spot in the room is out of its view in every pose.
+
+place_cubes:
+  randomizer.register:
+    place_cubes:
+      cubes:
+        get.prims:
+          path_pattern: '/blocks/[^/]+$'         # the cube Xforms only, not their meshes
+          path_pattern_exclusion: 'properties'
+      with.cubes:
+        modify.pose:
+          write_to_usd: true                     # PhysX teleports on USD writes, not Fabric
+          position:
+            distribution.uniform:                # absolute bounds, metres, /blocks frame
+              # z: the 5.15 cm cube resting on the table top (0.0153) is at 0.041;
+              # 1 mm above that it drops into place instead of popping out of it.
+              lower: [-0.25, 0.10, 0.042]
+              upper: [ 0.25, 0.30, 0.042]
+              name: cubes_position               # named: samples are recorded per episode
+          rotation:
+            distribution.uniform:                # Euler XYZ, degrees
+              lower: [0, 0, -180]
+              upper: [0, 0,  180]
+              name: cubes_rotation
+      still:
+        get.prims:
+          path_pattern: '/blocks/[^/]+$'
+          path_pattern_exclusion: 'properties'
+      with.still:
+        modify.attribute: { name: 'physics:velocity', attribute_type: vector3f, value: [0, 0, 0] }
+      spinless:
+        get.prims:
+          path_pattern: '/blocks/[^/]+$'
+          path_pattern_exclusion: 'properties'
+      with.spinless:
+        modify.attribute: { name: 'physics:angularVelocity', attribute_type: vector3f, value: [0, 0, 0] }
+
+park_bins:
+  randomizer.register:
+    park_bins:
+      bin_0:
+        get.prims: { path_pattern: '/bin_0$' }
+      bin_1:
+        get.prims: { path_pattern: '/bin_1$' }
+      with.bin_0:
+        modify.pose: { position: [3.0, -0.5, -0.68], rotation: [0, 0, 0], write_to_usd: true }
+        modify.visibility: { value: false }
+      with.bin_1:
+        modify.pose: { position: [3.0, 0.5, -0.68], rotation: [0, 0, 0], write_to_usd: true }
+        modify.visibility: { value: false }
+
+episode:
+  trigger.on_custom_event:
+    event_name: guide_randomize                  # fired once per Randomize call
+
+with_episode:
+  with.episode:
+    randomizer.place_cubes: null
+    randomizer.park_bins: null
+    guide.zone:                                  # after place_cubes: the starting cube in its cell
+      distribution: cubes_position               # region = that node's lower/upper
+      path_pattern: '/blocks/[^/]+$'             # narrowed to the zone target per episode
+      resolution: 0.1

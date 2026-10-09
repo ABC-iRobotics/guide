@@ -5,6 +5,8 @@ draw goes through :meth:`Randomizer.draw`, which does exactly one of two things
 — sample from the passed generator, or (when an injection record supplies the
 name) decode the previously realized value — and **always** records the result.
 Geometry never samples; tasks never call ``random``/``np.random`` directly.
+The exception is a Replicator-dialect file: Replicator samples it itself, seeded
+from the same seed, and only its samples are recorded (see ``replicator_guide``).
 """
 
 from __future__ import annotations

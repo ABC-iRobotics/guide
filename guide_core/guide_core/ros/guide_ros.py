@@ -57,7 +57,14 @@ from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
-from guide_msgs.srv import PauseRecording, Randomize, RegisterScene, StartRecording, StopRecording
+from guide_msgs.srv import (
+    PauseRecording,
+    Randomize,
+    RegisterScene,
+    SetPrompt,
+    StartRecording,
+    StopRecording,
+)
 
 
 class GUIDEROS2Interface(Node):
@@ -147,6 +154,14 @@ class GUIDEROS2Interface(Node):
             srv_type=PauseRecording,
             srv_name="pause_recording",
             callback=self._pause_recording_callback,
+            callback_group=self._reentrant_group,
+        )
+
+        # Task / subtask prompt: stamped on every frame recorded after it
+        self._set_prompt = self.create_service(
+            srv_type=SetPrompt,
+            srv_name="set_prompt",
+            callback=self._set_prompt_callback,
             callback_group=self._reentrant_group,
         )
 
@@ -341,9 +356,9 @@ class GUIDEROS2Interface(Node):
             save_episode = request.save_episode
             self._logger.info(f"Stopping recording for scene {id}... (Save: {save_episode})")
 
-            self._backend._scene_manager.clear_idle_event(id)
             if self._backend._scene_manager.stop_recording(id, save_episode):
-                # Block until Consumer thread processes Poison Pill
+                # Block until the SceneRecorder thread has saved or discarded the episode
+                # (it sets the stop event on FINALIZE_EPISODE / DISCARD_EPISODE)
                 self._backend._scene_manager.wait_stop_recording_event(id)
                 response.message = "Recording stopped and scene reset successfully."
             else:
@@ -371,6 +386,19 @@ class GUIDEROS2Interface(Node):
             response.success = False
         finally:
             return response
+
+    def _set_prompt_callback(
+        self, request: SetPrompt.Request, response: SetPrompt.Response
+    ) -> SetPrompt.Response:
+        response = SetPrompt.Response()
+        try:
+            self._logger.info(f"Prompts of scene {request.id}: task {request.task!r}, subtask {request.subtask!r}")
+            self._backend._scene_manager.set_prompt(request.id, request.task, request.subtask)
+            response.success = True
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+        return response
 
     def _finalize_recording_callback(
         self, request: FinalizeRecording.Request, response: FinalizeRecording.Response

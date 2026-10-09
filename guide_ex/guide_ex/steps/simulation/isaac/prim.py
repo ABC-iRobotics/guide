@@ -18,14 +18,15 @@ class GetPrimPose(BaseNode):
         self, robot: Node, sim_namespace: str, scene_namespace: str, prim_path: str
     ) -> ExecutionResult:
         """
-        Retrieves the current pose of the specified primitive.
+        Retrieves the current world pose of the specified primitive.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
-            prim_name (str): The name of the primitive to get the pose of.
+            scene_namespace (str): The scene namespace.
+            prim_path (str): The prim path, relative to the scene.
         Returns:
-            ExecutionResult: The result containing the current pose of the primitive.
+            ExecutionResult: outputs `pose`, the current world pose of the primitive.
         """
 
         if not robot.node:
@@ -64,6 +65,35 @@ class GetPrimPose(BaseNode):
             )
 
 
+class GetPrimPoses(BaseNode):
+    level = Layer.STEP
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("GetPrimPoses", alias, dynamic_map, static_args, output_map)
+
+    def run(
+        self, robot: Node, sim_namespace: str, scene_namespace: str, prim_paths: list
+    ) -> ExecutionResult:
+        """
+        Retrieves the current world poses of several primitives, in the given order.
+
+        Args:
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
+            sim_namespace (str): The simulation namespace.
+            scene_namespace (str): The scene namespace.
+            prim_paths (list): Prim paths relative to the scene.
+        Returns:
+            ExecutionResult: outputs `poses`, one Pose per path; FAILURE if any is missing.
+        """
+        poses = []
+        for prim_path in prim_paths:
+            result = GetPrimPose().run(robot, sim_namespace, scene_namespace, prim_path)
+            if result.status == DemoStatus.FAILURE:
+                return result
+            poses.append(result.outputs["pose"])
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"poses": poses})
+
+
 class IsPrimClashing(BaseNode):
     level = Layer.STEP
 
@@ -79,15 +109,16 @@ class IsPrimClashing(BaseNode):
         prim2_path: str,
     ) -> ExecutionResult:
         """
-        Checks if the specified primitive is clashing with any other primitives.
+        Checks whether two primitives are clashing (the simulator compares their bounding boxes).
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_namespace (str): The scene namespace.
-            prim_name (str): The name of the primitive to check for clashes.
+            prim1_path (str): The first prim path, relative to the scene.
+            prim2_path (str): The second prim path, relative to the scene.
         Returns:
-            ExecutionResult: The result containing whether the primitive is clashing.
+            ExecutionResult: outputs `has_collided`, whether the two primitives are clashing.
         """
 
         if not robot.node:

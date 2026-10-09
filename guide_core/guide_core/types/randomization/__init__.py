@@ -10,9 +10,11 @@ Layered so each concern has a single owner:
                       scene instructions (geometry injected, so still pure)
 - ``grid``          — ``Grid``, a 2D zone partition over a position region, plus the
                       ``single_grid`` scene validation and ``zone_plan`` request expansion
+- ``replicator_guide`` — the Replicator-YAML front-end (not re-exported here)
 
-The package depends only on NumPy + SciPy (rotation math); it is free of
-Isaac/ROS so it can be unit-tested in isolation.
+Apart from ``replicator_guide`` (PyYAML, and Isaac Replicator imported inside its
+Isaac-side functions), the package depends only on NumPy + SciPy (rotation math);
+it is free of Isaac/ROS so it can be unit-tested in isolation.
 """
 
 from __future__ import annotations

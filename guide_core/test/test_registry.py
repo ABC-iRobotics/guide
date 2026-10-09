@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from guide_core.core.registry import attach_cmd_functions
+from guide_core.core._registry import attach_cmd_functions
 
 
 class Host:
@@ -55,10 +55,6 @@ def test_attach_cmd_functions_filters_helpers(tmp_path: Path, monkeypatch: pytes
 
     assert hasattr(host, "_cmd_ping")
     assert callable(getattr(host, "_cmd_ping"))
-
-    # Helpers / non-commands must not be attached
-    # assert not hasattr(host, "__helper")
-    # assert not hasattr(host, "not_a_command")
 
     # And the bound command must behave correctly
     out = host._cmd_ping(5)

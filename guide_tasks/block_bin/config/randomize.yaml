@@ -2,8 +2,9 @@
 # omni.replicator.core; `guide.*` is GUIDE's namespace. Paths are scene-relative: GUIDE prefixes
 # /Scene_<id> before parsing. The bins are fixed; the blocks are drawn independently, one draw
 # per prim, and the colour-selected block is re-placed in the requested zone by GUIDE after
-# this group (see replicator_guide.draw). Groups a randomizer uses are declared inside it: the
-# parser evaluates a registered body when the randomizer is called, not where it is written.
+# this group (the guide.zone node below; see replicator_guide.zone and replicator_guide.fire).
+# Groups a randomizer uses are declared inside it: the parser evaluates a registered body
+# when the randomizer is called, not where it is written.
 
 place_blocks:
   randomizer.register:
@@ -18,17 +19,16 @@ place_blocks:
                                                  # poses stay local to the parent and keep scale
           position:
             distribution.uniform:                # absolute bounds, metres
-              lower: [-0.25, 0.0, 0.025]
-              upper: [ 0.25, 0.4, 0.025]
+              # z: the 5.15 cm cube resting on the table top (0.0153) is at 0.041;
+              # 1 mm above that it drops into place instead of popping out of it.
+              lower: [-0.25, 0.0, 0.042]
+              upper: [ 0.25, 0.4, 0.042]
               name: blocks_position              # named: samples are recorded per episode
           rotation:
             distribution.uniform:                # Euler XYZ, degrees
               lower: [0, 0, -180]
               upper: [0, 0,  180]
               name: blocks_rotation
-          # equivalent axis-angle form for the same slot:
-          # rotation:
-          #   guide.axis_angle: { axis: [0, 0, 1], angle: [-180, 180] }
 
 place_bins:
   randomizer.register:

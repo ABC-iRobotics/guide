@@ -10,7 +10,6 @@
   <depend>guide_core</depend>
   <depend>guide_msgs</depend>
   <depend>rclpy</depend>
-  <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>

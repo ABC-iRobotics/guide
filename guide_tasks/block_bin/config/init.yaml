@@ -6,7 +6,7 @@ usd_path: '/assets/block_bin.usd'
 # service replies. Turn ON at inference time, when a deployed policy needs live camera
 # images over ROS -- either here, or without editing this file:
 #   ros2 launch guide_core bringup.launch.py camera_topics:=true
-# (eval_policy_pink documents exactly that, and stops at start-up without the topics.)
+# (block_bin_eval's eval_policy_pink documents exactly that, and stops at start-up without the topics.)
 publish_camera_topics: false
 
 # Wire format of the rgb topics, when they are published at all.
@@ -100,11 +100,8 @@ dataset:
   fps: 10
   images:
     - top: top
-    - top_depth: top_depth
     - base: base
-    - base_depth: base_depth
     - wrist: wrist
-    - wrist_depth: wrist_depth
   cartesian_velocity_robot: franka
   observations:
     - joint1.pos: franka.fr3_joint1.pos

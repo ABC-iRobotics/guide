@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yaml
@@ -50,11 +50,6 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
 
 class SceneOrchestrator(ABC):
 
-    scene_id: int
-
-    _offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    _pkg_name: str
-
     _config: dict
     _usd_path: str
     bounding_box: dict
@@ -87,7 +82,11 @@ class SceneOrchestrator(ABC):
         else:
             self._logger = logger
 
+        # The procedure-level prompt, drawn at randomization.
         self.task = ""
+        # The GUIDE-EX task and subtask being worked on, set through
+        # SceneManager.set_prompt; "" = none. The task is each frame's LeRobot task.
+        self.prompts = {"task": "", "subtask": ""}
 
         # Getting init.yaml
         package_name = self.__class__.__module__.split(".")[0]
@@ -99,7 +98,6 @@ class SceneOrchestrator(ABC):
             self._path = Path(path)
             config_file = Path(f"{path}/{config_path}")
 
-        # with resources.files(package_name).joinpath(config_path).open('r') as f:
         with config_file.open("r") as f:
             self._config = yaml.safe_load(f)
 
@@ -134,8 +132,9 @@ class SceneOrchestrator(ABC):
         # Getting success.yaml (a query; stays on the executor -- see docs/design)
         self.success_instructions = self.parse_instruction(Path(f"{path}/{success_path}"))
 
-        # Single RNG authority for this scene (master seed injected at
-        # registration, else auto from system entropy -- captured + logged).
+        # Single RNG authority for this scene: the ``master_seed`` argument if given
+        # (SceneManager.add_scene passes none), else auto from system entropy --
+        # captured + logged.
         self._seed_tree = SeedTree.create(master_seed)
         self._episode_index = 0
         self._last_context: Optional[SceneContext] = None
@@ -145,7 +144,7 @@ class SceneOrchestrator(ABC):
 
         self.state = SceneState.IDLE
 
-        # Start separate recorder process
+        # Get this scene's recorder from the separate RecorderServer process
         dataset_name = f"dataset_{self._sim_id}_{self._scene_id}"
         from guide_core.core.recorder_manager import RecorderServer
 
@@ -186,7 +185,16 @@ class SceneOrchestrator(ABC):
             self.recorder = None
 
     def _get_usd_params(self, package_name):
-        self._usd_path = self._path.joinpath(self._config["usd_path"].lstrip("/"))
+        usd_path = self._config["usd_path"]
+        # 'package://<pkg>/<path>' loads another package's installed asset (the ROS
+        # convention), so a task can reuse a scene without copying it.
+        if usd_path.startswith("package://"):
+            from ament_index_python.packages import get_package_share_directory
+
+            pkg, _, rel = usd_path.removeprefix("package://").partition("/")
+            self._usd_path = Path(get_package_share_directory(pkg)) / rel
+        else:
+            self._usd_path = self._path.joinpath(usd_path.lstrip("/"))
 
     def _get_limits(self):
         # limits: [[x_min, x_max], [y_min, y_max], [z_min, z_max]] around the origin
@@ -209,9 +217,6 @@ class SceneOrchestrator(ABC):
         self.origin = self._config.get("origin", [0.0, 0.0, 0.0])
 
         assert self.origin is not None
-
-    def set_offset(self, offset: Tuple[float, float, float]):
-        self._offset = offset
 
     def create_robot_graphs(self):
         robot_list: List[Dict] = []
@@ -280,10 +285,10 @@ class SceneOrchestrator(ABC):
         separately, which is how a camera could be recorded at one resolution and
         published at another.
 
-        A camera carries up to two streams, ``rgb`` (default on) and ``depth`` (default
-        off). Only ``rgb`` reaches ROS 2; depth is captured in-process by the render
-        product's annotator and only ever lands in the dataset, like the semantic
-        labels. The dataset feature names follow from the pair:
+        A camera carries up to three streams, ``rgb`` (default on), ``depth`` and
+        ``instance`` (both default off). Only ``rgb`` reaches ROS 2; depth and instance
+        segmentation are captured in-process by the render product's annotators and only
+        ever land in the dataset. The rgb and depth feature names follow from the pair:
 
         ======  ======  ==============  ======================
         rgb     depth   rgb feature     depth feature
@@ -293,11 +298,12 @@ class SceneOrchestrator(ABC):
         false   true    --              ``<key>``
         ======  ======  ==============  ======================
 
-        A camera whose only stream is depth keeps the plain key: the suffix is there to
-        keep one camera's two streams apart, not to label the modality. ``<key>`` is the
-        ``dataset.images`` key rather than the camera name -- the two are free to differ,
-        and a camera absent from ``dataset.images`` gets no features at all, because it
-        is published for a live policy but never recorded.
+        ``instance`` follows the same rule: ``<key>_instance`` beside another stream,
+        ``<key>`` alone. A camera whose only stream is depth keeps the plain key: the
+        suffix is there to keep one camera's streams apart, not to label the modality.
+        ``<key>`` is the ``dataset.images`` key rather than the camera name -- the two are
+        free to differ, and a camera absent from ``dataset.images`` gets no features at
+        all, because it is published for a live policy but never recorded.
         """
         # dataset.images is a list of single-entry dicts: {feature key: camera name}.
         feature_key: Dict[str, str] = {}
@@ -461,7 +467,10 @@ class SceneOrchestrator(ABC):
         before the pose draws that place it; then every randomize instruction's
         PoseDist is drawn into a concrete Pose (kwargs['pose']). ``zone`` (>=0)
         restricts the ``zone_target`` prim to that grid cell; everything else is
-        free. If ``inject`` is given, drawn values come from it instead of the RNG.
+        free. Each draw ``inject`` names takes its recorded value instead of the RNG's.
+        A Replicator-dialect randomize file fires last, seeded with the same seed; its
+        named samples are recorded as ``replicator/<name>`` and ``inject`` does not
+        replay them.
         """
         if seed is not None:
             rng, used = self._seed_tree.generator(int(seed))
@@ -568,7 +577,7 @@ class SceneOrchestrator(ABC):
             if not (camera["rgb_feature"] or camera["depth_feature"] or camera["instance_feature"]):
                 continue  # published for a live policy, but not part of the dataset
 
-            # One render product per camera, shared by both annotators: rgb and depth
+            # One render product per camera, shared by its annotators: rgb and depth
             # come off the same RTX pass, so a depth camera costs no extra render.
             res = (camera["width"], camera["height"])
             rp = rep.create.render_product(f"/Scene_{self._scene_id}{camera['camera_path']}", res)
@@ -615,8 +624,9 @@ class SceneOrchestrator(ABC):
         life of the stage, whether or not anything reads it. Three 640x480 RTX passes
         per frame is most of this scene's frame budget, and the recorder consumes them
         ten times a second -- while idle, between episodes, and after a run has
-        finished it consumes them not at all. So they are off unless a capture is
-        actually about to read them (SceneManager.step) or the scene is warming up.
+        finished it consumes them not at all. So gate_render keeps them off except on
+        the frame before a capture (SceneManager.step), while the runtime is not
+        stepping, and for a scene with an instance stream, which renders every frame.
 
         Isaac's own code drives render products this way; see
         ``omni/replicator/core/scripts/annotators.py`` and
@@ -787,8 +797,8 @@ class SceneOrchestrator(ABC):
                 if ee_name:
                     import omni.usd
 
-                    # Isaac Sim 5.x: the batched XFormPrimView was unified into
-                    # XFormPrim (also matches multiple prims via prim_paths_expr).
+                    # The old batched XFormPrimView is isaacsim.core.prims.XFormPrim
+                    # (also matches multiple prims via prim_paths_expr).
                     from isaacsim.core.prims import XFormPrim
 
                     stage = omni.usd.get_context().get_stage()
@@ -1036,16 +1046,12 @@ class SceneOrchestrator(ABC):
             "timestamp": current_step,
             "observation": observation,
             "action": action,
-            "task": self.task,
+            # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
+            # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
+            # go in as language prompts.
+            "task": self.prompts["task"] or self.task,
+            "prompts": {"procedure": self.task, "subtask": self.prompts["subtask"]},
         }
 
     def clear_recording_history(self):
         self._last_recorded_obs_pose = None
-
-    @abstractmethod
-    def reset_lightweight(self):
-        raise NotImplementedError("Lightweight reset is not implemented for this scene.")
-
-    def finalize(self):
-        self.recorder.put_record_data("FINALIZE")
-        self.recorder.set_start_recording()

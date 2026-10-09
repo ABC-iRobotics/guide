@@ -1,7 +1,12 @@
 from types import SimpleNamespace
 
 from guide_ex.core.states import DemoStatus, Layer
-from guide_ex.steps.utility.recording import PauseRecording, StartRecording, StopRecording
+from guide_ex.utility.recording import (
+    PauseRecording,
+    SetPrompt,
+    StartRecording,
+    StopRecording,
+)
 
 
 class FakeRobot:
@@ -88,3 +93,20 @@ def test_both_are_utility_nodes_wired_through_the_context():
     assert StartRecording.level == StopRecording.level == Layer.UTILITY
     assert result.status == DemoStatus.PERFECT
     assert robot.calls[0][1].id == 1
+
+
+def test_task_and_subtask_go_to_their_service_in_one_request():
+    robot = FakeRobot()
+    node = SetPrompt(
+        dynamic_map={"robot": "robot", "sim_namespace": "sim_namespace", "scene_id": "scene_id"},
+        static_args={"task": "Put the red cube on the blue cube.", "subtask": "Pick up the red cube."},
+    )
+
+    result = node.execute({"robot": robot, "sim_namespace": "/Sim_0", "scene_id": 2})
+
+    assert SetPrompt.level == Layer.UTILITY
+    assert result.status == DemoStatus.PERFECT
+    assert robot.created == ["/Sim_0/set_prompt"]
+    request = robot.calls[0][1]
+    assert (request.id, request.task, request.subtask) == (
+        2, "Put the red cube on the blue cube.", "Pick up the red cube.")

@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
-import pkgutil
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Tuple
@@ -81,13 +80,6 @@ class SceneManager:
 
     def wait_stop_recording_event(self, scene_id: int, timeout=None):
         return self._scenes[scene_id].recorder.wait_stop_recording(timeout)
-
-    def wait_idle_event(self, scene_id: int, timeout=None):
-        return self._scenes[scene_id].recorder.is_idle()
-
-    def clear_idle_event(self, scene_id: int):
-        # We don't need to clear idle_event if we are checking is_idle directly, but if needed:
-        pass
 
     def add_scene(self, package_name: str) -> Tuple[int, Tuple[float, float, float], Dict]:
         try:
@@ -176,7 +168,6 @@ class SceneManager:
             self._locks[id] = Lock()
 
             offset = self._calculate_offset(id)
-            scene.set_offset(offset)
 
             self._logger.info(
                 f"[SceneManager] add_scene finished successfully. ID: {id}, Offset: {offset}"
@@ -195,7 +186,8 @@ class SceneManager:
 
             err_msg = traceback.format_exc()
             self._logger.error(f"[SceneManager] add_scene FAILED with exception:\n{err_msg}")
-            # Return failure tuple safely over IPC instead of raising, to avoid lock pickling issues in traceback context
+            # Return a failure tuple instead of raising: _cmd_register_scene turns id -1
+            # into a RuntimeError carrying this traceback.
             return (-1, (0.0, 0.0, 0.0), {"error": err_msg})
 
     def import_class_from_path(self, package_path: str, module_file: str, class_name: str):
@@ -218,42 +210,6 @@ class SceneManager:
         cls = getattr(module, class_name, None)
         if not inspect.isclass(cls):
             raise ImportError(f"{class_name} not found in {module_path}")
-        return cls
-
-    def _verify_package(self, package_name: str, class_name: str) -> bool:
-        assert package_name is not None
-        assert class_name is not None
-
-        try:
-            package = importlib.import_module(package_name)
-        except ImportError:
-            print(f"{package_name} module is not found!")
-            return False
-
-        # top-level ellenőrzés
-        if inspect.isclass(getattr(package, class_name, None)):
-            return True
-
-        # almodulok bejárása
-        if hasattr(package, "__path__"):
-            for _, modname, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
-                try:
-                    module = importlib.import_module(modname)
-                except Exception:
-                    continue
-
-                if inspect.isclass(getattr(module, class_name, None)):
-                    return True
-
-        print(f"{class_name} class is not found!")
-        return False
-
-    def _import_class(self, module_name: str, class_name: str):
-        module = importlib.import_module(module_name)
-        try:
-            cls = getattr(module, class_name)
-        except AttributeError:
-            raise ImportError(f"Module '{module_name}' does not define '{class_name}'")
         return cls
 
     def _calculate_offset(self, scene_id: int) -> Tuple[float, float, float]:
@@ -307,12 +263,6 @@ class SceneManager:
         # `zone` (>=0) places the scene's zone target in that grid cell.
         self._scenes[scene_id].randomize(seed=seed, inject=inject, zone=zone)
         return self._scenes[scene_id].randomize_instructions
-
-    def get_last_record_json(self, scene_id: int) -> str:
-        ctx = getattr(self._scenes[scene_id], "_last_context", None)
-        if ctx is None or ctx.record is None:
-            return ""
-        return ctx.to_json()
 
     def randomize_postprocess(self, scene_id: int, result):
         try:
@@ -467,15 +417,24 @@ class SceneManager:
                     # received, which gate_render has already arranged to be the frame
                     # rendered just before this tick.
                     if current_step % interval == 0:
-                        try:
-                            # record_step must run natively and return a frame dict
-                            data = scene.record_step(current_step)
-                            if data:
-                                # A full queue is dropped inside the recorder process
-                                # (SceneRecorder.put_record_data); nothing to catch here.
-                                scene.recorder.put_record_data(data)
-                        except Exception as e:
-                            print(f"Error in record_step: {e}")
+                        # Under the scene's lock, which stop_recording/pause_recording hold
+                        # while they close the episode: a frame is queued either before the
+                        # episode's end marker or not captured at all. Without it a capture
+                        # (milliseconds: nine streams) that straddled stop_recording was
+                        # queued after the marker and became frame 0 of the NEXT episode --
+                        # 15-20% of block_bin's episodes started with the previous one's end.
+                        with self._locks[scene_id]:
+                            if scene.state != SceneState.RECORDING:
+                                continue
+                            try:
+                                # record_step must run natively and return a frame dict
+                                data = scene.record_step(current_step)
+                                if data:
+                                    # A full queue is dropped inside the recorder process
+                                    # (SceneRecorder.put_record_data); nothing to catch here.
+                                    scene.recorder.put_record_data(data)
+                            except Exception as e:
+                                print(f"Error in record_step: {e}")
 
                 elif state == SceneState.FINALIZING:
                     # is_idle() is a blocking round trip to the recorder process. Poll it
@@ -494,7 +453,6 @@ class SceneManager:
             # them; record_step drops the frames captured before every stream is warm.
             # Forward the requested dataset base dir to the recorder (empty => ~/dataset).
             self._scenes[scene_id].recorder.set_output_path(path)
-            # self._scenes[scene_id].recorder.clear_start_recording()
             if hasattr(self._scenes[scene_id], "clear_recording_history"):
                 self._scenes[scene_id].clear_recording_history()
 
@@ -515,10 +473,25 @@ class SceneManager:
             scene.state = SceneState.PAUSED
             scene.recorder.clear_start_recording()
 
+    def set_prompt(self, scene_id: int, task: str = "", subtask: str = "") -> None:
+        """Stamp every frame recorded from now on with this task and/or subtask prompt.
+
+        Both change under the scene lock the capture takes, so no frame pairs a new task
+        with the last one's subtask; "" leaves a level as it is. A prompt holds until the
+        next one of its level or the end of the episode (stop_recording clears both).
+        """
+        with self._locks[scene_id]:
+            prompts = self._scenes[scene_id].prompts
+            for level, prompt in (("task", task), ("subtask", subtask)):
+                if prompt:
+                    prompts[level] = prompt
+
     def stop_recording(self, scene_id: int, save_episode: bool = True) -> bool:
         """End the episode, saving or discarding it. Returns False if nothing was recording."""
         with self._locks[scene_id]:
             scene = self._scenes[scene_id]
+            # Prompts belong to their episode; the next one starts without.
+            scene.prompts = dict.fromkeys(scene.prompts, "")
             if scene.state in (SceneState.IDLE, SceneState.FINALIZING):
                 # No episode is open, and the signal below would sit in the queue of a
                 # writer that is not reading it: the caller would wait forever.
@@ -553,18 +526,3 @@ class SceneManager:
 
         for scene_id in range(len(self._scenes)):
             self._scenes[scene_id].recorder.wait_shutdown(15.0)
-
-    def get_scene_state(self, scene_id: int) -> SceneState:
-        return self._scenes[scene_id].state
-
-    def check_warmup(self, scene_id: int):
-        try:
-            return self._scenes[scene_id].check_warmup()
-        except NotImplementedError:
-            return []
-
-    def record_step(self, scene_id: int):
-        try:
-            return self._scenes[scene_id].record_step()
-        except NotImplementedError:
-            return []

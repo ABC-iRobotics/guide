@@ -23,10 +23,10 @@ home_objects:
       blue:   { get.prims: { path_pattern: '/blocks/blue_block$' } }
       bin_0:  { get.prims: { path_pattern: '/bin_0$' } }
       bin_1:  { get.prims: { path_pattern: '/bin_1$' } }
-      with.red:    { modify.pose: { position: [0.25, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
-      with.yellow: { modify.pose: { position: [0.35, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
-      with.green:  { modify.pose: { position: [0.45, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
-      with.blue:   { modify.pose: { position: [0.55, -0.4, 0.025], rotation: [0, 0, 0], write_to_usd: true } }
+      with.red:    { modify.pose: { position: [0.25, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.yellow: { modify.pose: { position: [0.35, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.green:  { modify.pose: { position: [0.45, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.blue:   { modify.pose: { position: [0.55, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
       with.bin_0:  { modify.pose: { position: [0.4,   0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
       with.bin_1:  { modify.pose: { position: [0.4,  -0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
 
