@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import traceback
 from threading import Thread
 from typing import Optional
@@ -52,6 +53,8 @@ class _RosLoggerAdapter:
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 
 from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
@@ -65,6 +68,9 @@ from guide_msgs.srv import (
     StartRecording,
     StopRecording,
 )
+
+# Writing a long dataset's videos takes minutes; past this, finalize reports a stuck recorder.
+FINALIZE_TIMEOUT_S = 600.0
 
 
 class GUIDEROS2Interface(Node):
@@ -172,6 +178,18 @@ class GUIDEROS2Interface(Node):
             callback=self._finalize_recording_callback,
             callback_group=self._reentrant_group,
         )
+
+        # Every dataset GUIDE finalizes, for whoever drives this simulator (a master, a
+        # script): {"scene": id, "path": dir}; path "" when the scene recorded nothing.
+        self._finalized_pub = self.create_publisher(
+            String,
+            "dataset_finalized",
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
+
+    def _announce_finalized(self, scene_id: int, path: str) -> None:
+        self._finalized_pub.publish(String(data=json.dumps({"scene": scene_id, "path": path})))
+
     def _randomize_callback(
         self, request: Randomize.Request, response: Randomize.Response
     ) -> Randomize.Response:
@@ -225,7 +243,9 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Registered scene with id {id} at offset {offset}")
 
             if not self._has_clock:
-                self._backend.call("create_clock")
+                # /Sim_N/clock: every simulator runs at its own speed. Task launches remap
+                # their nodes' /clock to it (SetRemap in <task>/launch/bringup.launch.py).
+                self._backend.call("create_clock", namespace=self.get_namespace().strip("/"))
                 self._has_clock = True
 
             self._backend.play()
@@ -407,8 +427,14 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Finalizing recording for scene {id}...")
 
             self._backend._scene_manager.finalize_recording(id)
+            # Answer once the recorder has written the dataset: it adds the language columns
+            # after LeRobot's finalize, and only then is the dataset complete.
+            path = self._backend._scene_manager.wait_finalized(id, FINALIZE_TIMEOUT_S)
+            if path is None:
+                raise TimeoutError(f"the recorder did not finish scene {id} in {FINALIZE_TIMEOUT_S:.0f} s")
+            self._announce_finalized(id, path)
 
-            response.message = "Recording finalized successfully."
+            response.message = path or "Nothing was recorded."
             response.success = True
         except Exception as e:
             response.message = str(e)

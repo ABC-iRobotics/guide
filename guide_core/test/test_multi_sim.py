@@ -1,10 +1,12 @@
 """Several simulators on one ROS domain: launches, clocks, finalized datasets, shutdown, Register."""
 
 import importlib.util
+import json
 import logging
 import threading
 from pathlib import Path
 from types import MethodType, SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -111,3 +113,66 @@ def test_shutdown_finalizes_every_scene_and_says_what_it_wrote(isaac_import):
 
     assert manager.finalize_all_recordings(me) == [(0, "/scratch/d0"), (1, "")]
     assert recorders[0].controls == ["clear", "SHUTDOWN"]
+
+
+def ros_class(isaac_import):
+    return isaac_import("guide_core.ros.guide_ros").GUIDEROS2Interface
+
+
+def test_the_clock_is_created_in_the_simulator_namespace(isaac_import):
+    from guide_msgs.srv import RegisterScene
+
+    backend = SimpleNamespace(
+        stop=MagicMock(), play=MagicMock(), call=MagicMock(),
+        register_scene=MagicMock(return_value=(0, (0.0, 0.0, 0.0))),
+    )
+    me = SimpleNamespace(
+        _backend=backend, _logger=MagicMock(), _has_clock=False, _tasks=None,
+        get_namespace=lambda: "/Sim_3",
+    )
+
+    reply = ros_class(isaac_import)._register_callback(me, RegisterScene.Request(path="block_bin"), None)
+
+    assert reply.success
+    backend.call.assert_called_once_with("create_clock", namespace="Sim_3")
+
+
+def test_finalize_answers_with_the_written_dataset_and_announces_it(isaac_import):
+    from guide_msgs.srv import FinalizeRecording
+
+    scenes = SimpleNamespace(finalize_recording=MagicMock(), wait_finalized=lambda id, timeout=None: "/s/d1")
+    announced = []
+    me = SimpleNamespace(
+        _backend=SimpleNamespace(_scene_manager=scenes), _logger=MagicMock(),
+        _announce_finalized=lambda i, p: announced.append((i, p)),
+    )
+
+    reply = ros_class(isaac_import)._finalize_recording_callback(me, FinalizeRecording.Request(id=2), None)
+
+    assert (reply.success, reply.message) == (True, "/s/d1")
+    assert announced == [(2, "/s/d1")]
+
+
+def test_a_recorder_that_never_finishes_fails_finalize(isaac_import):
+    from guide_msgs.srv import FinalizeRecording
+
+    scenes = SimpleNamespace(finalize_recording=MagicMock(), wait_finalized=lambda id, timeout=None: None)
+    announced = []
+    me = SimpleNamespace(
+        _backend=SimpleNamespace(_scene_manager=scenes), _logger=MagicMock(),
+        _announce_finalized=lambda i, p: announced.append((i, p)),
+    )
+
+    reply = ros_class(isaac_import)._finalize_recording_callback(me, FinalizeRecording.Request(id=2), None)
+
+    assert not reply.success and "did not finish" in reply.message
+    assert announced == []
+
+
+def test_announcements_are_json_with_scene_and_path(isaac_import):
+    published = []
+    me = SimpleNamespace(_finalized_pub=SimpleNamespace(publish=published.append))
+
+    ros_class(isaac_import)._announce_finalized(me, 1, "/s/d2")
+
+    assert json.loads(published[0].data) == {"scene": 1, "path": "/s/d2"}
