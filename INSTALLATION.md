@@ -202,7 +202,7 @@ LeRobot dataset format.
 env_isaaclab/bin/pip install python-fcl -c ~/ros2_ws/src/guide/modules/isaac-safe-pins.txt
 ```
 
-**Why:** `trimesh` (already present) + `python-fcl` (the engine MoveIt uses) provide
+**Why:** `python-fcl` (the engine MoveIt uses) provides
 robust box collision/distance queries. The manylinux cp311 wheel is numpy-safe (Isaac's
 numpy 1.26 is preserved).
 
