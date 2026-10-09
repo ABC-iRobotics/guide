@@ -72,3 +72,14 @@ def test_is_prim_clashing_falls_back_to_the_bounding_box_command(command_module)
 
     assert clash._cmd_is_prim_clashing(h, "/Scene_0/blocks/red_block", scope="/Scene_0/bin_0")
     h._cmd_check_bounding_box_collision.assert_called_once()
+
+
+def test_set_visibilities_spreads_one_bool_over_every_prim(command_module):
+    prims_cmds = command_module("_cmd_prims")
+    view = SimpleNamespace(count=3, set_visibilities=MagicMock())  # count is a property
+    h = host()
+    setattr(h, "__get_xform", lambda prim_path: view)
+
+    prims_cmds._cmd_set_visibilities(h, "/Scene_0/blocks/.*", True)
+
+    view.set_visibilities.assert_called_once_with([True, True, True])

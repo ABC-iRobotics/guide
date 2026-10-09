@@ -185,8 +185,8 @@ def _cmd_set_visibilities(
         self._logger.error(e)
         return
 
-    if isinstance(visibilities, bool) and prims.count() > 1:
-        visibilities = [visibilities] * prims.count()
+    if isinstance(visibilities, bool) and prims.count > 1:
+        visibilities = [visibilities] * prims.count
 
     prims.set_visibilities(visibilities)
 
