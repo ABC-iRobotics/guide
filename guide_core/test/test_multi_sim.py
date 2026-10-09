@@ -153,6 +153,59 @@ def test_the_clock_is_created_in_the_simulator_namespace(isaac_import):
     backend.call.assert_called_once_with("create_clock", namespace="Sim_3")
 
 
+def register(isaac_import, prepare, bringup=True):
+    from guide_msgs.srv import RegisterScene
+
+    order = []
+    backend = SimpleNamespace(
+        stop=lambda: order.append("stop"),
+        play=lambda: order.append("play"),
+        call=MagicMock(),
+        register_scene=lambda path: order.append(("register", path)) or (1, (0.0, 2.0, 0.0)),
+    )
+    tasks = SimpleNamespace(
+        prepare=lambda path: order.append("prepare") or prepare(path),
+        launch=lambda pkg, scene_id: order.append(("launch", pkg, scene_id)),
+    )
+    me = SimpleNamespace(
+        _backend=backend, _logger=MagicMock(), _has_clock=True, _tasks=tasks,
+        get_namespace=lambda: "/Sim_3",
+    )
+    request = RegisterScene.Request(path="s3://t/my_task.tar.gz", bringup=bringup)
+    return ros_class(isaac_import)._register_callback(me, request, None), order
+
+
+def test_register_builds_first_and_launches_the_scene_last(isaac_import):
+    reply, order = register(isaac_import, lambda path: ("my_task", "my_task"))
+
+    assert (reply.success, reply.id, reply.package) == (True, 1, "my_task")
+    assert order == ["prepare", "stop", ("register", "my_task"), "play", ("launch", "my_task", 1)]
+
+
+def test_register_without_bringup_launches_nothing(isaac_import):
+    reply, order = register(isaac_import, lambda path: ("my_task", "my_task"), bringup=False)
+
+    assert reply.success
+    assert [o for o in order if o[0] == "launch"] == []
+
+
+def test_a_failed_build_fails_register_and_keeps_the_simulator_running(isaac_import):
+    def broken(path):
+        raise RuntimeError("rosdep: cannot resolve key 'libfoo'")
+
+    reply, order = register(isaac_import, broken)
+
+    assert not reply.success and "libfoo" in reply.message
+    assert order == ["prepare"]  # never stopped: the other scenes kept stepping
+
+
+def test_bringup_needs_a_bringup_launch(isaac_import):
+    reply, order = register(isaac_import, lambda path: ("/scenes/flat", None))
+
+    assert not reply.success and "bringup.launch.py" in reply.message
+    assert "stop" not in order
+
+
 def test_finalize_answers_with_the_written_dataset_and_announces_it(isaac_import):
     from guide_msgs.srv import FinalizeRecording
 

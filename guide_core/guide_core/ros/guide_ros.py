@@ -60,6 +60,7 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from guide_core.core.guide_simulator import GUIDESimulator
+from guide_core.ros.task_bringup import TaskBringup
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
@@ -284,9 +285,15 @@ class GUIDEROS2Interface(Node):
     ) -> RegisterScene.Response:
         response = RegisterScene.Response()
         try:
-            self._backend.stop()
+            # A task given as a directory or an s3://….tar.gz is fetched and built with its
+            # dependencies first: that can take minutes, and the other scenes keep stepping.
+            path, package = (
+                self._tasks.prepare(request.path) if self._tasks else (request.path, None)
+            )
+            if request.bringup and package is None:
+                raise ValueError(f"{request.path} has no launch/bringup.launch.py to start")
 
-            path = request.path
+            self._backend.stop()
 
             id, offset = self._backend.register_scene(path)
 
@@ -299,8 +306,11 @@ class GUIDEROS2Interface(Node):
                 self._has_clock = True
 
             self._backend.play()
+            if request.bringup:
+                self._tasks.launch(package, id)  # the task's MoveIt + solver for this scene
             response.id = id
             response.offset = list(offset)
+            response.package = package or ""
             response.message = ""
             response.success = True
 
@@ -542,7 +552,9 @@ def ros_entry_point():
     #    Isaac's loop mid-frame on SIGINT and never ends it on SIGTERM.
     rclpy.init(args=None, signal_handler_options=SignalHandlerOptions.NO)
 
-    ros_interface = GUIDEROS2Interface(sim, node_name="GUIDE", namespace=NAMESPACE)
+    ros_interface = GUIDEROS2Interface(
+        sim, node_name="GUIDE", namespace=NAMESPACE, tasks=TaskBringup(args.id)
+    )
 
     # Dynamically set ROS 2 node logger severity based on debug CLI flag
     from rclpy.logging import LoggingSeverity

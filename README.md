@@ -156,6 +156,12 @@ ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bi
 ros2 launch block_bin bringup.launch.py
 ```
 
+```bash
+# Register can also fetch a task (a directory or s3://bucket/task.tar.gz), build it with its
+# dependencies, and start its MoveIt + solver for the new scene -- one call instead of two:
+ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin', bringup: true}"
+```
+
 In a separate terminal, trigger demonstration generation via a ROS 2 service. `path` is the
 directory the dataset is written under (empty means `~/dataset`); `zones` and `counts` are
 parallel arrays saying how many successful episodes to record per zone:
