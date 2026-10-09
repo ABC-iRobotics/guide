@@ -7,7 +7,7 @@ package_name = "block_bin"
 
 setup(
     name=package_name,
-    version="1.0.0",
+    version="2.0.0",
     packages=find_namespace_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
