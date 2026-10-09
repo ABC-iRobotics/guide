@@ -42,27 +42,21 @@ class SetGripperState(BaseNode):
                     error_message=f"ROS2Robot does not support gripper control with current gripper_action_type: {robot.config.gripper_action_type}",
                 )
 
-            if len(gripper_goal_pos) == 1:
-                joint_name = next(iter(gripper_goal_pos))
-                target_position = gripper_goal_pos[joint_name]
-                self.logger.info(
-                    f"Sending gripper control action for single joint: {joint_name} to position {target_position}"
-                )
-                success = robot.send_action(
-                    action={f"{joint_name}.pos": target_position}, wait_for_execution=False
-                )
-                # Wait for the grasp/release to physically settle before the next
-                # step (planning) starts, so it snapshots a stable arm rather than
-                # one still reacting to the new contact forces. (wait_for_execution
-                # is left False: awaiting the gripper action deadlocked the node's
-                # executor for ~23s, so a fixed settle is used instead.)
-                self.logger.info(
-                    f"Waiting {self.SETTLE_SECONDS:.2f}s for gripper/arm to settle "
-                    f"before continuing."
-                )
-                time.sleep(self.SETTLE_SECONDS)
-                # TODO: Proper success checking based on robot response
-                success = True
+            action = {f"{joint}.pos": position for joint, position in gripper_goal_pos.items()}
+            self.logger.info(f"Sending gripper control action: {action}")
+            robot.send_action(action=action, wait_for_execution=False)
+            # Wait for the grasp/release to physically settle before the next
+            # step (planning) starts, so it snapshots a stable arm rather than
+            # one still reacting to the new contact forces. (wait_for_execution
+            # is left False: awaiting the gripper action deadlocked the node's
+            # executor for ~23s, so a fixed settle is used instead.)
+            self.logger.info(
+                f"Waiting {self.SETTLE_SECONDS:.2f}s for gripper/arm to settle "
+                f"before continuing."
+            )
+            time.sleep(self.SETTLE_SECONDS)
+            # TODO: Proper success checking based on robot response
+            success = True
 
         else:
             robot.send_action(gripper_goal_pos)
