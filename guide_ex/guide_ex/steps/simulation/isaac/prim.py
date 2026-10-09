@@ -55,13 +55,14 @@ class GetPrimPose(BaseNode):
 
         pose_response = robot.callService(robot.pose, request, f"Getting pose for {request.path}")
 
-        if pose_response is not None:
+        if pose_response is not None and pose_response.success:
             pose = Pose.from_ros_pose(pose_response.pose)
             return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
         else:
             return ExecutionResult(
                 status=DemoStatus.FAILURE,
-                error_message=f"Service call to get pose for primitive {request.path} failed.",
+                error_message=f"Service call to get pose for primitive {request.path} failed: "
+                f"{getattr(pose_response, 'message', '')}",
             )
 
 
