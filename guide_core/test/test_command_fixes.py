@@ -83,3 +83,14 @@ def test_set_visibilities_spreads_one_bool_over_every_prim(command_module):
     prims_cmds._cmd_set_visibilities(h, "/Scene_0/blocks/.*", True)
 
     view.set_visibilities.assert_called_once_with([True, True, True])
+
+
+def test_a_missing_scene_usd_fails_add_scene(command_module):
+    stage = command_module("_cmd_stage")
+    stage.is_file = lambda path: False
+    h = host(state=IsaacState.READY, update=MagicMock())
+    setattr(h, "__setup_stage", MethodType(getattr(stage, "__setup_stage"), h))
+
+    with pytest.raises(FileNotFoundError):
+        stage._cmd_add_scene(h, {"usd_path_absolute": "/nowhere/block_bin.usd"}, "/Scene_0")
+    assert h.state == IsaacState.ERROR
