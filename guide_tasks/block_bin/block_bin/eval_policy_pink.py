@@ -132,8 +132,11 @@ from block_bin.eval_policy import (
     GRIP_CLOSE_COMMAND,
     GRIPPER_OPEN,
     HOME_POSITION,
+    PROMPT_TEMPLATE,
     ChunkStream,
+    InstructionHolder,
     RunControl,
+    SubtaskFeed,
     add_interpolation_arguments,
     add_rtc_arguments,
     command_from_action,
@@ -146,6 +149,7 @@ from block_bin.eval_policy import (
     handle_stop,
     images_from,
     is_success,
+    load_oracle,
     load_policy,
     parse_evaluation_args,
     publish_command,
@@ -710,6 +714,17 @@ def run_episode(
 
     sleep_sim(robot, 0.5)  # let the randomized scene settle, as solve_task does
 
+    # The instruction is the holder's: the bare procedure prompt (the scene's task), or the
+    # GUIDE-EX task + subtask once a source (the oracle; an operator on subtask_override)
+    # holds them. Read before every chunk.
+    holder = InstructionHolder(task, args.prompt_template)
+    control.holder = holder
+    oracle = feed = None
+    if args.oracle:
+        oracle = load_oracle(args.oracle, robot, args.sim_namespace, scene_id, drawn)
+        feed = SubtaskFeed(holder, "oracle", oracle, args.oracle_period, robot.node.get_logger())
+        robot.node.get_logger().info(f'Oracle says: "{holder.prompt()}"')
+
     preprocessor, postprocessor = processors
     policy.reset()
     preprocessor.reset()
@@ -720,7 +735,7 @@ def run_episode(
         preprocessor,
         postprocessor,
         device,
-        task,
+        holder.prompt,
         robot.name,
         args.lead,
         rtc=rtc_config_from_args(args),
@@ -934,6 +949,8 @@ def run_episode(
             last_target = issued
 
     stream.close()
+    if feed is not None:
+        feed.close()
     wall_seconds = time.perf_counter() - started_wall
     sim_seconds = (clock.now() - started_sim).nanoseconds / 1e9
     report_rollout(robot, args, policy, step_times, grips, stream.replans)
@@ -998,6 +1015,11 @@ def run_episode(
             round(1000 * sorted(step_times)[len(step_times) // 2], 1) if step_times else None
         ),
         "replans": stream.replans,
+        # Every change of what the policy was told, with its source (oracle/operator),
+        # and whether the oracle saw the task through -- the subtask a run stalled at.
+        "subtasks": holder.history,
+        "instruction_switches": stream.switches,
+        "oracle_done": oracle.done if oracle is not None else None,
         "rtc_engaged": stream.rtc_engaged,
         "rtc_tail_mean": (round(stream.rtc_tail_total / stream.rtc_engaged, 2)
                           if stream.rtc_engaged else None),
@@ -1273,6 +1295,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Radians per unit of OSC rotation action (default {LIBERO_ROTATION_SCALE}).",
     )
     parser.add_argument("--task", type=str, default="", help="Override the scene's instruction.")
+    parser.add_argument(
+        "--oracle",
+        metavar="PACKAGE",
+        default="",
+        help="Tell the policy the GUIDE-EX task + subtask, read off the scene by PACKAGE's "
+        "oracle (PACKAGE.oracle.make_oracle, e.g. cube_stack) -- for a policy trained on a "
+        "prompt view. An operator overrides it on <namespace>/subtask_override "
+        "(std_msgs/String: '<subtask>' or '<task> || <subtask>'; an empty string hands back).",
+    )
+    parser.add_argument(
+        "--oracle-period", type=float, default=0.5, help="Wall seconds between oracle readings."
+    )
+    parser.add_argument(
+        "--prompt-template",
+        default=PROMPT_TEMPLATE,
+        help="How {procedure}, {task} and {subtask} are joined; must match the training "
+        "prompt view (default %(default)r).",
+    )
     parser.add_argument("--device", type=str, default=None, help="cuda, cpu (default: policy's)")
     add_rtc_arguments(parser)
     add_interpolation_arguments(parser)
@@ -1444,6 +1484,20 @@ def setup_evaluation(args) -> SimpleNamespace:
     args.scene_origin = prim_position(robot, f"/Scene_{scene_id}")
 
     control = RunControl()
+    args.sim_namespace = sim_namespace
+
+    def override(message):
+        """An operator outranks the oracle: "<subtask>", or "<task> || <subtask>" for both
+        levels; "" hands back."""
+        if control.holder is not None:
+            task, _, subtask = message.data.rpartition("||")
+            control.holder.set("operator", task=task.strip() or None, subtask=subtask.strip() or None)
+            robot.node.get_logger().info(f'Told now: "{control.holder.prompt()}"')
+
+    robot.override_subscription = robot.node.create_subscription(
+        String, f"{namespace_base}/subtask_override", override, 10,
+        callback_group=robot._reentrant_callback_group,
+    )
     stop_service_name = f"{namespace_base}/stop_episode"
     robot.stop_service = robot.node.create_service(
         srv_type=SetBool,

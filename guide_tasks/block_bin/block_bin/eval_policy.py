@@ -254,6 +254,7 @@ class RunControl:
     def __init__(self):
         self.abort_episode = threading.Event()
         self.stop_run = threading.Event()
+        self.holder = None  # the running episode's InstructionHolder, for subtask overrides
 
 
 def handle_stop(request, response, control: RunControl, logger):
@@ -337,6 +338,111 @@ def rtc_config_from_args(args):
     )
 
 
+# guide_dataset_tools' prompt view: a policy trained on it must be told the GUIDE-EX task
+# and subtask exactly the way its frames were labelled. {procedure} is also available.
+PROMPT_TEMPLATE = "{task} {subtask}"
+
+
+class InstructionHolder:
+    """What the policy is told, read by ``ChunkStream`` before every chunk: the procedure's
+    prompt and the GUIDE-EX task and subtask the highest-priority sources hold, joined by
+    ``template``. With no task held, the procedure stands in for it -- what the recordings
+    carry outside every task.
+
+    Sources, highest first: ``operator`` (a person's override), ``oracle`` (the scene's
+    own state; simulation only), ``planner`` (a learned one), decided per level: an
+    operator can override the subtask and leave the oracle's task. A source overrides
+    those below it only while it holds that level; clearing it hands control back down.
+    Every change of what the policy is told lands in ``history`` with its sources.
+    """
+
+    SOURCES = ("operator", "oracle", "planner")
+    LEVELS = ("task", "subtask")
+
+    def __init__(self, procedure: str, template: str = PROMPT_TEMPLATE):
+        self.procedure, self.template = procedure, template
+        self.history: list[dict] = []
+        self._held: dict[str, dict[str, str]] = {level: {} for level in self.LEVELS}
+        self._lock = threading.Lock()
+        self._t0 = time.monotonic()
+
+    def _active(self) -> dict:
+        return {
+            level: next(((s, held[s]) for s in self.SOURCES if s in held), None)
+            for level, held in self._held.items()
+        }
+
+    def set(self, source: str, task: str | None = None, subtask: str | None = None) -> None:
+        """``source``'s task and subtask; None or "" withdraws that level from it."""
+        if source not in self.SOURCES:
+            raise ValueError(f"unknown instruction source {source!r}")
+        with self._lock:
+            before = self._active()
+            for level, text in (("task", task), ("subtask", subtask)):
+                if text:
+                    self._held[level][source] = text
+                else:
+                    self._held[level].pop(source, None)
+            after = self._active()
+            if after != before:
+                self.history.append({"seconds": round(time.monotonic() - self._t0, 2), **{
+                    level: (None, None) if held is None else held for level, held in after.items()
+                }})
+
+    def clear(self, source: str) -> None:
+        """Withdraw everything ``source`` holds: the sources below are heard again."""
+        self.set(source)
+
+    def active(self) -> dict:
+        """{level: (source, text) or None} the policy is told now."""
+        with self._lock:
+            return self._active()
+
+    def prompt(self) -> str:
+        held = self.active()
+        task = held["task"][1] if held["task"] else self.procedure
+        subtask = held["subtask"][1] if held["subtask"] else ""
+        return " ".join(self.template.format(procedure=self.procedure, task=task, subtask=subtask).split())
+
+
+class SubtaskFeed:
+    """Asks a subtask source every ``period`` seconds, on its own thread, and hands the
+    answer to the holder. A source measures the scene through service calls, so it never
+    runs in the control loop: the loop reads the holder, which always has an answer. The
+    first answer is in before the constructor returns -- the first chunk already sees it.
+    """
+
+    def __init__(self, holder: InstructionHolder, name: str, source, period: float, logger):
+        self.holder, self.name, self.source, self.period, self.logger = holder, name, source, period, logger
+        self._stop = threading.Event()
+        self._ask()
+        self._thread = threading.Thread(target=self._run, name=f"{name}-feed", daemon=True)
+        self._thread.start()
+
+    def _ask(self) -> None:
+        try:
+            answer = self.source()  # {"task": ..., "subtask": ...}, or just the subtask
+            self.holder.set(self.name, **(answer if isinstance(answer, dict) else {"subtask": answer}))
+        except Exception as exc:  # noqa: BLE001 -- a failed measurement keeps the last subtask
+            self.logger.warn(f"{self.name} subtask source failed, keeping the last one: {exc}")
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.period):
+            self._ask()
+
+    def close(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5.0)
+
+
+def load_oracle(package: str, robot, sim_namespace: str, scene_id: int, plan: dict):
+    """``<package>.oracle.make_oracle``: a task package's subtask oracle for this episode's
+    draw (``plan``, the scene's Randomize reply)."""
+    import importlib
+
+    return importlib.import_module(f"{package}.oracle").make_oracle(robot, sim_namespace, scene_id, plan)
+
+
 class ChunkStream:
     """Feeds the control loop actions without the arm stalling on every re-plan.
 
@@ -349,6 +455,12 @@ class ChunkStream:
     while it computed are dropped -- the arm is never handed a command from the past.
 
     `lead=0` restores the old blocking behaviour: predict only when nothing is left.
+
+    `task` is the instruction, or a callable returning the current one (an
+    InstructionHolder's ``prompt``), read before every chunk. When it changes, actions
+    planned under the old one are dropped -- unless RTC is on, which plans the next
+    chunk under the new instruction and blends it into what is queued (lerobot's
+    rollout does the same), so the motion stays continuous.
     """
 
     def __init__(
@@ -362,6 +474,8 @@ class ChunkStream:
         self.robot_type = robot_type
         self.lead = lead
         self.replans = 0
+        self.switches = 0  # instruction changes seen mid-rollout
+        self._told = None  # the instruction the last chunk was planned under
         # How often RTC actually had a tail to inpaint against, and how long it was.
         # At short horizons the queue can drain during inference, in which case the
         # prediction is plain and "RTC on" did nothing for that chunk -- so a run has
@@ -412,7 +526,10 @@ class ChunkStream:
             return None
         return torch.stack(list(self._raw_queue), dim=1)
 
-    def _predict(self, frame: dict, prev_tail=None) -> tuple[list, list]:
+    def _instruction(self) -> str:
+        return self.task() if callable(self.task) else self.task
+
+    def _predict(self, frame: dict, prev_tail=None, task=None) -> tuple[list, list]:
         """One action chunk, truncated to the horizon, in both spaces."""
         kwargs = {}
         if self.rtc is not None and prev_tail is not None:
@@ -438,7 +555,7 @@ class ChunkStream:
             ),
         ):
             batch = prepare_observation_for_inference(
-                frame, self.device, self.task, self.robot_type
+                frame, self.device, task if task is not None else self._instruction(), self.robot_type
             )
             raw = self.policy.predict_action_chunk(self.preprocessor(batch), **kwargs)
             chunk = self.postprocessor(raw)
@@ -453,6 +570,16 @@ class ChunkStream:
         self._raw_queue.extend(raw[offset:])
 
     def next_action(self, frame: dict, step: int):
+        task = self._instruction()
+        if task != self._told:
+            if self._told is not None:
+                self.switches += 1
+                if self.rtc is None:  # planned for the old instruction: drop, plan afresh
+                    self._queue.clear()
+                    self._raw_queue.clear()
+                    self._pending = None  # its result, when it lands, is discarded
+            self._told = task
+
         if self._pending is not None and self._pending[0].done():
             future, launched_at = self._pending
             self._pending = None
@@ -467,14 +594,14 @@ class ChunkStream:
 
         if not self._queue:  # first step of the episode, or the chunk arrived fully stale
             self.replans += 1
-            self._absorb(self._predict(frame), step, step)
+            self._absorb(self._predict(frame, task=task), step, step)
         elif len(self._queue) <= self.lead and self._pending is None:
             self.replans += 1
             tail = self._rtc_tail()
             if tail is not None:
                 self.rtc_engaged += 1
                 self.rtc_tail_total += int(tail.shape[1])
-            self._pending = (self._pool.submit(self._predict, frame, tail), step)
+            self._pending = (self._pool.submit(self._predict, frame, tail, task), step)
 
         if self._raw_queue:
             self._raw_queue.popleft()  # kept in lockstep with _queue

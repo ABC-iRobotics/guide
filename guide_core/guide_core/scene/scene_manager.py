@@ -467,15 +467,24 @@ class SceneManager:
                     # received, which gate_render has already arranged to be the frame
                     # rendered just before this tick.
                     if current_step % interval == 0:
-                        try:
-                            # record_step must run natively and return a frame dict
-                            data = scene.record_step(current_step)
-                            if data:
-                                # A full queue is dropped inside the recorder process
-                                # (SceneRecorder.put_record_data); nothing to catch here.
-                                scene.recorder.put_record_data(data)
-                        except Exception as e:
-                            print(f"Error in record_step: {e}")
+                        # Under the scene's lock, which stop_recording/pause_recording hold
+                        # while they close the episode: a frame is queued either before the
+                        # episode's end marker or not captured at all. Without it a capture
+                        # (milliseconds: nine streams) that straddled stop_recording was
+                        # queued after the marker and became frame 0 of the NEXT episode --
+                        # 15-20% of block_bin's episodes started with the previous one's end.
+                        with self._locks[scene_id]:
+                            if scene.state != SceneState.RECORDING:
+                                continue
+                            try:
+                                # record_step must run natively and return a frame dict
+                                data = scene.record_step(current_step)
+                                if data:
+                                    # A full queue is dropped inside the recorder process
+                                    # (SceneRecorder.put_record_data); nothing to catch here.
+                                    scene.recorder.put_record_data(data)
+                            except Exception as e:
+                                print(f"Error in record_step: {e}")
 
                 elif state == SceneState.FINALIZING:
                     # is_idle() is a blocking round trip to the recorder process. Poll it
@@ -515,10 +524,25 @@ class SceneManager:
             scene.state = SceneState.PAUSED
             scene.recorder.clear_start_recording()
 
+    def set_prompt(self, scene_id: int, task: str = "", subtask: str = "") -> None:
+        """Stamp every frame recorded from now on with this task and/or subtask prompt.
+
+        Both change under the scene lock the capture takes, so no frame pairs a new task
+        with the last one's subtask; "" leaves a level as it is. A prompt holds until the
+        next one of its level or the end of the episode (stop_recording clears both).
+        """
+        with self._locks[scene_id]:
+            prompts = self._scenes[scene_id].prompts
+            for level, prompt in (("task", task), ("subtask", subtask)):
+                if prompt:
+                    prompts[level] = prompt
+
     def stop_recording(self, scene_id: int, save_episode: bool = True) -> bool:
         """End the episode, saving or discarding it. Returns False if nothing was recording."""
         with self._locks[scene_id]:
             scene = self._scenes[scene_id]
+            # Prompts belong to their episode; the next one starts without.
+            scene.prompts = dict.fromkeys(scene.prompts, "")
             if scene.state in (SceneState.IDLE, SceneState.FINALIZING):
                 # No episode is open, and the signal below would sit in the queue of a
                 # writer that is not reading it: the caller would wait forever.

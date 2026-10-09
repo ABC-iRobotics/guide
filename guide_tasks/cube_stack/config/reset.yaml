@@ -1,18 +1,14 @@
-# block_bin reset in Replicator YAML (spike). Runs on the /Sim_*/Reset service. Native nodes
-# only: fixed poses via modify.pose (written to USD so PhysX teleports the bodies) and joint
-# drive targets via modify.attribute (revolute drives take degrees, prismatic metres).
+# cube_stack reset in Replicator YAML. Runs only on the /Sim_*/Reset service: the cubes in
+# a row across the table 50 cm in front of the robot base, the arm home, the bins parked
+# and hidden as randomize.yaml keeps them. Native nodes only, as block_bin's reset:
+# modify.pose written to USD (PhysX teleports the bodies) and joint drive targets via
+# modify.attribute (revolute drives take degrees, prismatic metres).
 #
-# Two Replicator limits shape this file:
-#  * a per-prim list of constants cannot feed one node (distribution.sequence has no
-#    numSamples; a scalar fans out to every matched prim), so each distinct value is its own
-#    prim group + modify node;
-#  * Replicator walks a trigger's downstream graph without a visited set when it attaches
-#    each new node, so registration time grows exponentially with the number of `with`
-#    blocks under ONE trigger (9 blocks: 9 s; 15: never returns). The work is therefore split
-#    over three triggers that listen to the same event.
-# physics.rigid_body is NOT used: re-applying the rigid-body API to simulated bodies
-# invalidates their physics views. joint_efforts had no target equivalent and was all zeros;
-# drive targetVelocity stays at its default 0.
+# Each distinct value is its own prim group (a list of constants cannot feed one node),
+# and the work is split over three triggers on the same event: Replicator's registration
+# time grows exponentially with the `with` blocks under one trigger.
+# Cube positions are in the /blocks frame (turned -90 deg: local x = -scene y, local y =
+# scene x).
 
 home_objects:
   randomizer.register:
@@ -23,12 +19,16 @@ home_objects:
       blue:   { get.prims: { path_pattern: '/blocks/blue_block$' } }
       bin_0:  { get.prims: { path_pattern: '/bin_0$' } }
       bin_1:  { get.prims: { path_pattern: '/bin_1$' } }
-      with.red:    { modify.pose: { position: [0.25, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
-      with.yellow: { modify.pose: { position: [0.35, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
-      with.green:  { modify.pose: { position: [0.45, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
-      with.blue:   { modify.pose: { position: [0.55, -0.4, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
-      with.bin_0:  { modify.pose: { position: [0.4,   0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
-      with.bin_1:  { modify.pose: { position: [0.4,  -0.4, 0.09],  rotation: [0, 0, 0], write_to_usd: true } }
+      with.red:    { modify.pose: { position: [ 0.225, 0.2, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.yellow: { modify.pose: { position: [ 0.075, 0.2, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.green:  { modify.pose: { position: [-0.075, 0.2, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.blue:   { modify.pose: { position: [-0.225, 0.2, 0.042], rotation: [0, 0, 0], write_to_usd: true } }
+      with.bin_0:
+        modify.pose: { position: [3.0, -0.5, -0.68], rotation: [0, 0, 0], write_to_usd: true }
+        modify.visibility: { value: false }
+      with.bin_1:
+        modify.pose: { position: [3.0, 0.5, -0.68], rotation: [0, 0, 0], write_to_usd: true }
+        modify.visibility: { value: false }
 
 home_arm:
   randomizer.register:
@@ -56,7 +56,7 @@ home_fingers:
       with.f1: { modify.attribute: { name: 'drive:linear:physics:targetPosition', attribute_type: float, value: 0.0 } }   # metres
       with.f2: { modify.attribute: { name: 'drive:linear:physics:targetPosition', attribute_type: float, value: 0.0 } }
 
-# Three triggers on one event, so each downstream chain stays short (see the note above).
+# Three triggers on one event, so each downstream chain stays short (see above).
 on_reset_objects:
   trigger.on_custom_event: { event_name: guide_reset }
 on_reset_arm:

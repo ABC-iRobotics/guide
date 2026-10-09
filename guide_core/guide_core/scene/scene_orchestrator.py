@@ -87,7 +87,11 @@ class SceneOrchestrator(ABC):
         else:
             self._logger = logger
 
+        # The procedure-level prompt, drawn at randomization.
         self.task = ""
+        # The GUIDE-EX task and subtask being worked on, set through
+        # SceneManager.set_prompt; "" = none. The task is each frame's LeRobot task.
+        self.prompts = {"task": "", "subtask": ""}
 
         # Getting init.yaml
         package_name = self.__class__.__module__.split(".")[0]
@@ -186,7 +190,16 @@ class SceneOrchestrator(ABC):
             self.recorder = None
 
     def _get_usd_params(self, package_name):
-        self._usd_path = self._path.joinpath(self._config["usd_path"].lstrip("/"))
+        usd_path = self._config["usd_path"]
+        # 'package://<pkg>/<path>' loads another package's installed asset (the ROS
+        # convention), so a task can reuse a scene without copying it.
+        if usd_path.startswith("package://"):
+            from ament_index_python.packages import get_package_share_directory
+
+            pkg, _, rel = usd_path.removeprefix("package://").partition("/")
+            self._usd_path = Path(get_package_share_directory(pkg)) / rel
+        else:
+            self._usd_path = self._path.joinpath(usd_path.lstrip("/"))
 
     def _get_limits(self):
         # limits: [[x_min, x_max], [y_min, y_max], [z_min, z_max]] around the origin
@@ -1036,7 +1049,11 @@ class SceneOrchestrator(ABC):
             "timestamp": current_step,
             "observation": observation,
             "action": action,
-            "task": self.task,
+            # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
+            # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
+            # go in as language prompts.
+            "task": self.prompts["task"] or self.task,
+            "prompts": {"procedure": self.task, "subtask": self.prompts["subtask"]},
         }
 
     def clear_recording_history(self):

@@ -30,6 +30,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Randomize.srv"
   "srv/RegisterScene.srv"
   "srv/SetJoint.srv"
+  "srv/SetPrompt.srv"
   "srv/StartRecording.srv"
   "srv/StopRecording.srv"
   "srv/PauseRecording.srv"

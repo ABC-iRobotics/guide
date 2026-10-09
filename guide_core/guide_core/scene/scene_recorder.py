@@ -4,6 +4,8 @@ import datetime
 import json
 import logging
 import queue
+import shutil
+import tempfile
 import traceback
 from pathlib import Path
 from threading import Event, Thread
@@ -22,6 +24,67 @@ GUIDE_META_SCHEMA = 1
 #: (this file's old literal) -- so every dataset recorded in that window claims a rate
 #: it was not recorded at. 10 is what the recorder actually did.
 DEFAULT_FPS = 10
+
+
+#: Where each GUIDE-EX layer's prompt is recorded. The TASK's ("Put the red cube on the blue
+#: cube.") is each frame's LeRobot ``task`` (a tree that announces no task, like block_bin's,
+#: leaves the scene's own prompt there; cube_stack's announces one on every frame). The
+#: PROCEDURE's ("Stack the cubes.") and the SUBTASK's ("Pick up the red cube.") are
+#: ``language_persistent`` styles: ``subtask`` is LeRobot's, ``procedure`` is GUIDE's,
+#: registered with LeRobot by ``register_guide_styles`` wherever it is written or resolved.
+PROMPT_STYLES = ("procedure", "subtask")
+
+
+def register_guide_styles() -> None:
+    """Make LeRobot accept GUIDE's ``procedure`` style as a persistent one (idempotent)."""
+    from lerobot.datasets import language
+
+    language.EXTENDED_STYLES.add("procedure")
+    language.PERSISTENT_STYLES.add("procedure")
+
+
+def write_language(root: Path, language: dict) -> bool:
+    """Write saved episodes' procedure and subtask prompts into a finalized dataset, the
+    LeRobot way.
+
+    ``language`` maps an episode index to ``{style: [(frame_index, prompt), ...]}``, one
+    entry per change. LeRobot (>= 0.6) keeps these in the ``language_persistent`` column as
+    rows of that style, each active from its timestamp until the next one of its style --
+    what a training recipe's ``active_at(t, style=subtask)`` reads. ``add_frame`` drops
+    language values at record time, so they go in afterwards through LeRobot's own
+    annotation writer, timestamps taken from the dataset's frames. A LeRobot without
+    language columns gets nothing written: returns False.
+    """
+    try:
+        from lerobot.annotations.steerable_pipeline.executor import Executor
+        from lerobot.annotations.steerable_pipeline.reader import iter_episodes
+        from lerobot.annotations.steerable_pipeline.staging import EpisodeStaging
+        from lerobot.annotations.steerable_pipeline.writer import LanguageColumnsWriter
+    except ImportError:
+        return False
+
+    register_guide_styles()
+    root = Path(root)
+    records = list(iter_episodes(root))
+    with tempfile.TemporaryDirectory() as staging:
+        for record in records:
+            rows = [
+                {
+                    "role": "assistant",
+                    "content": prompt,
+                    "style": level,
+                    "timestamp": record.frame_timestamps[frame_index],
+                    "camera": None,
+                    "tool_calls": None,
+                }
+                for level, changes in language.get(record.episode_index, {}).items()
+                for frame_index, prompt in changes
+            ]
+            if rows:
+                EpisodeStaging(Path(staging), record.episode_index).write("plan", rows)
+        LanguageColumnsWriter().write_all(records, Path(staging), root)
+    Executor._ensure_annotation_metadata_in_info(root)
+    return True
 
 
 class SceneRecorder(Thread):
@@ -56,6 +119,13 @@ class SceneRecorder(Thread):
         self._run_meta: dict = {}
         self._pending_episode_meta: dict | None = None
         self._info_written = False
+
+        # Procedure and subtask prompts: this episode's changes per style as (frame_index,
+        # prompt), and those of every saved episode, written into the dataset when it is
+        # finalized.
+        self._episode_frames = 0
+        self._language: dict = {}
+        self._saved_language: dict = {}
 
         self.dataset = None
         self.LeRobotDataset = None
@@ -324,9 +394,19 @@ class SceneRecorder(Thread):
         )
 
         task_str = item.pop("task", self.task_name)
+        prompts = item.pop("prompts", {})
         frame = {**observation_frame, **action_frame, "task": task_str}
 
         self.dataset.add_frame(frame)
+        # LeRobot numbers an episode's frames 0, 1, ... in the order they are added. A
+        # level is recorded where it changes to a new prompt. "" is not recorded: LeRobot
+        # keeps a persistent row active until the next one and stores no empty row, so a
+        # level keeps its last prompt until another one replaces it.
+        for level, prompt in prompts.items():
+            changes = self._language.setdefault(level, [])
+            if prompt and prompt != (changes[-1][1] if changes else ""):
+                changes.append((self._episode_frames, prompt))
+        self._episode_frames += 1
         self._logger.info(
             f"Frame added successfully at time={current_time:.2f} (relative={relative_time:.2f}). Total frames: {len(self.dataset)}"
         )
@@ -345,6 +425,9 @@ class SceneRecorder(Thread):
             self.dataset.save_episode(parallel_encoding=False)
             self._logger.info("Episode successfully saved.")
             self._write_episode_meta(episode_index)
+            if any(self._language.values()):
+                self._saved_language[episode_index] = self._language
+        self._language, self._episode_frames = {}, 0
         self._pending_episode_meta = None
         self.start_recording_event.clear()
         self.stop_recording_event.set()
@@ -353,8 +436,16 @@ class SceneRecorder(Thread):
     def _discard_episode(self):
         if self.dataset is not None:
             self._logger.info("Discarding episode...")
-            self.dataset.clear_episode_buffer()
+            writer = self.dataset.writer
+            episode_index = int(np.asarray(writer.episode_buffer["episode_index"]).reshape(-1)[0])
+            self.dataset.clear_episode_buffer()  # waits for the image writer first
+            # lerobot 0.6 deletes the buffered frames of image features only. Cameras are
+            # video features, and the retry -- same episode index -- overwrites just its
+            # own frames: a longer attempt's tail was encoded after the episode's last.
+            for key in self.dataset.meta.video_keys:
+                shutil.rmtree(writer._get_image_file_dir(episode_index, key), ignore_errors=True)
             self._logger.info("Episode buffer cleared.")
+        self._language, self._episode_frames = {}, 0
         # Drop the pending sidecar payload so only saved episodes are recorded.
         self._pending_episode_meta = None
         self.start_recording_event.clear()
@@ -480,7 +571,20 @@ class SceneRecorder(Thread):
             self._logger.info(f"Finalizing dataset at {dataset_root}...")
             self.dataset.finalize()
             self.dataset = None
+            # The next recording is a new dataset, with its own guide_info.json.
+            self._info_written = False
             self._logger.info("Dataset finalized successfully.")
+
+            if self._saved_language:
+                try:
+                    written = write_language(dataset_root, self._saved_language)
+                    self._logger.info(
+                        f"Procedure and subtask prompts of {len(self._saved_language)} episode(s) "
+                        f"{'written' if written else 'skipped: this LeRobot has no language columns'}."
+                    )
+                except Exception as e:
+                    self._logger.error(f"Writing prompts failed: {e}\n{traceback.format_exc()}")
+                self._saved_language = {}
 
             # Verify dataset files exist on disk (local only, no Hub access)
             try:
