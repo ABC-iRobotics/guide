@@ -4,17 +4,20 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 
 
 def generate_nodes(context, *args, **kwargs):
 
     num_env = int(LaunchConfiguration("num_env").perform(context))
+    first = int(LaunchConfiguration("first_scene").perform(context))
+    sim = f"/Sim_{LaunchConfiguration('sim_id').perform(context)}"
 
     # Same-host DDS discovery on this machine needs the localhost cyclonedds
     # config (loopback has no MULTICAST flag + multiple NICs), otherwise these
@@ -50,10 +53,10 @@ def generate_nodes(context, *args, **kwargs):
     )
 
     move_groups = []
-    for i in range(num_env):
+    for i in range(first, first + num_env):
         # The robot for scene i lives under this namespace; Isaac publishes its
         # joint states and subscribes its joint commands here.
-        ns = f"/Sim_0/Scene_{i}/franka"
+        ns = f"{sim}/Scene_{i}/franka"
         move_groups.append(
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(guide_moveit),
@@ -73,7 +76,7 @@ def generate_nodes(context, *args, **kwargs):
         )
 
     testers = []
-    for i in range(num_env):
+    for i in range(first, first + num_env):
         testers.append(
             Node(
                 package="block_bin",
@@ -81,7 +84,7 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"block_bin_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}"],
+                arguments=["--namespace", f"{sim}/Scene_{i}"],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),
@@ -89,7 +92,9 @@ def generate_nodes(context, *args, **kwargs):
                 ],
             )
         )
-    return move_groups + testers
+    # Each simulator publishes its own clock (/Sim_N/clock); use_sim_time nodes listen on
+    # /clock, so point every node of this launch, the included MoveIt ones too, at it.
+    return [GroupAction([SetRemap(src="/clock", dst=f"{sim}/clock"), *move_groups, *testers])]
 
 
 def generate_launch_description():
@@ -97,7 +102,13 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "num_env", default_value="1", description="Number of environments to launch"
+                "num_env", default_value="1", description="Number of scenes to launch"
+            ),
+            DeclareLaunchArgument(
+                "first_scene", default_value="0", description="Id of the first scene to launch"
+            ),
+            DeclareLaunchArgument(
+                "sim_id", default_value="0", description="Simulator id: the Sim_<id> namespace"
             ),
             OpaqueFunction(function=generate_nodes),
         ]
