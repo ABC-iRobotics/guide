@@ -116,3 +116,11 @@ def test_launch_starts_one_scene_in_this_simulator(tmp_path):
         "bash", "-c",
         "exec ros2 launch my_task bringup.launch.py sim_id:=3 first_scene:=2 num_env:=1",
     ]]
+
+
+def test_launch_quotes_the_package_name(tmp_path):
+    started = []
+    tb.TaskBringup(0, tmp_path, popen=lambda cmd, **kw: started.append(cmd)).launch("x; touch /tmp/pwned", 0)
+    assert started[0][2] == (
+        "exec ros2 launch 'x; touch /tmp/pwned' bringup.launch.py sim_id:=0 first_scene:=0 num_env:=1"
+    )

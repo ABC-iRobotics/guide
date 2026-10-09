@@ -14,6 +14,7 @@ which this process and every launch then use.
 from __future__ import annotations
 
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -139,12 +140,12 @@ class TaskBringup:
     def launch(self, pkg: str, scene_id: int) -> None:
         """Start the task's MoveIt + solver for one scene: <pkg>/launch/bringup.launch.py."""
         cmd = (
-            f"exec ros2 launch {pkg} bringup.launch.py "
+            f"exec ros2 launch {shlex.quote(pkg)} bringup.launch.py "
             f"sim_id:={self.sim_id} first_scene:={scene_id} num_env:=1"
         )
         setup = self.install / "setup.bash"
         if setup.is_file():
-            cmd = f"source {setup} && {cmd}"
+            cmd = f"source {shlex.quote(str(setup))} && {cmd}"
         self._launches.append(self._popen(["bash", "-c", cmd], start_new_session=True))
 
     def shutdown(self, timeout: float = 30.0) -> None:
