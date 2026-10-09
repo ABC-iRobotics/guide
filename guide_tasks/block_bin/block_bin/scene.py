@@ -58,7 +58,3 @@ class Scene(SceneOrchestrator):
     def check_warmup(self):
         # Default implementation: warmup is always complete after the required frames
         return True
-
-    def reset_lightweight(self):
-        # To be implemented with actual scene reset logic
-        pass

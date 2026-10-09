@@ -190,9 +190,6 @@ class SceneRecorder(Thread):
                     f"recorder is behind but the simulation is not stalled."
                 )
 
-    def set_idle(self):
-        self.idle_event.set()
-
     def is_idle(self):
         return self.idle_event.is_set()
 

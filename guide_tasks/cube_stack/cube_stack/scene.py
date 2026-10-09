@@ -130,6 +130,3 @@ class Scene(SceneOrchestrator):
 
     def check_warmup(self):
         return True
-
-    def reset_lightweight(self):
-        pass

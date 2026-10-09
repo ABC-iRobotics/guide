@@ -5,7 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yaml
@@ -49,11 +49,6 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
 
 
 class SceneOrchestrator(ABC):
-
-    scene_id: int
-
-    _offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    _pkg_name: str
 
     _config: dict
     _usd_path: str
@@ -222,9 +217,6 @@ class SceneOrchestrator(ABC):
         self.origin = self._config.get("origin", [0.0, 0.0, 0.0])
 
         assert self.origin is not None
-
-    def set_offset(self, offset: Tuple[float, float, float]):
-        self._offset = offset
 
     def create_robot_graphs(self):
         robot_list: List[Dict] = []
@@ -1058,11 +1050,3 @@ class SceneOrchestrator(ABC):
 
     def clear_recording_history(self):
         self._last_recorded_obs_pose = None
-
-    @abstractmethod
-    def reset_lightweight(self):
-        raise NotImplementedError("Lightweight reset is not implemented for this scene.")
-
-    def finalize(self):
-        self.recorder.put_record_data("FINALIZE")
-        self.recorder.set_start_recording()
