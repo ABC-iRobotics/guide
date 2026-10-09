@@ -2,9 +2,9 @@
 
 GUIDE demonstration task: **stack the cubes**. The four cubes of the block_bin scene are
 built into one tower, in a random order, one cube on top of the other. Each episode is
-recorded as a LeRobot dataset episode with the task prompt (`Stack the cubes.`) on every
-frame and the subtask being worked on (`Put the red cube on the blue cube.`) as LeRobot's
-subtask annotation.
+recorded as a LeRobot dataset episode with a prompt per layer: the task under way (`Put the
+red cube on the blue cube.`) as each frame's task, and the procedure (`Stack the cubes.`)
+and the subtask (`Pick up the red cube.`) as language annotations (see [Dataset](#dataset)).
 
 ## Scene
 

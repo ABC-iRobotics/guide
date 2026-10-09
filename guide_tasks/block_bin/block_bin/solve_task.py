@@ -50,7 +50,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
             id=scene_id, use_zone=zone is not None, zone=int(zone) if zone is not None else 0
         ),
     )
-    # robot.node.get_logger().info(f'Result is: {task}')
 
     task_dict = json.loads(task.message)
     target = task_dict["target"]
@@ -198,12 +197,11 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 static_args={"speed": 0.2, "cartesian": True},
             ),
             SetGripperState(
-                # Over-close onto the cube: command fully closed (0.0) and let the cube
-                # stop the fingers. The GripperActionController latches the *stalled*
-                # position on success (set_hold_position), so the fingers must be pushing
-                # PAST the cube for that held position to keep a squeeze force. Commanding
-                # the cube's surface (~0.02) held ~zero force and the grip loosened.
-                # Tune upward (e.g. 0.01) if 0.0 squeezes too hard for the cube.
+                # Over-close onto the cube: command 0.01, past the cube's surface (~0.02),
+                # and let the cube stop the fingers. The GripperActionController latches the
+                # *stalled* position on success (set_hold_position), so the fingers must be
+                # pushing PAST the cube for that held position to keep a squeeze force.
+                # Commanding the cube's surface (~0.02) held ~zero force and the grip loosened.
                 alias="CloseGripper",
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.01}},
@@ -635,8 +633,6 @@ def main():
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
     scene_id = int(match.group()) if match else 0
 
-    # SPARStwokConfigDefault
-    # BiESTkConfigDefault
     config = FR3RobotConfig(
         frame_id=namespace_base.split("/")[-1] if namespace_base else "world",
         namespace=f"{namespace_base}/franka",

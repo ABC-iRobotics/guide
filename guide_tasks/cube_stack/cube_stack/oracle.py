@@ -14,8 +14,9 @@ Once the tower stands, the closing task and its subtask are both going home -- w
 recordings carry. The recovery subtask (setting an undeliverable cube
 down) is a decision, not a state, so the oracle never names it. Nothing here moves the arm.
 
-It is the ``oracle`` source of the evaluation's InstructionHolder: it stands in for a
-learned planner or overrides one.
+It is the ``oracle`` source of the InstructionHolder in block_bin_eval's ``eval_policy``
+(a separate package, outside this repository): it stands in for a learned planner or
+overrides one.
 """
 
 from guide_ex.core.composite_node import CompositeNode
@@ -85,5 +86,6 @@ class SceneOracle:
 
 
 def make_oracle(robot, sim_namespace, scene_id, plan) -> SceneOracle:
-    """The evaluation's hook: ``plan`` is the scene's Randomize reply (scene.plan)."""
+    """block_bin_eval's hook (``eval_policy.load_oracle``): ``plan`` is the scene's
+    Randomize reply (scene.plan)."""
     return SceneOracle(robot, sim_namespace, scene_id, plan)

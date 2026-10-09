@@ -1,6 +1,7 @@
 # Success = one tower in this episode's order. Scene.is_success_preprocess turns this
 # into one get_world_poses per cube, bottom first, and is_success_postprocess checks that
-# each cube rests on the one below it (the tree's TowerProgress uses the same test).
+# each cube rests on the one below it (the tree's TowerHeight, a ChainLength, uses the same
+# test: guide_ex.utility.pose.is_at_offset).
 instructions:
   - cmd: 'get_world_poses'
     kwargs:
