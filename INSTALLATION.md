@@ -343,7 +343,7 @@ to `LD_LIBRARY_PATH` automatically.
 
 ### 5.1 rclpy for the Isaac Python (3.11)
 
-- **Files:** `guide_core/launch/bringup.launch.py`, `isaac_sim.launch.py`.
+- **Files:** `guide_core/launch/bringup.launch.py`.
 - **What:** the launchers prepend Isaac Sim's **bundled** rclpy to the spawned process's
   `PYTHONPATH`:
   `env_isaaclab/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/$ROS_DISTRO/rclpy`
