@@ -1,4 +1,4 @@
-"""Runtime commands and service replies, run against fakes with Isaac stubbed out.
+"""Runtime commands, service replies and the recorder, run against fakes with Isaac stubbed out.
 
 Each test pins one defect that used to slip through because the code path needs a
 running simulator to reach. These modules import Isaac at module level, so they are
@@ -118,3 +118,22 @@ def test_service_replies_carry_their_own_type_and_the_reason(isaac_import):
 
     reply = ros._stop_recording_callback(me, StopRecording.Request(id=0), None)
     assert reply.success and "reset" not in reply.message
+
+
+def test_the_end_effector_is_recorded_in_the_scene_frame(isaac_import):
+    """Scene_1 sits at y = 10, z = 1 in the world; its data must not."""
+    import numpy as np
+
+    orchestrator = isaac_import("guide_core.scene.scene_orchestrator").SceneOrchestrator
+    world = np.array([[0.1, 10.2, 1.4]])
+    ee_view = SimpleNamespace(get_world_poses=lambda: (world, np.array([[0.0, 1.0, 0.0, 0.0]])))
+    scene = host(
+        _config={"dataset": {}}, ee_views={"franka": ee_view}, _offset=(0.0, 10.0, 1.0),
+        prompts={"task": "", "subtask": ""}, task="",
+    )
+    scene._recorded_annotators = dict
+
+    frame = orchestrator.record_step(scene, 0)
+
+    xyz = [frame["observation"][k] for k in ("x", "y", "z")]
+    assert np.allclose(xyz, [0.1, 0.2, 0.4])
