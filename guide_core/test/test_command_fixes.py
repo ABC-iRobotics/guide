@@ -120,20 +120,23 @@ def test_service_replies_carry_their_own_type_and_the_reason(isaac_import):
     assert reply.success and "reset" not in reply.message
 
 
-def test_the_end_effector_is_recorded_in_the_scene_frame(isaac_import):
-    """Scene_1 sits at y = 10, z = 1 in the world; its data must not."""
+def test_the_end_effector_is_recorded_relative_to_the_robot_base(isaac_import):
+    """A base on Scene_1 (y = 10, z = 1 in the world), turned 90 deg about z: the data is the
+    end effector as that base sees it, translation and rotation."""
     import numpy as np
 
     orchestrator = isaac_import("guide_core.scene.scene_orchestrator").SceneOrchestrator
-    world = np.array([[0.1, 10.2, 1.4]])
-    ee_view = SimpleNamespace(get_world_poses=lambda: (world, np.array([[0.0, 1.0, 0.0, 0.0]])))
+    turn = np.array([[np.cos(np.pi / 4), 0.0, 0.0, np.sin(np.pi / 4)]])  # wxyz, +90 deg about z
+    base = SimpleNamespace(get_world_poses=lambda: (np.array([[-0.3, 10.0, 1.0]]), turn))
+    # 0.4 ahead of and 0.4 above the base: ahead is world +y once the base is turned.
+    ee = SimpleNamespace(get_world_poses=lambda: (np.array([[-0.3, 10.4, 1.4]]), turn))
     scene = host(
-        _config={"dataset": {}}, ee_views={"franka": ee_view}, _offset=(0.0, 10.0, 1.0),
+        _config={"dataset": {}}, ee_views={"franka": ee}, base_views={"franka": base},
         prompts={"task": "", "subtask": ""}, task="",
     )
     scene._recorded_annotators = dict
 
-    frame = orchestrator.record_step(scene, 0)
+    obs = orchestrator.record_step(scene, 0)["observation"]
 
-    xyz = [frame["observation"][k] for k in ("x", "y", "z")]
-    assert np.allclose(xyz, [0.1, 0.2, 0.4])
+    assert np.allclose([obs[k] for k in ("x", "y", "z")], [0.4, 0.0, 0.4])
+    assert np.allclose([obs[k] for k in ("wx", "wy", "wz")], 0.0, atol=1e-9)

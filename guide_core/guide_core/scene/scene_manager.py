@@ -168,7 +168,6 @@ class SceneManager:
             self._locks[id] = Lock()
 
             offset = self._calculate_offset(id)
-            scene.set_offset(offset)
 
             self._logger.info(
                 f"[SceneManager] add_scene finished successfully. ID: {id}, Offset: {offset}"
