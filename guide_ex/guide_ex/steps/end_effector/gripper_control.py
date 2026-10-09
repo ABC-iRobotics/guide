@@ -16,8 +16,8 @@ class SetGripperState(BaseNode):
     # next step (e.g. planning) runs. Closing onto the cube injects contact forces
     # that shift the arm joints; planning immediately snapshots a still-moving arm,
     # so move_group later rejects the trajectory ("start point deviates from
-    # current robot state"). Waiting for the gripper action to finish and then
-    # settling makes the next plan start from a stable, grasped state.
+    # current robot state"). Settling for this long after sending the gripper
+    # command makes the next plan start from a stable, grasped state.
     SETTLE_SECONDS = 1.0
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
@@ -28,6 +28,7 @@ class SetGripperState(BaseNode):
         Executes a gripper control action to the specified target position.
 
         Args:
+            robot (Robot): The robot whose gripper to command.
             gripper_goal_pos (Dict[str, float]): A dictionary mapping gripper joint names to target positions.
         Returns:
             ExecutionResult: The result of the gripper control execution.

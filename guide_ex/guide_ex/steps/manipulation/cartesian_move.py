@@ -28,8 +28,9 @@ class MoveToCartesianPose(BaseNode):
         Executes a Cartesian move to the specified target pose at the given speed.
 
         Args:
+            robot (Robot): The robot to move.
             target_pose (Pose): The target pose to move to.
-            speed (float): The speed at which to execute the move (default: 1.0).
+            speed (float): MoveIt's velocity scaling factor for the move, 0 to 1 (default: 1.0).
             cartesian (bool): Whether to execute the move in Cartesian space (default: False).
             min_fraction (float): A straight-line move MoveIt can compute for less than
                 this share of the way is refused before the arm moves.
@@ -39,7 +40,6 @@ class MoveToCartesianPose(BaseNode):
 
         if isinstance(robot, ROS2Robot):
             self.logger = robot.node.get_logger()  # Use the robot's logger for consistent logging
-            # Convert target_pose to the format expected by the ROS2Robot
             if robot.config.arm_action_type not in [
                 ActionType.CARTESIAN_POSE,
                 ActionType.JOINT_POSITION,
@@ -107,10 +107,12 @@ class MoveWithCartesianVelocity(BaseNode):
 
     def run(self, robot: Robot, velocity_command: Dict[str, float]) -> ExecutionResult:
         """
-        Executes a Cartesian velocity command for a specified duration.
+        Sends one Cartesian velocity command; the node neither times nor stops it.
 
         Args:
-            velocity_command (Dict[str, float]): A dictionary containing velocity components (e.g., {'vx': 0.1, 'vy': 0.0, 'vz': 0.0}).
+            robot (Robot): The robot to move.
+            velocity_command (Dict[str, float]): Velocity components 'vx', 'vy', 'vz', 'vroll',
+                'vpitch', 'vyaw'; a missing one is 0 (e.g., {'vx': 0.1, 'vy': 0.0, 'vz': 0.0}).
         Returns:
             ExecutionResult: The result of the velocity command execution.
         """
@@ -137,7 +139,7 @@ class MoveWithCartesianVelocity(BaseNode):
                 if success:
                     break
             success = robot.send_action(action=twist_msg, cartesian=True, wait_for_execution=False)
-            # In a real implementation, you would need to handle the timing and stopping of the velocity command after the specified duration.
+            # Nothing here times the motion or stops it after the command is sent.
         else:
             robot.send_action(velocity_command)
             success = True  # Assume success for non-ROS2Robot implementations

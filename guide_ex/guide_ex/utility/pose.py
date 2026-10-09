@@ -13,16 +13,15 @@ class TransformPose(BaseNode):
 
     def run(self, l_pose: Pose | Transform, r_pose: Pose | Transform) -> ExecutionResult:
         """
-        Transforms the input pose by applying the given transform.
+        Composes two poses or transforms: ``l_pose * r_pose``.
 
         Args:
-            input_pose (Pose | Transform): The original pose or transform to be transformed.
-            transform (Pose | Transform): The transformation to apply to the input pose or transform.
+            l_pose (Pose | Transform): The left operand, e.g. a frame or an offset to apply.
+            r_pose (Pose | Transform): The right operand, given in ``l_pose``'s frame.
         Returns:
-            ExecutionResult: The result containing the transformed pose.
+            ExecutionResult: outputs `pose`, of ``l_pose``'s type.
         """
-        # Perform the pose transformation (this is a placeholder for actual transformation logic)
-        pose = l_pose * r_pose  # Assuming Pose and Transform have __mul__ defined for composition
+        pose = l_pose * r_pose
 
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
 
@@ -42,8 +41,7 @@ class InvertPose(BaseNode):
         Returns:
             ExecutionResult: The result containing the inverted pose.
         """
-        # Perform the pose inversion (this is a placeholder for actual inversion logic)
-        inverted_pose = pose.inv()  # Assuming Pose and Transform have an inv() method
+        inverted_pose = pose.inv()
 
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": inverted_pose})
 

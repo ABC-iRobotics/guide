@@ -17,7 +17,7 @@ class IsTaskSuccessful(BaseNode):
         and outputs `success` False, so a following StopRecording can discard on it.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene to check.
         Returns:

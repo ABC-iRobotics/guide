@@ -102,7 +102,7 @@ class ReduceRotationToSymmetry(BaseNode):
 
     An object with ``symmetry`` identical faces looks the same under any multiple
     of ``2*pi / symmetry`` about Z, so the wrist never needs to turn more than
-    half a period. The yaw is wrapped into ``(-pi/n, pi/n]``, minimising the wrist
+    half a period. The yaw is wrapped into ``[-pi/n, pi/n]``, minimising the wrist
     travel while landing on a symmetry-equivalent orientation. ``symmetry=4`` is a
     cube/square, ``symmetry=1`` disables reduction (plain angle normalisation).
     """

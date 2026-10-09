@@ -53,7 +53,7 @@ class StartRecording(BaseNode):
         dataset itself is created on the first frame of the run, under `path`.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene to record.
             path (str): Dataset base directory; empty means ~/dataset.
@@ -90,7 +90,7 @@ class PauseRecording(BaseNode):
         resume follows the last one before the pause directly.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene being recorded.
             timeout_sec (float): Per-attempt service timeout.
@@ -129,7 +129,7 @@ class StopRecording(BaseNode):
         open for the next episode; finalize_recording closes it.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene being recorded.
             save_episode (bool): True saves the episode, False discards it.
@@ -171,7 +171,7 @@ class SetPrompt(BaseNode):
         already active changes nothing, so a retried node may announce itself again.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_id (int): The scene being recorded.
             task (str): The task, in natural language; empty leaves it as it is.

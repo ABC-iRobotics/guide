@@ -21,8 +21,10 @@ class MoveToJointConfiguration(BaseNode):
         Executes a joint move to the specified target configuration at the given speed.
 
         Args:
-            target_configuration (Dict[str, float]): A dictionary mapping joint names to target positions.
-            speed (float): The speed at which to execute the move (default: 1.0).
+            robot (Robot): The robot to move.
+            target_configuration (Dict[str, float]): Target position per arm joint, keyed
+                "<joint>.pos" (e.g. "fr3_joint1.pos"); a ROS2Robot needs every arm joint.
+            speed (float): MoveIt's velocity scaling factor for the move, 0 to 1 (default: 1.0).
         Returns:
             ExecutionResult: The result of the move execution.
         """

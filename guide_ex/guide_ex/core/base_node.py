@@ -36,7 +36,8 @@ class BaseNode:
         return inputs
 
     def map_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Map outputs. Utility nodes strictly return ONLY explicitly mapped keys."""
+        """Map outputs through output_map: utility nodes return ONLY the keys it maps, other
+        nodes rename those keys and keep the rest. Without an output_map, outputs pass as-is."""
         if not (outputs and self.output_map):
             return outputs
 
