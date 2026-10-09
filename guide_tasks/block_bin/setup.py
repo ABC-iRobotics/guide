@@ -7,7 +7,7 @@ package_name = "block_bin"
 
 setup(
     name=package_name,
-    version="1.0.0",
+    version="2.0.0",
     packages=find_namespace_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -33,11 +33,6 @@ setup(
         (os.path.join("share", package_name, os.path.dirname(f)), [f])
         for f in glob(os.path.join("assets", "**", "*"), recursive=True)
         if os.path.isfile(f)
-    ]
-    + [
-        (os.path.join("share", package_name, os.path.dirname(f).replace("../../", "")), [f])
-        for f in glob(os.path.join("../../modules", "irob_franka_ros2", "**", "*"), recursive=True)
-        if os.path.isfile(f)
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -51,6 +46,8 @@ setup(
         ],
     },
     entry_points={
-        "console_scripts": ["solve_task = block_bin.solve_task:main"],
+        "console_scripts": [
+            "solve_task = block_bin.solve_task:main",
+        ],
     },
 )

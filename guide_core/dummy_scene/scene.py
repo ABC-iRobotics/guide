@@ -25,6 +25,3 @@ class Scene(SceneOrchestrator):
 
     def reset_postprocess(self, result):
         return True
-
-    def reset_lightweight(self):
-        pass

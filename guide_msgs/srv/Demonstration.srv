@@ -1,5 +1,6 @@
-int64 amount
 string path
+int32[] zones
+int32[] counts
 ---
 bool success
 string message

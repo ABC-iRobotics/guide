@@ -15,15 +15,18 @@ from scipy.spatial.transform.rotation import Rotation as R
 from guide_core.types.geometry import Point as PointType
 from guide_core.types.geometry import Pose as PoseType
 from guide_core.types.geometry import Rotation as RotationType
+from guide_core.types.randomization import zone_plan
 from guide_ex.core.composite_node import CompositeNode, RecoveryNode
-from guide_ex.core.states import Layer
+from guide_ex.core.states import DemoStatus, Layer
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
-from guide_ex.steps.utility.exception import NodeException
-from guide_ex.steps.utility.pose import InvertPose, TransformPose
-from guide_ex.steps.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
-from guide_ex.steps.utility.wait import WaitForSeconds
+from guide_ex.steps.simulation.success import IsTaskSuccessful
+from guide_ex.utility import recording
+from guide_ex.utility.exception import NodeException
+from guide_ex.utility.pose import InvertPose, TransformPose
+from guide_ex.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
+from guide_ex.utility.wait import WaitForSeconds
 from guide_msgs.srv import (
     CheckSuccess,
     Collision,
@@ -38,11 +41,15 @@ from guide_msgs.srv import (
 namespace_base = ""
 
 
-def solveTask(scene_id, robot):
+def solveTask(scene_id, robot, zone=None, path=""):
     global namespace_base
 
-    task = robot.callService(robot.randomize, Randomize.Request(id=scene_id))
-    # robot.node.get_logger().info(f'Result is: {task}')
+    task = robot.callService(
+        robot.randomize,
+        Randomize.Request(
+            id=scene_id, use_zone=zone is not None, zone=int(zone) if zone is not None else 0
+        ),
+    )
 
     task_dict = json.loads(task.message)
     target = task_dict["target"]
@@ -66,12 +73,14 @@ def solveTask(scene_id, robot):
     global_context: dict[str, Any] = {
         "sim_namespace": f'/{namespace_base.split("/")[1]}',
         "scene_namespace": f"/Scene_{scene_id}",
+        "scene_id": scene_id,
         "robot": robot,
         "robot_prim": "/fr3/fr3_rightfinger",
         "target": target,
         "goal": goal,
         "scene_path": "",
         "rest_pose": rest_pose,
+        "dataset_path": path,
     }
 
     robot.node.get_logger().info(f"Context {global_context}")
@@ -161,6 +170,7 @@ def solveTask(scene_id, robot):
             "target": "target",
             "scene_path": "scene_path",
             "cube_pose": "cube_pose",
+            "rest_pose": "rest_pose",
         },
         children=[
             # ~~~~~~~~~~~~~~~~~~ Pick ~~~~~~~~~~~~~~~~~ #
@@ -187,21 +197,22 @@ def solveTask(scene_id, robot):
                 static_args={"speed": 0.2, "cartesian": True},
             ),
             SetGripperState(
-                # Over-close onto the cube: command fully closed (0.0) and let the cube
-                # stop the fingers. The GripperActionController latches the *stalled*
-                # position on success (set_hold_position), so the fingers must be pushing
-                # PAST the cube for that held position to keep a squeeze force. Commanding
-                # the cube's surface (~0.02) held ~zero force and the grip loosened.
-                # Tune upward (e.g. 0.01) if 0.0 squeezes too hard for the cube.
+                # Over-close onto the cube: command 0.01, past the cube's surface (~0.02),
+                # and let the cube stop the fingers. The GripperActionController latches the
+                # *stalled* position on success (set_hold_position), so the fingers must be
+                # pushing PAST the cube for that held position to keep a squeeze force.
+                # Commanding the cube's surface (~0.02) held ~zero force and the grip loosened.
                 alias="CloseGripper",
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.01}},
             ),
             WaitForSeconds(alias="WaitAfterClose", static_args={"seconds": 2.0}),
+            # Lift 28 cm straight up before heading for the bin. 20 cm taught policies a
+            # lift too shallow to clear the bin walls (their main failure mode).
             TransformPose(
                 alias="TransformCubeRetreatPose",
                 dynamic_map={"r_pose": "cube_pose"},
-                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.4]))},
+                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.28]))},
                 output_map={"pose": "cube_retreat_pose"},
             ),
             MoveToCartesianPose(
@@ -228,6 +239,25 @@ def solveTask(scene_id, robot):
         condition_expr="grasp_success",
         true_branch=None,
         false_branch=NodeException(name="NoGrasp"),
+        fallbacks={
+            # If the straight-up retreat can't execute (its Cartesian move aborts),
+            # lift via the (high) rest pose instead, then resume the pick at the
+            # grasp check -- so the arm reaches the bin THROUGH the rest pose rather
+            # than sweeping across at grasp height and clipping the bin.
+            "MoveToCubeRetreat": RecoveryNode(
+                name="RetreatViaRest",
+                level=Layer.SEQUENCE,
+                children=[
+                    MoveToCartesianPose(
+                        alias="MoveToRestRetreat",
+                        dynamic_map={"robot": "robot", "target_pose": "rest_pose"},
+                        static_args={"speed": 1.0},
+                    ),
+                ],
+                dynamic_map={"robot": "robot", "rest_pose": "rest_pose"},
+                resume_target="CheckClash",
+            ),
+        },
     )
 
     robot.node.get_logger().info("Initializing Unclutch subtask...")
@@ -318,7 +348,7 @@ def solveTask(scene_id, robot):
             TransformPose(
                 alias="TransformBinApproachPose",
                 dynamic_map={"r_pose": "bin_pose"},
-                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.1]))},
+                static_args={"l_pose": PoseType(position=PointType([0.0, 0.0, 0.15]))},
                 output_map={"pose": "bin_approach_pose"},
             ),
             # Move to bin and release the cube
@@ -363,10 +393,42 @@ def solveTask(scene_id, robot):
         dynamic_map={key: key for key, _ in global_context.items()},
         children=[
             unclutch_subtask,
+            # The episode starts once the arm is unclutched at rest, not at randomization.
+            recording.StartRecording(
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                    "path": "dataset_path",
+                },
+                # A busy recorder has held start_recording for ~3 min before.
+                static_args={"timeout_sec": 240.0},
+            ),
             get_target_pose_sequence,
             pick_subtask,
             place_subtask,
             return_subtask,
+            # ...and ends after homing: saved if the scene says the task is done, else
+            # discarded. Return's WaitAfterTask has already let the scene settle.
+            IsTaskSuccessful(
+                alias="CheckSuccess",
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                },
+                output_map={"success": "task_success", "reason": "task_reason"},
+            ),
+            recording.StopRecording(
+                dynamic_map={
+                    "robot": "robot",
+                    "sim_namespace": "sim_namespace",
+                    "scene_id": "scene_id",
+                    "save_episode": "task_success",
+                },
+                # Saving encodes every camera stream of the episode before it answers.
+                static_args={"timeout_sec": 300.0},
+            ),
         ],
         fallbacks={
             "Pick": RecoveryNode(
@@ -410,13 +472,12 @@ def solveTask(scene_id, robot):
 
     robot.node.get_logger().info("Executing pick and place motion sequence")
     try:
-        pick_and_place.execute(context=global_context)
+        result = pick_and_place.execute(context=global_context)
         robot.node.get_logger().info("Executed pick and place motion sequence")
 
-        # Evaluate success of the task
-        time.sleep(1.0)  # Wait a second for physics to settle completely before evaluating
-        response = robot.callService(robot.is_success, CheckSuccess.Request(id=scene_id))
-        if response.success:
+        # The tree checked success itself, right before StopRecording saved or dropped
+        # the episode. A run that broke off earlier never got that far: not a success.
+        if result.status == DemoStatus.PERFECT and result.outputs.get("task_success"):
             robot.node.get_logger().info("\033[92m" + "=" * 50 + "\033[0m")
             robot.node.get_logger().info(
                 f"\033[92m[SUCCESS] Scene {scene_id}: Task completed successfully!\033[0m"
@@ -424,7 +485,7 @@ def solveTask(scene_id, robot):
             robot.node.get_logger().info("\033[92m" + "=" * 50 + "\033[0m")
             return True
         else:
-            reason = response.message if response.message else "Conditions not met"
+            reason = result.outputs.get("task_reason") or result.error_message or "Sequence aborted"
             robot.node.get_logger().error("\033[91m" + "=" * 50 + "\033[0m")
             robot.node.get_logger().error(
                 f"\033[91m[FAILURE] Scene {scene_id}: Task failed! Reason: {reason}\033[0m"
@@ -443,38 +504,92 @@ is_generating = False
 generation_lock = threading.Lock()
 
 
-def generate_demos_thread(amount, scene_id, robot):
+# block_bin has a zone grid; read it from this package's randomize.yaml so
+# "all zones" expands to the right count.
+def scene_num_zones() -> int:
+    try:
+        import os
+
+        from ament_index_python.packages import get_package_share_directory
+
+        from guide_core.types.randomization.replicator_guide import zone_grid
+
+        share = get_package_share_directory("block_bin")
+        grid = zone_grid(os.path.join(share, "config", "randomize.yaml"))
+        if grid is not None:
+            return grid.num_zones
+    except Exception:
+        pass
+    return 1
+
+
+def zoned_request(zone_counts: dict, path: str = "") -> Demonstration.Request:
+    """Build a Demonstration request: ``zoned_request({2: 4, 16: 10})`` -> 4 demos
+    with the cube in zone 2 and 10 in zone 16."""
+    zones = [int(z) for z in zone_counts]
+    counts = [int(zone_counts[z]) for z in zones]
+    return Demonstration.Request(path=path, zones=zones, counts=counts)
+
+
+def all_zones_request(count: int, path: str = "") -> Demonstration.Request:
+    """`count` demos in EVERY zone (``zones=[-1]``); ``zones=[]`` would be free draws."""
+    return Demonstration.Request(path=path, zones=[-1], counts=[int(count)])
+
+
+def generate_demos_thread(plan, scene_id, robot, path=""):
     global is_generating
     try:
-        successful_episodes = 0
+        total = len(plan)
+        idx = 0
         attempts = 0
-        while successful_episodes < amount:
+        errors = 0  # consecutive attempts that raised
+        while idx < total:
+            zone = plan[idx]
             attempts += 1
             robot.node.get_logger().info(
-                f"--- Attempt {attempts} | Successful {successful_episodes}/{amount} ---"
+                f"--- Episode {idx + 1}/{total} (zone={zone}) | attempt {attempts} ---"
             )
 
-            robot.callService(robot.start_recording, StartRecording.Request(id=scene_id))
+            # The tree records its own episode: StartRecording after Unclutch,
+            # StopRecording after homing, saving only on success.
+            try:
+                success = solveTask(scene_id, robot, zone=zone, path=path)
+                errors = 0
+            except Exception as e:
+                # A timed-out sim call (Randomize, ...) costs this attempt, not the run;
+                # five in a row means the simulator is gone.
+                errors += 1
+                robot.node.get_logger().error(f"Attempt failed ({errors} in a row): {e}")
+                if errors >= 5:
+                    raise
+                success = False
 
-            success = solveTask(scene_id, robot)
+            # A run that broke off between the two leaves its episode open: drop it.
+            # stop_recording is a no-op when nothing is open, and a stalled recorder
+            # must cost this one attempt, not the whole generation run.
+            try:
+                robot.callService(
+                    robot.stop_recording,
+                    StopRecording.Request(id=scene_id, save_episode=False),
+                    timeout_sec=300.0,
+                )
+            except TimeoutError as e:
+                robot.node.get_logger().error(f"Cleanup stop_recording timed out: {e}")
 
             if success:
-                robot.node.get_logger().info("Task succeeded. Saving episode...")
-                robot.callService(
-                    robot.stop_recording, StopRecording.Request(id=scene_id, save_episode=True)
-                )
-                successful_episodes += 1
-            else:
-                robot.node.get_logger().info("Task failed. Discarding episode...")
-                robot.callService(
-                    robot.stop_recording, StopRecording.Request(id=scene_id, save_episode=False)
-                )
+                idx += 1
+                attempts = 0
 
-        robot.node.get_logger().info("Test completed. Finalizing recording dataset...")
+        robot.node.get_logger().info("Generation finished. Finalizing recording dataset...")
         robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
         robot.node.get_logger().info("Recording dataset finalized.")
     except Exception as e:
         robot.node.get_logger().error(f"Error during generation: {e}")
+        # Episodes already saved stay unreadable until the dataset is finalized.
+        try:
+            robot.callService(robot.finalize_recording, FinalizeRecording.Request(id=scene_id))
+        except Exception as finalize_error:
+            robot.node.get_logger().error(f"Finalize after abort failed: {finalize_error}")
     finally:
         with generation_lock:
             is_generating = False
@@ -491,21 +606,24 @@ def handle_generate_demonstration(request, response, scene_id, robot):
 
         is_generating = True
 
-    amount = request.amount
-    robot.node.get_logger().info(f"Received request to generate {amount} demonstrations.")
+    plan = zone_plan(request.zones, request.counts, scene_num_zones())
+    robot.node.get_logger().info(
+        f"Received request: zones={list(request.zones)} counts={list(request.counts)} "
+        f"-> {len(plan)} demonstrations."
+    )
 
-    t = threading.Thread(target=generate_demos_thread, args=(amount, scene_id, robot))
+    t = threading.Thread(target=generate_demos_thread, args=(plan, scene_id, robot, request.path))
     t.start()
 
     response.success = True
-    response.message = f"Started generating {amount} demonstrations."
+    response.message = f"Started generating {len(plan)} demonstrations."
     return response
 
 
 def main():
     # Create a robot configuration
     argparser = argparse.ArgumentParser(
-        description="Test ROS2Robot connection and action execution."
+        description="block_bin demonstration generator."
     )
     argparser.add_argument("--namespace", type=str, default="")
     args = argparser.parse_known_args()
@@ -515,8 +633,6 @@ def main():
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
     scene_id = int(match.group()) if match else 0
 
-    # SPARStwokConfigDefault
-    # BiESTkConfigDefault
     config = FR3RobotConfig(
         frame_id=namespace_base.split("/")[-1] if namespace_base else "world",
         namespace=f"{namespace_base}/franka",

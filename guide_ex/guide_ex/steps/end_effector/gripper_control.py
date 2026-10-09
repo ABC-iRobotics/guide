@@ -16,18 +16,19 @@ class SetGripperState(BaseNode):
     # next step (e.g. planning) runs. Closing onto the cube injects contact forces
     # that shift the arm joints; planning immediately snapshots a still-moving arm,
     # so move_group later rejects the trajectory ("start point deviates from
-    # current robot state"). Waiting for the gripper action to finish and then
-    # settling makes the next plan start from a stable, grasped state.
+    # current robot state"). Settling for this long after sending the gripper
+    # command makes the next plan start from a stable, grasped state.
     SETTLE_SECONDS = 1.0
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("GripperControl", alias, dynamic_map, static_args)
+        super().__init__("GripperControl", alias, dynamic_map, static_args, output_map)
 
     def run(self, robot: Robot, gripper_goal_pos: Dict[str, float]) -> ExecutionResult:
         """
         Executes a gripper control action to the specified target position.
 
         Args:
+            robot (Robot): The robot whose gripper to command.
             gripper_goal_pos (Dict[str, float]): A dictionary mapping gripper joint names to target positions.
         Returns:
             ExecutionResult: The result of the gripper control execution.
@@ -41,27 +42,21 @@ class SetGripperState(BaseNode):
                     error_message=f"ROS2Robot does not support gripper control with current gripper_action_type: {robot.config.gripper_action_type}",
                 )
 
-            if len(gripper_goal_pos) == 1:
-                joint_name = next(iter(gripper_goal_pos))
-                target_position = gripper_goal_pos[joint_name]
-                self.logger.info(
-                    f"Sending gripper control action for single joint: {joint_name} to position {target_position}"
-                )
-                success = robot.send_action(
-                    action={f"{joint_name}.pos": target_position}, wait_for_execution=False
-                )
-                # Wait for the grasp/release to physically settle before the next
-                # step (planning) starts, so it snapshots a stable arm rather than
-                # one still reacting to the new contact forces. (wait_for_execution
-                # is left False: awaiting the gripper action deadlocked the node's
-                # executor for ~23s, so a fixed settle is used instead.)
-                self.logger.info(
-                    f"Waiting {self.SETTLE_SECONDS:.2f}s for gripper/arm to settle "
-                    f"before continuing."
-                )
-                time.sleep(self.SETTLE_SECONDS)
-                # TODO: Proper success checking based on robot response
-                success = True
+            action = {f"{joint}.pos": position for joint, position in gripper_goal_pos.items()}
+            self.logger.info(f"Sending gripper control action: {action}")
+            robot.send_action(action=action, wait_for_execution=False)
+            # Wait for the grasp/release to physically settle before the next
+            # step (planning) starts, so it snapshots a stable arm rather than
+            # one still reacting to the new contact forces. (wait_for_execution
+            # is left False: awaiting the gripper action deadlocked the node's
+            # executor for ~23s, so a fixed settle is used instead.)
+            self.logger.info(
+                f"Waiting {self.SETTLE_SECONDS:.2f}s for gripper/arm to settle "
+                f"before continuing."
+            )
+            time.sleep(self.SETTLE_SECONDS)
+            # TODO: Proper success checking based on robot response
+            success = True
 
         else:
             robot.send_action(gripper_goal_pos)
@@ -76,40 +71,3 @@ class SetGripperState(BaseNode):
             status=DemoStatus.PERFECT,
         )
 
-
-class OpenGripper(SetGripperState):
-    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("OpenGripper", alias, dynamic_map, static_args, output_map)
-
-    def run(self, robot: Robot | ROS2Robot, **kwargs) -> ExecutionResult:
-        if isinstance(robot, ROS2Robot):
-            self.static_args = {
-                "gripper_goal_pos": {
-                    f"{joint}.pos": robot.config.gripper_open_position[idx]
-                    for idx, joint in enumerate(robot.config.gripper_joint_names)
-                }
-            }
-        else:
-            self.static_args = {
-                "gripper_goal_pos": {joint: 1.0 for joint in robot.config.gripper_joint_names}
-            }  # Assuming 1.0 is the open position for non-ROS2Robot implementations
-        return super().run(robot=robot, **kwargs)
-
-
-class CloseGripper(SetGripperState):
-    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
-        super().__init__("CloseGripper", alias, dynamic_map, static_args, output_map)
-
-    def run(self, robot: Robot | ROS2Robot, **kwargs) -> ExecutionResult:
-        if isinstance(robot, ROS2Robot):
-            self.static_args = {
-                "gripper_goal_pos": {
-                    f"{joint}.pos": robot.config.gripper_closed_position[idx]
-                    for idx, joint in enumerate(robot.config.gripper_joint_names)
-                }
-            }
-        else:
-            self.static_args = {
-                "gripper_goal_pos": {joint: 0.0 for joint in robot.config.gripper_joint_names}
-            }  # Assuming 0.0 is the closed position for non-ROS2Robot implementations
-        return super().run(robot=robot, **kwargs)

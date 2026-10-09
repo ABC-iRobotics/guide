@@ -1,7 +1,5 @@
-import carb
 from isaacsim.storage.native import is_file
 from isaacsim.core.utils.stage import add_reference_to_stage, is_stage_loading
-from pxr import Usd
 
 from guide_core.types.isaac_state import IsaacState
 
@@ -24,8 +22,6 @@ def _cmd_clear_world(self) -> None:
     scene.clear()
     scene.add_default_ground_plane()
 
-    # self._scenes = {}
-
 
 def _cmd_add_scene(self, stage_config=None, root: str = "/World") -> None:
 
@@ -39,19 +35,17 @@ def _cmd_add_scene(self, stage_config=None, root: str = "/World") -> None:
         self.update(2)
 
         self._logger.debug("Opening USD stage...")
-        # open_stage + wait loading + returns stage
+        # reference the scene USD under `root` + wait for it to load
         self.__setup_stage(stage_config, root)
 
-    except Exception as e:
-        self._logger.debug(f"Error in _cmd_open_stage: {e}")
+    except Exception:
         self.state = ERROR
-        return
+        raise
 
     self.state = READY
 
 
 def _cmd_start(self) -> None:
-    # ? self._sim_enabled.set()
 
     assert self.state in [READY, PAUSED, STOPPED]
 
@@ -66,7 +60,6 @@ def _cmd_add_physics_callback(self, callback_id: str, callback_fn) -> None:
 
 
 def _cmd_pause(self) -> None:
-    # ? self._sim_enabled.clear()
 
     assert self.state is RUNNING
 
@@ -85,19 +78,17 @@ def _cmd_stop(self) -> None:
 
 def _cmd_shutdown(self) -> None:
     self._cmd_stop()
-    # self._stop_evt.set()
 
     self.state = SHUTTING_DOWN
 
     self.simulation_app.close()
-    # self._scenes = {}
     self._world = None
     self._stage = None
 
     self.state = UNINITIALIZED
 
 
-def __setup_stage(self, stage_config, root) -> "Usd.Stage":
+def __setup_stage(self, stage_config, root) -> None:
 
     if stage_config is None:
         raise ValueError("No world configuration found in init.yaml")
@@ -116,14 +107,9 @@ def __setup_stage(self, stage_config, root) -> "Usd.Stage":
         result = False
 
     # Reference USD stage
-    if result:
-        add_reference_to_stage(usd_path=USD_PATH, prim_path=root)
-    else:
-        carb.log_error(
-            f"the usd path {USD_PATH} could not be opened, please make sure that {USD_PATH} is a valid usd file in {assets_root_path}"
-        )
-        self.state = ERROR
-        return
+    if not result:
+        raise FileNotFoundError(f"The scene USD {USD_PATH} is not a file.")
+    add_reference_to_stage(usd_path=USD_PATH, prim_path=root)
 
     # Mandatory waiting
     self._logger.debug("Loading stage...")

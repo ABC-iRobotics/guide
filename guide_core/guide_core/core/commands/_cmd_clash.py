@@ -1,9 +1,10 @@
 import isaacsim.core.utils.prims as prims_utils
 from omni.physx import get_physx_interface
 
-# Isaac Sim 5.x removed the `isaacsim.util.clash_detection` extension. When it is
-# unavailable we fall back to the bounding-box (OBB/AABB) overlap check below.
-# TODO(isaac5.1): reimplement precise mesh clash via omni.physx overlap queries.
+# Mesh-level clash detection comes from the `isaacsim.util.clash_detection` extension,
+# which IsaacSimRuntime._import_isaac_extensions enables before the commands are
+# imported. Isaac Sim 5.x had dropped it; 6.0 ships it again. Without it ClashDetector
+# is None and only the bounding-box (OBB/AABB) overlap check below is used.
 try:
     from isaacsim.util.clash_detection import ClashDetector
 except ImportError:
@@ -34,7 +35,7 @@ def __init_clash_detector(self, tolerance: float = 0.0):
     assert self.state not in [UNINITIALIZED, INITIALIZING, ERROR, SHUTTING_DOWN]
 
     if ClashDetector is None:
-        # No mesh-level clash detector available (Isaac Sim 5.x): keep _cd None
+        # No mesh-level clash detector (extension not loaded): keep _cd None
         # and rely on the bounding-box fallback. Scope is tracked on self._scope.
         self._cd = None
         return
@@ -156,7 +157,7 @@ def _cmd_is_prim_clashing(
         res = self._cd.is_prim_clashing(prim)
         self._logger.debug(f"[CLASH_DEBUG]   is_prim_clashing returned: {res}")
     else:
-        # No mesh-level detector (Isaac Sim 5.x): defer entirely to the
+        # No mesh-level detector (extension not loaded): defer entirely to the
         # bounding-box overlap check below.
         res = False
 
@@ -169,7 +170,7 @@ def _cmd_is_prim_clashing(
             except Exception:
                 target_scope = ""
 
-        res = self._check_bounding_box_collision(
+        res = self._cmd_check_bounding_box_collision(
             prim_path, target_scope, tol, check_containment=False
         )
 

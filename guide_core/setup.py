@@ -7,7 +7,7 @@ package_name = "guide_core"
 
 setup(
     name=package_name,
-    version="1.0.0",
+    version="2.0.0",
     packages=find_namespace_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -28,7 +28,7 @@ setup(
         for f in glob(os.path.join("dummy_scene", "**", "*"), recursive=True)
         if os.path.isfile(f)
     ],
-    install_requires=["setuptools", "numpy", "trimesh", "python-fcl"],
+    install_requires=["setuptools", "numpy", "python-fcl"],
     zip_safe=True,
     maintainer="András Makány",
     maintainer_email="makany.andras@uni-obuda.hu",
@@ -37,8 +37,6 @@ setup(
     entry_points={
         "console_scripts": [
             "GUIDE = guide_core.ros.guide_ros:ros_entry_point",
-            "guide_ex_test = guide_core.guide_ex_test:main",
-            "guide_smolvla_test = guide_core.run_smolvla:main",
         ],
     },
 )

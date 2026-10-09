@@ -18,14 +18,15 @@ class GetPrimPose(BaseNode):
         self, robot: Node, sim_namespace: str, scene_namespace: str, prim_path: str
     ) -> ExecutionResult:
         """
-        Retrieves the current pose of the specified primitive.
+        Retrieves the current world pose of the specified primitive.
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
-            prim_name (str): The name of the primitive to get the pose of.
+            scene_namespace (str): The scene namespace.
+            prim_path (str): The prim path, relative to the scene.
         Returns:
-            ExecutionResult: The result containing the current pose of the primitive.
+            ExecutionResult: outputs `pose`, the current world pose of the primitive.
         """
 
         if not robot.node:
@@ -34,12 +35,19 @@ class GetPrimPose(BaseNode):
                 error_message="ROS2 node is not available for GetPrimPose.",
             )
 
-        if getattr(robot.node, "pose", None) is None:
-            robot.node.pose = robot.node.create_client(
+        # Reuse the single PoseRequest client that lives on `robot.pose` (created up
+        # front by the solver's main()). The check must target the SAME attribute the
+        # call below uses: the old code checked `robot.node.pose` (always None) and so
+        # created a SECOND client on the same /PoseRequest service every run. Two
+        # clients on one service on one node breaks rmw_cyclonedds reply routing — the
+        # server sends the response but the calling client's future never completes
+        # (confirmed: server logs "backend RETURNED", client executor idle, future
+        # never done). Create it only if truly absent, on the node's registered group.
+        if getattr(robot, "pose", None) is None:
+            robot.pose = robot.node.create_client(
                 PoseSrv,
                 f"{sim_namespace}/PoseRequest",
-                qos_profile=rclpy.qos.QoSProfile(depth=10),
-                callback_group=rclpy.callback_groups.ReentrantCallbackGroup(),
+                callback_group=robot._reentrant_callback_group,
             )
 
         request = PoseSrv.Request()
@@ -47,14 +55,44 @@ class GetPrimPose(BaseNode):
 
         pose_response = robot.callService(robot.pose, request, f"Getting pose for {request.path}")
 
-        if pose_response is not None:
+        if pose_response is not None and pose_response.success:
             pose = Pose.from_ros_pose(pose_response.pose)
             return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
         else:
             return ExecutionResult(
                 status=DemoStatus.FAILURE,
-                error_message=f"Service call to get pose for primitive {request.path} failed.",
+                error_message=f"Service call to get pose for primitive {request.path} failed: "
+                f"{getattr(pose_response, 'message', '')}",
             )
+
+
+class GetPrimPoses(BaseNode):
+    level = Layer.STEP
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("GetPrimPoses", alias, dynamic_map, static_args, output_map)
+
+    def run(
+        self, robot: Node, sim_namespace: str, scene_namespace: str, prim_paths: list
+    ) -> ExecutionResult:
+        """
+        Retrieves the current world poses of several primitives, in the given order.
+
+        Args:
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
+            sim_namespace (str): The simulation namespace.
+            scene_namespace (str): The scene namespace.
+            prim_paths (list): Prim paths relative to the scene.
+        Returns:
+            ExecutionResult: outputs `poses`, one Pose per path; FAILURE if any is missing.
+        """
+        poses = []
+        for prim_path in prim_paths:
+            result = GetPrimPose().run(robot, sim_namespace, scene_namespace, prim_path)
+            if result.status == DemoStatus.FAILURE:
+                return result
+            poses.append(result.outputs["pose"])
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"poses": poses})
 
 
 class IsPrimClashing(BaseNode):
@@ -72,15 +110,16 @@ class IsPrimClashing(BaseNode):
         prim2_path: str,
     ) -> ExecutionResult:
         """
-        Checks if the specified primitive is clashing with any other primitives.
+        Checks whether two primitives are clashing (the simulator compares their bounding boxes).
 
         Args:
-            robot (Node): The ROS2 robot to use for service calls.
+            robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
             scene_namespace (str): The scene namespace.
-            prim_name (str): The name of the primitive to check for clashes.
+            prim1_path (str): The first prim path, relative to the scene.
+            prim2_path (str): The second prim path, relative to the scene.
         Returns:
-            ExecutionResult: The result containing whether the primitive is clashing.
+            ExecutionResult: outputs `has_collided`, whether the two primitives are clashing.
         """
 
         if not robot.node:
@@ -89,12 +128,14 @@ class IsPrimClashing(BaseNode):
                 error_message="ROS2 node is not available for IsPrimClashing.",
             )
 
-        if getattr(robot.node, "collision", None) is None:
-            robot.node.collision = robot.node.create_client(
+        # Same fix as GetPrimPose: reuse the single `robot.collision` client (created
+        # by main()); the old check on `robot.node.collision` always created a second
+        # client on the same /CollisionRequest service and would hang reply routing.
+        if getattr(robot, "collision", None) is None:
+            robot.collision = robot.node.create_client(
                 Collision,
                 f"{sim_namespace}/CollisionRequest",
-                qos_profile=rclpy.qos.QoSProfile(depth=10),
-                callback_group=rclpy.callback_groups.ReentrantCallbackGroup(),
+                callback_group=robot._reentrant_callback_group,
             )
 
         request = Collision.Request()

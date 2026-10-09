@@ -4,7 +4,8 @@
 the seed that drove the draws and the realized value of every named draw, and
 nothing about scenes, episodes, or tasks (that identity lives in the
 orchestration layer). It is JSON-serializable for the dataset sidecar and for
-injection over the ``Randomize`` service.
+injection (``_cmd_randomize_scene``'s ``params``; the ``Randomize`` service does not
+expose it).
 """
 
 from __future__ import annotations

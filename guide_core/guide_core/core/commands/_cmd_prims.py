@@ -151,7 +151,6 @@ def __size_to_num_of_prims(
         or (isinstance(singleton, list) and len(singleton) == 1)
         or (isinstance(singleton, np.ndarray) and singleton.shape[0] == 1)
     ) and prims.count > 1:
-        # singleton = np.vstack([singleton] * prims.count)
         if isinstance(singleton, list) or isinstance(singleton, np.ndarray):
             singleton = singleton[0]
         singleton = [singleton for _ in range(prims.count)]
@@ -161,7 +160,6 @@ def __size_to_num_of_prims(
 
 def __get_xform(self, prim_path: str | list[str]):
     try:
-        # self.__pre_initialize_xform_properties(prim_path)
         return XFormPrim(prim_paths_expr=prim_path, reset_xform_properties=True)
     except BaseException as e:
         self._logger.error(f"Error in __get_xform: {e}")
@@ -187,8 +185,8 @@ def _cmd_set_visibilities(
         self._logger.error(e)
         return
 
-    if isinstance(visibilities, bool) and prims.count() > 1:
-        visibilities = [visibilities] * prims.count()
+    if isinstance(visibilities, bool) and prims.count > 1:
+        visibilities = [visibilities] * prims.count
 
     prims.set_visibilities(visibilities)
 
@@ -205,7 +203,6 @@ def _cmd_get_world_poses(self, prim_path: str | list[str]) -> Pose | list[Pose]:
     positions, orientations = prims.get_world_poses()
 
     if positions.shape[0] == 1:
-        # _cmd_create_prim(self, prim_path='/' + prims.prim_paths[0].split('/')[-1]+'_marker', prim_type="Xform", position=positions[0], orientation=orientations[0])
         return Pose(Point(positions), Rotation(R.from_quat(np.roll(orientations, -1))))
     return [
         Pose(Point(p), Rotation(R.from_quat(np.roll(o, -1))))
@@ -306,7 +303,6 @@ def _cmd_set_local_scales(self, prim_path: str | list[str], scales: list | np.nd
 
 def __get_rigid(self, prim_path: str | list[str]):
     try:
-        # self.__pre_initialize_xform_properties(prim_path)
         return RigidPrim(prim_paths_expr=prim_path, usd=False)
     except BaseException:
         raise PrimDoesNotExistError("Invalid prim path.")

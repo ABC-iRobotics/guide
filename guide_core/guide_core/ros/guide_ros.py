@@ -1,23 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 import traceback
 from threading import Thread
 from typing import Optional
 
 import rclpy
 import rclpy.logging
-
-
-def _trace(msg: str) -> None:
-    """Fine-grained startup tracing to pinpoint where GUIDE gets stuck.
-
-    Writes to stderr with flush so checkpoints appear immediately in the
-    ``ros2 launch`` output even if the ROS logger / DDS is misbehaving.
-    """
-    print(f"[GUIDE-TRACE] {msg}", file=sys.stderr, flush=True)
 
 
 class _RosLoggerAdapter:
@@ -68,14 +57,19 @@ from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
-from guide_msgs.srv import Randomize, RegisterScene, StartRecording, StopRecording
+from guide_msgs.srv import (
+    PauseRecording,
+    Randomize,
+    RegisterScene,
+    SetPrompt,
+    StartRecording,
+    StopRecording,
+)
 
 
 class GUIDEROS2Interface(Node):
     def __init__(self, backend: GUIDESimulator, node_name: Optional[str], namespace: Optional[str]):
-        _trace(f"  node.__init__: calling super().__init__(name={node_name}, ns={namespace})...")
         super().__init__(node_name=node_name, namespace=namespace)
-        _trace("  node.__init__: super() returned (DDS participant created)")
 
         self._backend = backend
 
@@ -83,7 +77,6 @@ class GUIDEROS2Interface(Node):
         self._reentrant_group = ReentrantCallbackGroup()
         self._mutually_exclusive_group = MutuallyExclusiveCallbackGroup()
 
-        _trace("  node.__init__: creating services...")
         # Randomize Scene
         self._randomize_scene = self.create_service(
             srv_type=Randomize,
@@ -156,6 +149,22 @@ class GUIDEROS2Interface(Node):
             callback_group=self._reentrant_group,
         )
 
+        # Pause Recording (resume = start_recording)
+        self._pause_recording = self.create_service(
+            srv_type=PauseRecording,
+            srv_name="pause_recording",
+            callback=self._pause_recording_callback,
+            callback_group=self._reentrant_group,
+        )
+
+        # Task / subtask prompt: stamped on every frame recorded after it
+        self._set_prompt = self.create_service(
+            srv_type=SetPrompt,
+            srv_name="set_prompt",
+            callback=self._set_prompt_callback,
+            callback_group=self._reentrant_group,
+        )
+
         # Finalize Recording
         self._finalize_recording = self.create_service(
             srv_type=FinalizeRecording,
@@ -170,12 +179,17 @@ class GUIDEROS2Interface(Node):
         try:
             id = request.id
 
-            output = self._backend.randomize_scene(scene_id=id)
+            output = self._backend.randomize_scene(
+                scene_id=id,
+                use_zone=request.use_zone,
+                zone=request.zone,
+                seed=request.seed if request.use_seed else None,
+            )
 
             response.message = output if isinstance(output, str) else ""
             response.success = output is not None
         except Exception as e:
-            response.message = e
+            response.message = str(e)
             response.success = False
         finally:
             return response
@@ -251,9 +265,9 @@ class GUIDEROS2Interface(Node):
             return response
 
     def _attribute_request_callback(
-        self, request: Randomize.Request, response: Randomize.Response
-    ) -> Randomize.Response:
-        response = Randomize.Response()
+        self, request: Attribute.Request, response: Attribute.Response
+    ) -> Attribute.Response:
+        response = Attribute.Response()
         try:
             path = request.path
             attribute = request.attribute
@@ -263,11 +277,9 @@ class GUIDEROS2Interface(Node):
                 "set_prim_attribute_value", prim_path=path, attribute_name=attribute, value=value
             )
 
-            response.message = ""
-            response.success = success
+            response.result = str(success)
         except Exception as e:
-            response.message = str(e)
-            response.success = False
+            response.result = str(e)
         finally:
             return response
 
@@ -320,7 +332,7 @@ class GUIDEROS2Interface(Node):
             id = request.id
             self._logger.info(f"Starting recording for scene {id}...")
 
-            self._backend._scene_manager.start_recording(id)
+            self._backend._scene_manager.start_recording(id, request.path)
 
             # Block until warmup is done and state is RECORDING
             self._backend._scene_manager.wait_start_recording_event(id)
@@ -342,23 +354,49 @@ class GUIDEROS2Interface(Node):
             save_episode = request.save_episode
             self._logger.info(f"Stopping recording for scene {id}... (Save: {save_episode})")
 
-            self._backend._scene_manager.clear_idle_event(id)
-            self._backend._scene_manager.stop_recording(id, save_episode)
-
-            # Block until Consumer thread processes Poison Pill
-            self._backend._scene_manager.wait_stop_recording_event(id)
-
-            # Also block until scene resets and transitions to IDLE (if not already)
-            # Actually we can just wait until the recorder is idle.
-            # self._backend._scene_manager.wait_idle_event(id)
-
-            response.message = "Recording stopped and scene reset successfully."
+            if self._backend._scene_manager.stop_recording(id, save_episode):
+                # Block until the SceneRecorder thread has saved or discarded the episode
+                # (it sets the stop event on FINALIZE_EPISODE / DISCARD_EPISODE)
+                self._backend._scene_manager.wait_stop_recording_event(id)
+                response.message = "Recording stopped."
+            else:
+                # Idempotent: a caller cleaning up after a failed run may stop a scene
+                # that never started, or already stopped.
+                response.message = "Not recording; nothing to stop."
             response.success = True
         except Exception as e:
             response.message = str(e)
             response.success = False
         finally:
             return response
+
+    def _pause_recording_callback(
+        self, request: PauseRecording.Request, response: PauseRecording.Response
+    ) -> PauseRecording.Response:
+        response = PauseRecording.Response()
+        try:
+            self._logger.info(f"Pausing recording for scene {request.id}...")
+            self._backend._scene_manager.pause_recording(request.id)
+            response.message = "Recording paused; start_recording resumes it."
+            response.success = True
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+        finally:
+            return response
+
+    def _set_prompt_callback(
+        self, request: SetPrompt.Request, response: SetPrompt.Response
+    ) -> SetPrompt.Response:
+        response = SetPrompt.Response()
+        try:
+            self._logger.info(f"Prompts of scene {request.id}: task {request.task!r}, subtask {request.subtask!r}")
+            self._backend._scene_manager.set_prompt(request.id, request.task, request.subtask)
+            response.success = True
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+        return response
 
     def _finalize_recording_callback(
         self, request: FinalizeRecording.Request, response: FinalizeRecording.Response
@@ -380,14 +418,10 @@ class GUIDEROS2Interface(Node):
 
 
 def launch_ros_interface(node: GUIDEROS2Interface):
-    _trace("[ros-thread] launch_ros_interface: creating MultiThreadedExecutor...")
     executor = MultiThreadedExecutor()
     try:
-        _trace("[ros-thread] executor.add_node(node)...")
         executor.add_node(node)
-        _trace("[ros-thread] executor.spin() — now servicing ROS callbacks (blocks)")
         executor.spin()
-        _trace("[ros-thread] executor.spin() returned")
 
         node.destroy_node()
         rclpy.shutdown()
@@ -434,38 +468,16 @@ def ros_entry_point():
     args = parser.parse_args()
 
     NAMESPACE = f"Sim_{args.id}"
-    _trace(f"ros_entry_point: START id={args.id} namespace={NAMESPACE} debug={args.debug}")
 
     # 1. Initialize Isaac Sim BEFORE ROS 2 to prevent deadlocks with ROS 2 bridge
-    _trace("step 1a: constructing GUIDESimulator...")
     sim = GUIDESimulator(sim_id=args.id, namespace=NAMESPACE)
-    _trace("step 1b: sim.init_runtime() [start Isaac Sim] ...")
     sim.init_runtime(debug=args.debug, logger=None)
-    _trace("step 1c: init_runtime DONE. sim.init_scene_manager() ...")
     sim.init_scene_manager()
-    _trace("step 1d: init_scene_manager DONE.")
 
     # 2. Initialize ROS 2
-    _trace("step 2a: rclpy.init() ...")
     rclpy.init(args=None)
-    try:
-        from rclpy.utilities import get_rmw_implementation_identifier
 
-        _rmw = get_rmw_implementation_identifier()
-    except Exception as _e:  # pragma: no cover
-        _rmw = f"<unknown: {_e}>"
-    _trace(
-        f"step 2b: rclpy.init DONE. RMW={_rmw} "
-        f"ROS_DOMAIN_ID={os.environ.get('ROS_DOMAIN_ID', '0')}"
-    )
-
-    _trace("step 2c: constructing GUIDEROS2Interface node (creates services)...")
     ros_interface = GUIDEROS2Interface(sim, node_name="GUIDE", namespace=NAMESPACE)
-    _trace(
-        f"step 2d: NODE CREATED name={ros_interface.get_name()} "
-        f"ns={ros_interface.get_namespace()} fqn={ros_interface.get_fully_qualified_name()} "
-        "(should now be visible to 'ros2 node list')"
-    )
 
     # Dynamically set ROS 2 node logger severity based on debug CLI flag
     from rclpy.logging import LoggingSeverity
@@ -480,17 +492,13 @@ def ros_entry_point():
     sim._runtime._logger = backend_logger
     sim._scene_manager._logger = backend_logger
 
-    _trace("step 3: starting ROS executor thread (launch_ros_interface)...")
     ros_t = Thread(target=launch_ros_interface, args=(ros_interface,))
     ros_t.start()
 
     ros_interface.get_logger().info("Running simulation loop...")
-    _trace("step 4: entering sim.run_runtime_loop() on MAIN thread (Isaac step loop)...")
     sim.run_runtime_loop()
-    _trace("step 5: run_runtime_loop RETURNED (sim loop exited). joining ROS thread...")
 
     ros_t.join()
-    _trace("ros_entry_point: END")
 
 
 if __name__ == "__main__":

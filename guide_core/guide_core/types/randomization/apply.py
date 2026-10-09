@@ -12,9 +12,21 @@ geometry ``Pose``), so the module stays Isaac/ROS/SciPy-free and unit-testable.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Iterable
 
 from .engine import Randomizer
+
+
+def is_prim_pattern(path: Any) -> bool:
+    """True if ``path`` is an Isaac prim-path *pattern* (matches many prims).
+
+    Isaac matches ``prim_paths_expr`` as a regex, so any regex metacharacter
+    (``*``, ``[``, ``.`` ...) means the expression can resolve to more than one
+    prim. ``re.escape`` changes exactly those characters, so a path that differs
+    from its escaped form contains a special char and is treated as a pattern.
+    """
+    return isinstance(path, str) and re.escape(path) != path
 
 
 def draw_name(instruction: dict) -> str:
@@ -36,16 +48,67 @@ def draw_instructions(
     instructions: Iterable[dict],
     randomizer: Randomizer,
     pose_builder: Callable[[Any], Any],
+    prim_resolver: Callable[[str], list] | None = None,
+    zone: int | None = None,
+    zone_target: str | None = None,
 ) -> None:
     """Draw every instruction's ``pose_dist`` and write back a concrete pose.
 
-    Mutates each instruction in place: the realized value is captured in the
-    randomizer's record under :func:`draw_name`, and ``kwargs['pose']`` is set to
-    ``pose_builder(value)``. Instructions without a ``pose_dist`` are left alone.
+    Mutates each instruction in place. Instructions without a ``pose_dist`` are
+    left alone.
+
+    Two cases:
+
+    * **Single prim** (literal ``prim_path``): one draw for the instruction,
+      recorded under :func:`draw_name`, ``kwargs['pose']`` set to
+      ``pose_builder(value)``.
+    * **Pattern prim_path** (e.g. ``/Scene_0/blocks/*``) with a ``prim_resolver``:
+      applying one drawn pose to every matched prim stacks them all at the same
+      spot. Instead, expand the pattern to its concrete prims and draw an
+      **independent** pose per prim (recorded under each concrete path, so every
+      object is placed — and reproduced via injection — individually).
+      ``kwargs['prim_path']`` becomes the concrete list and ``kwargs['pose']`` a
+      list of poses in the same order (which ``_cmd_set_local_poses`` applies
+      element-wise).
+
+    **Zoning:** when an instruction carries a ``grid`` (a ``Grid``) and ``zone`` is
+    given (``>= 0``), the prim equal to ``zone_target`` samples inside that zone's
+    cell instead of the full range; every other prim (and non-grid instruction) is
+    drawn free. ``zone_target=None`` zones *all* prims of the grid instruction.
     """
+
+    def _dist_for(instr: dict, prim: str | None):
+        base = instr["pose_dist"]
+        grid = instr.get("grid")
+        if grid is not None and zone is not None and zone >= 0:
+            if zone_target is None or prim == zone_target:
+                return grid.restrict(base, int(zone))
+        return base
+
     for instruction in instructions:
-        dist = instruction.get("pose_dist")
-        if dist is None:
+        if instruction.get("pose_dist") is None:
             continue
-        value = randomizer.draw(draw_name(instruction), dist)
-        instruction.setdefault("kwargs", {})["pose"] = pose_builder(value)
+        kwargs = instruction.setdefault("kwargs", {})
+
+        # Remember the original pattern the first time we expand it. Expanding
+        # overwrites kwargs['prim_path'] with the concrete prim list, so on the
+        # NEXT randomization it would no longer look like a pattern -- the draw
+        # would collapse back to one shared pose and stack every prim into a line.
+        # Resolving from the remembered pattern keeps every pass per-prim.
+        pattern = instruction.get("_prim_pattern")
+        if pattern is None and is_prim_pattern(kwargs.get("prim_path")):
+            pattern = kwargs["prim_path"]
+            instruction["_prim_pattern"] = pattern
+
+        if prim_resolver is not None and pattern is not None:
+            prims = list(prim_resolver(pattern))
+            if prims:
+                kwargs["prim_path"] = prims
+                kwargs["pose"] = [
+                    pose_builder(randomizer.draw(p, _dist_for(instruction, p))) for p in prims
+                ]
+                continue
+
+        # Single literal path (or a pattern that matched nothing): one draw.
+        name = draw_name(instruction)
+        kwargs["pose"] = pose_builder(randomizer.draw(name, _dist_for(instruction, name)))

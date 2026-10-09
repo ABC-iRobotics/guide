@@ -1,4 +1,5 @@
 int32 id
+string path
 ---
 bool success
 string message

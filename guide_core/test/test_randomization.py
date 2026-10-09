@@ -1,7 +1,6 @@
 """Unit tests for guide_core.types.randomization.
 
-Pure-Python (NumPy + SciPy) — runs without Isaac Sim or ROS. Mirrors the test
-plan in SCENE_REPRODUCE_PLAN.md section 7.
+Pure-Python (NumPy + SciPy) — runs without Isaac Sim or ROS.
 """
 
 from __future__ import annotations
@@ -62,7 +61,7 @@ def test_uniform_vec_bounds_and_determinism():
 
 
 def test_axis_angle_is_unit_and_bounded():
-    dist = AxisAngle(axis=[0, 0, 1], max_angle=np.pi / 4)
+    dist = AxisAngle(axis=[0, 0, 1], angle=(-np.pi / 4, np.pi / 4))
     rng = np.random.default_rng(42)
     for _ in range(50):
         q = dist.sample(rng)
@@ -85,7 +84,7 @@ def test_categorical_preserves_native_type_and_is_seeded():
 
 
 def test_pose_dist_shape():
-    dist = PoseDist(UniformVec([-1, -1, 0], [1, 1, 0]), AxisAngle([0, 0, 1], 0.5))
+    dist = PoseDist(UniformVec([-1, -1, 0], [1, 1, 0]), AxisAngle([0, 0, 1], (-0.5, 0.5)))
     out = dist.sample(np.random.default_rng(1))
     assert out.shape == (7,)
     assert np.isclose(np.linalg.norm(out[3:]), 1.0)
@@ -95,9 +94,9 @@ def test_spec_roundtrip():
     dists = [
         Constant([1.0, 2.0, 3.0]),
         UniformVec([-1, -1, -1], [1, 1, 1]),
-        AxisAngle([0, 0, 1], 0.3),
+        AxisAngle([0, 0, 1], (-0.3, 0.3)),
         Categorical(("a", "b", "c")),
-        PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([1, 0, 0], 0.2)),
+        PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([1, 0, 0], (-0.2, 0.2))),
     ]
     for d in dists:
         rebuilt = from_spec(d.to_spec())
@@ -111,8 +110,8 @@ def test_spec_roundtrip():
 def test_pose_from_yaml_matches_block_bin_schema():
     spec = {
         "position": {"value": [0.25, -0.4, 0.09],
-                     "random": {"low": [-0.05, -0.05, 0.0], "high": [0.05, 0.05, 0.0]}},
-        "orientation": {"random": {"axis": [0.0, 0.0, 1.0], "angle": 180}},
+                     "random": [[-0.05, 0.05], [-0.05, 0.05], [0.0, 0.0]]},
+        "orientation": {"random": {"axis": [0.0, 0.0, 1.0], "angle": [-180, 180]}},
     }
     dist = pose_from_yaml(spec)
     out = dist.sample(np.random.default_rng(3))
@@ -128,7 +127,7 @@ def _scene_dists():
     return {
         "/blocks/red_block": PoseDist(
             UniformVec([-0.25, 0.0, 0.025], [0.25, 0.25, 0.025]),
-            AxisAngle([0, 0, 1], np.pi),
+            AxisAngle([0, 0, 1], (-np.pi, np.pi)),
         ),
         "color": Categorical(("red", "yellow", "green", "blue")),
         "side": Categorical(("left", "right")),
@@ -182,10 +181,24 @@ def test_quat_ordering_roundtrip():
     assert np.array_equal(_quat.wxyz_to_xyzw([1, 0, 0, 0]), [0, 0, 0, 1])
 
 
+def test_axis_angle_range_is_honoured():
+    from scipy.spatial.transform import Rotation as R
+
+    dist = pose_from_yaml({"orientation": {"random": {"axis": [0, 0, 1], "angle": [0, 90]}}}).orientation
+    rng = np.random.default_rng(7)
+    for _ in range(100):
+        z = R.from_quat(_quat.wxyz_to_xyzw(dist.sample(rng))).as_rotvec()[2]
+        assert -1e-9 <= z <= np.pi / 2 + 1e-9
+    with pytest.raises(ValueError):
+        pose_from_yaml({"orientation": {"random": {"axis": [0, 0, 1], "angle": 180}}})
+    with pytest.raises(ValueError):
+        AxisAngle([0, 0, 1], (1.0, 0.0))
+
+
 def test_axis_angle_against_scipy():
     from scipy.spatial.transform import Rotation as R
 
-    dist = AxisAngle(axis=[0, 0, 1], max_angle=np.pi)
+    dist = AxisAngle(axis=[0, 0, 1], angle=(-np.pi, np.pi))
     q_wxyz = dist.sample(np.random.default_rng(0))
     rotvec = R.from_quat(_quat.wxyz_to_xyzw(q_wxyz)).as_rotvec()
     assert abs(rotvec[0]) < 1e-9 and abs(rotvec[1]) < 1e-9
@@ -199,7 +212,7 @@ from guide_core.types.scene_context import SceneContext  # noqa: E402
 
 
 def _pose_dist():
-    return PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([0, 0, 1], 1.0))
+    return PoseDist(UniformVec([0, 0, 0], [1, 1, 1]), AxisAngle([0, 0, 1], (-1.0, 1.0)))
 
 
 def test_draw_instructions_capture_and_skip():
@@ -236,3 +249,25 @@ def test_scene_context_json_roundtrip():
     assert again.scene_id == 1 and again.episode_index == 3
     assert again.record.seed == 42 and again.record.values["color"] == "red"
     assert SceneContext.from_json(SceneContext(2).to_json()).record is None
+
+
+# --------------------------------------------------------------------------- #
+# 3x2 [[min, max], ...] ranges: init.yaml `limits` and the pose `random` field
+# --------------------------------------------------------------------------- #
+def test_as_range_splits_min_max_columns():
+    low, high = _quat.as_range([[-1, 2], [-3, 4], [0, 0]])
+    assert low.tolist() == [-1, -3, 0] and high.tolist() == [2, 4, 0]
+    low, high = _quat.as_range([])
+    assert low.tolist() == [0, 0, 0] and high.tolist() == [0, 0, 0]
+    with pytest.raises(ValueError):
+        _quat.as_range([[-1, 2], [-3, 4]])
+
+
+def test_scene_limits_matrix_becomes_bounding_box():
+    from types import SimpleNamespace
+
+    from guide_core.scene.scene_orchestrator import SceneOrchestrator
+
+    scene = SimpleNamespace(_config={"limits": [[-1.0, 2.0], [-3.0, 4.0], [-0.5, 0.5]]})
+    SceneOrchestrator._get_limits(scene)
+    assert scene.bounding_box == {"xp": 2.0, "xn": 1.0, "yp": 4.0, "yn": 3.0, "zp": 0.5, "zn": 0.5}

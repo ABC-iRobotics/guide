@@ -1,18 +1,51 @@
 startup:
   renderer: "RaytracedLighting"
-  headless: False
+  # No Kit window. The GUI viewport is a whole extra render target plus the UI, and
+  # nothing reads it during generation or evaluation -- watch a camera over ROS instead
+  # (guide_core/scripts/view_camera.py). Set False to get the window back for debugging.
+  headless: True
   anti_aliasing: 0
   verbose: False
   step_freq: 60
-  # This machine has two mismatched GPUs (RTX A4000 + A2000) with no CUDA peer
-  # access. Isaac Sim's multi-GPU renderer then deadlocks on device 1 when a camera
-  # RenderProduct is created ("Failed to begin render graph ... semaphore timed out").
-  # Force single-GPU rendering on GPU 0 (the A4000). Override per-machine if needed.
-  multi_gpu: False
-  active_gpu: 0
+  # PhysX Hz. 2x step_freq => 2 physics substeps per rendered frame; Isaac derives the
+  # substep count from the ratio. This is the clock the recorder's interval is measured
+  # against (SceneManager.step), so changing it does not change the recording rate.
+  physics_freq: 120
+  # Pace the loop to sim time. Set false for batch demonstration generation to let
+  # the sim run ahead of real time once a frame costs less than 1/step_freq.
+  realtime: true
+
+  # Viewport render resolution -- NOT the cameras. The camera render products are
+  # pinned to the size the datasets were recorded at (_set_render_resolution in
+  # _cmd_robot), so this is the only render target free to shrink. Isaac's default is
+  # 1280x720, which costs ~7 ms a frame here against 640x360.
+  width: 640
+  height: 360
+
+  # Renderer card, by the index nvidia-smi and Kit use (PCI bus order). On this box
+  # 0 = A2000, 1 = A4000. Kept single-GPU whatever is asked: the cards are mismatched
+  # with no peer access and Isaac's multi-GPU renderer deadlocks on them ("Failed to
+  # begin render graph ... semaphore timed out").
+  render_device: cuda:1
+
+  # Where PhysX runs: "cpu", or "cuda:N" -- and CAREFUL, N here is CUDA's numbering,
+  # not nvidia-smi's. CUDA sorts FASTEST_FIRST by default, so its cuda:0 is the A4000
+  # while nvidia-smi's 0 is the A2000. The runtime logs the card each key resolved to
+  # at startup; check those lines rather than trusting either convention.
+  #
+  # Measured on this scene (one arm, two bins, four blocks) under an evaluation:
+  # physics was 39.6 ms of a 57.7 ms frame on the renderer's card, and ~4 ms of a
+  # 31.5 ms frame on the CPU. NVIDIA documents GPU dynamics as a win at scale, which
+  # this is not.
+  physics_device: cpu
+
+  # PhysX worker threads (/persistent/physics/numThreads). 0 runs the solver
+  # synchronously on the calling thread; -1 leaves Isaac's default of 8.
+  physics_threads: -1
 
 world:
   stage_units_in_meters: 1.0
 
 extensions:
   - isaacsim.storage.native
+  - omni.replicator.replicator_yaml

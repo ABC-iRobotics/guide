@@ -1,70 +1,173 @@
 # GUIDE — Installation & Porting Log
 
-This document records **every** step taken to install and run the GUIDE framework on
-a machine whose stack differs from the one the framework was originally built for.
-Each step lists the command(s) and a short **Why** explaining the rationale, so the
-whole process is reproducible.
+How GUIDE is installed and run on this machine, every command with a short **Why**. The
+first part is the current setup; the second part is the log of the earlier Isaac Sim 5.1
+port, kept as history.
 
 > **Reproducibility guardrails**
-> - **No system packages are modified.** All Python installs go into the Isaac Sim
->   virtualenv (`env_isaaclab`); no `apt`, no changes to `/opt/ros/jazzy`.
-> - Isaac Sim's pinned dependencies are protected with a pip **constraints file**
->   (`modules/isaac-safe-pins.txt`) on every install.
-> - The shell here is **zsh** — always source the `.zsh` ROS setup files.
+> - **No system packages are modified.** Every Python install goes into the workspace
+>   virtualenv `~/ros2_ws/.venv`; no `apt`, no changes to `/opt/ros/jazzy`.
+> - Isaac Sim's exact pins are protected with a constraints file
+>   (`modules/isaac6-safe-pins.txt`) on every install of a torch-dependent package.
+> - The shell here is **zsh**: always source the `.zsh` ROS setup files.
 
 ---
 
-## ⭐ Current setup: Isaac Sim 6.0.1 on Python 3.12 (native ROS 2 Jazzy)
+## ⭐ Current setup: Isaac Sim 6.0.1, Python 3.12, ROS 2 Jazzy
 
-**This supersedes most of the 5.1 workarounds below.** Isaac Sim 6.0 runs on **Python
-3.12 — the same interpreter as ROS 2 Jazzy** — so ROS 2 works *natively* (NVIDIA's
-headline 6.0 feature). The entire cross-version stack from the 5.1 era is **obsolete**:
-no bundled cp311 rclpy, no `/opt/ros` scrubbing, no `guide_msgs` cp311 overlay / dual
-build, no `libpython` juggling. Env: `~/ros2_ws/.venv`.
+Isaac Sim 6.0 runs on **Python 3.12, the interpreter of ROS 2 Jazzy**, so GUIDE uses the
+system rclpy natively: no bundled rclpy, no `/opt/ros` scrubbing, no `guide_msgs` overlay.
+Requirements: Ubuntu 24.04, ROS 2 Jazzy with MoveIt 2, an NVIDIA GPU with a recent driver,
+[`uv`](https://docs.astral.sh/uv/).
 
-**Install (uv, from system python3.12):**
+### 1. Sources
+
 ```bash
+mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
+git clone -b dev https://github.com/ABC-iRobotics/guide.git
+git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_ros2.git franka_ros2
+git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git franka_description
+git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
+mkdir -p guide/modules && cd guide/modules
+git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
+git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+```
+
+| Repository | Gives GUIDE |
+|---|---|
+| `guide` | `guide_msgs`, `guide_core`, `guide_ex`, the tasks `block_bin` and `cube_stack` |
+| `irob_franka_ros2` (`jazzy`) | `franka_fr3_moveit_config/launch/guide_moveit.launch.py`, the FR3 MoveIt bring-up every task launch includes |
+| `irob_franka_description` (`jazzy`) | the FR3 URDF/xacro |
+| `topic_based_ros2_control` | ros2_control over the joint topics Isaac publishes |
+| `modules/pymoveit2`, `modules/irob_lerobot_ros` | MoveIt from Python; the LeRobot robot (`ROS2Robot`) the solvers drive |
+
+**Why:** `modules/` is git-ignored (`.gitmodules` lists submodules but no gitlinks are
+committed), so the two modules are cloned by hand.
+
+### 2. Python environment
+
+```bash
+cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
-# torch first (CUDA 13 here), matched torchvision:
+PINS=src/guide/modules/isaac6-safe-pins.txt
+printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
 uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
   --index-url https://download.pytorch.org/whl/cu130
-# Isaac Sim 6.0.1 — --prerelease=allow because isaacsim-core needs the pre-release
-# tinyobjloader==2.0.0rc13 (via mujoco-usd-converter), which uv skips by default:
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
-# guide deps (protect Isaac's numpy2/torch pins so they aren't clobbered):
-uv pip install --python .venv/bin/python python-fcl -c modules/isaac6-safe-pins.txt
-uv pip install --python .venv/bin/python lerobot -c modules/isaac6-safe-pins.txt   # newer lerobot (torch<2.12, numpy>=2)
+uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
+uv pip check --python .venv/bin/python     # must report no incompatibilities
 ```
-**Gotcha:** installing torch-dependent pkgs (lerobot) without `-c` re-resolves torch to
-cu128 and breaks the CUDA stack (`ncclDevCommDestroy` / torchvision CUDA mismatch). If it
-happens: `uv pip install torch==2.11.0 torchvision --index-url .../cu130` to restore.
 
-**Running** needs `export OMNI_KIT_ACCEPT_EULA=YES` (the launchers set it).
+- `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
+  which uv skips by default.
+- `-c $PINS` on every torch-dependent install: lerobot 0.6.0 caps `numpy<2.3.0`, so
+  without it uv downgrades numpy to 2.2.6 and drags torch to 2.10.0 / torchvision to
+  0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins (numpy
+  2.3.1 runs fine for lerobot). lerobot 0.6.0 also needs `transformers 5.4–5.6` and
+  `huggingface-hub 1.x`.
+- After a drift (also a cu128 torch pulled in by another project), restore with
+  `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
+- The venv is uv's: it has no `pip`; always `uv pip ... --python .venv/bin/python`.
 
-**5.1 → 6.0 API port (only two changes):**
+### 3. Build
+
+```bash
+mkdir -p ~/.colcon
+printf 'build:\n  cmake-args:\n    - -DPython3_EXECUTABLE=/usr/bin/python3\n' > ~/.colcon/defaults.yaml
+source /opt/ros/jazzy/setup.zsh && cd ~/ros2_ws
+colcon build
+source install/setup.zsh
+```
+
+- `~/.colcon/defaults.yaml`: CMake's FindPython3 otherwise picks uv's `~/.local/bin/python3`
+  (ahead of 3.12 in `PATH`), which lacks `empy`, and rosidl fails with `No module named 'em'`.
+- `.venv` is a hidden directory, so colcon does not descend into it.
+- The build is a **copy** install: after editing a package's Python, config or assets,
+  rebuild it (`colcon build --packages-select <pkg>`), or the old installed copy keeps
+  running. A hand-edited file under `install/` that is newer than its source is not
+  overwritten by the rebuild; compare or delete it.
+- Sourcing `setup.bash` under zsh silently fails (empty `ros2 pkg list`); use `setup.zsh`.
+
+### 4. Run
+
+Every shell that talks to GUIDE (launches, `ros2` CLI, rqt) uses the localhost DDS config
+(§5.4 explains why this host needs it):
+```bash
+export CYCLONEDDS_URI=file://$HOME/ros2_ws/install/guide_core/share/guide_core/config/cyclonedds_localhost.xml
+ros2 launch guide_core bringup.launch.py                   # Isaac Sim + the GUIDE node
+ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin'}"
+ros2 launch block_bin bringup.launch.py                    # MoveIt + the solver, per scene
+```
+
+- `bringup.launch.py` runs Isaac through `~/ros2_ws/.venv/bin/python` (override:
+  `ISAACSIM_PYTHON`) and sets `OMNI_KIT_ACCEPT_EULA=YES`. The first start compiles RTX
+  shaders for about two minutes. `camera_topics:=true` adds the `/cam_*` image topics
+  (needed only by a live policy).
+- **One GUIDE simulator per machine:** its recorder server listens on `127.0.0.1:50050`
+  and frees the port at start-up by killing whatever holds it, a running simulator's
+  recorder included.
+- **Several scenes:** register the task once per scene (`Scene_0`, `Scene_1`, …) and start
+  its bring-up with `num_env:=N`. The task bring-ups start at `Scene_0`, so two *different*
+  tasks in one simulator need the second task's MoveIt + solver started for its own scene
+  index by hand.
+- Machine-specific settings live in `guide_core/config/init.yaml` (`render_device`,
+  `physics_device`, `headless`, …). Do not set `CUDA_DEVICE_ORDER` in the simulator's
+  environment: every annotator then returns empty data.
+
+### 5. Generate a dataset
+
+```bash
+ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
+  "{path: '~/dataset/block_bin', zones: [-1], counts: [5]}"
+```
+
+- `counts` are successful episodes (failed attempts are discarded and retried); `zones: []`
+  draws freely, `[-1]` covers every zone of the task's grid, `[2, 16]` with `counts: [4, 10]`
+  restricts to those cells.
+- Output: `<path>/dataset_<sim>_<scene>_<YYYY_MM_DD_HH_MM_SS>/`, a LeRobot v3.0 dataset plus
+  `meta/guide_info.json` and `meta/guide_episodes.jsonl`. An empty `path` means `~/dataset`.
+- **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
+  base**: the prim named by `robots.<name>.base_name` in the task's `config/init.yaml`
+  (`fr3_link0` for both FR3 tasks; the robot prim when unset), whatever the scene index.
+  One cartesian robot per scene; several are on `TODO.md`. Datasets recorded before
+  2026-10-09 store other frames (world, or the scene after the August repair).
+
+### 6. Sibling packages (on this machine, outside the repository)
+
+| Package | Path | Role |
+|---|---|---|
+| `block_bin_eval` | `~/ros2_ws/src/block_bin_eval` (own git repo, no remote yet) | block_bin policy evaluation and rollout studies: `ros2 launch block_bin_eval eval_pink.launch.py`, `ros2 run block_bin_eval eval_policy_pink --policy <checkpoint>/pretrained_model` |
+| `guide_dataset_tools` | `~/ros2_ws/src/guide_dataset_tools` | LeRobot dataset tools: `guide_dataset_build`, `guide_dataset_merge`, `guide_dataset_ui` |
+
+Both are ament_python packages in `src/`, so the same `colcon build` builds them.
+
+### 7. Check the install
+
+```bash
+cd ~/ros2_ws/src/guide
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/python -m pytest -q \
+  guide_core/test guide_ex/test guide_tasks/cube_stack/test \
+  --ignore-glob='*test_flake8.py' --ignore-glob='*test_pep257.py' --ignore-glob='*test_copyright.py'
+```
+Run it from a shell with the workspace sourced; the tests import the installed packages
+(`episode_plan` reads the installed `randomize.yaml`). `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`
+keeps ROS's launch_testing plugin (it needs `lark`) out of the run.
+
+### 5.1 → 6.0 API port (what changed in the code)
 - `is_file`: `isaacsim.core.utils.nucleus` (removed) → `isaacsim.storage.native` (`_cmd_stage.py`).
 - OmniGraph ROS 2 shortcuts: `isaacsim.ros2.bridge.impl.og_shortcuts` → `isaacsim.ros2.ui`
   (`_cmd_robot.py`, `runtime.py`).
-- Bonus: `isaacsim.util.clash_detection.ClashDetector` is **back** in 6.0 → re-enabled in
-  `runtime.py`, so `_cmd_clash.py` uses full mesh clash again (not just the bbox fallback).
+- `isaacsim.util.clash_detection.ClashDetector` is back in 6.0 and enabled again in
+  `runtime.py`, so `_cmd_clash.py` has full mesh clash next to the bounding-box check.
 
-**Build & run (simple now — both sides are 3.12):**
-```bash
-source /opt/ros/jazzy/setup.zsh && cd ~/ros2_ws
-colcon build                 # single cp312 build serves GUIDE *and* rqt
-source install/setup.zsh
-export CYCLONEDDS_URI=file://$HOME/ros2_ws/install/guide_core/share/guide_core/config/cyclonedds_localhost.xml
-ros2 launch guide_core bringup.launch.py
-```
-The launchers just set `python_executable=~/ros2_ws/.venv/bin/python` +
-`additional_env={OMNI_KIT_ACCEPT_EULA, CYCLONEDDS_URI}` — all the `_isaac_ros_env`
-scrubbing and the `install_isaac` overlay are gone. The **DDS localhost config (§5.4)**
-is still needed (host networking, unrelated to Python).
+---
 
-> The sections below document the earlier **Isaac Sim 5.1** effort. They're kept for
-> history; on 6.0 the cross-version items (bundled rclpy in §5.1, the `guide_msgs`
-> dual-build in §4.4, the launcher scrubbing) no longer apply.
+# History: the Isaac Sim 5.1 port (obsolete)
+
+The sections below document the earlier Isaac Sim 5.1 effort (Python 3.11 venv
+`env_isaaclab`). On 6.0 the cross-version items (bundled rclpy in §5.1, the `guide_msgs`
+dual build in §4.4, the launcher scrubbing) no longer apply; §5.4 (DDS) still does.
 
 ---
 
@@ -197,7 +300,7 @@ LeRobot dataset format.
 env_isaaclab/bin/pip install python-fcl -c ~/ros2_ws/src/guide/modules/isaac-safe-pins.txt
 ```
 
-**Why:** `trimesh` (already present) + `python-fcl` (the engine MoveIt uses) provide
+**Why:** `python-fcl` (the engine MoveIt uses) provides
 robust box collision/distance queries. The manylinux cp311 wheel is numpy-safe (Isaac's
 numpy 1.26 is preserved).
 
@@ -270,7 +373,7 @@ EOF
 
 ### 4.2 Packaging fix — namespace subpackages
 
-- **Files:** `setup.py` in `guide_core`, `guide_ex`, `guide`, `guide_tasks/block_bin`.
+- **Files:** `setup.py` in `guide_core`, `guide_ex`, `guide_tasks/block_bin`.
 - **What:** `find_packages(exclude=["test"])` → `find_namespace_packages(include=[package_name, f"{package_name}.*"])`.
 - **Why:** the subpackages (`ros`, `core`, `scene`, `types`, `steps`, …) have **no
   `__init__.py`** (PEP 420 namespace packages). `find_packages` silently drops them, so
@@ -287,8 +390,8 @@ source install/setup.zsh
 ```
 
 **Why:** plain `colcon build` (copy install) also avoids the fragile symlinked install
-of the CMake message package `guide_msgs`. Result: `guide_msgs` exposes 13 services +
-1 action; all subpackages resolve.
+of the CMake message package `guide_msgs`. Result: `guide_msgs` exposes 12
+services; all subpackages resolve.
 
 > **zsh note:** sourcing the colcon-generated `setup.bash` under zsh silently fails
 > (`$BASH_SOURCE` is empty), leaving `ros2 pkg list` empty. Always use `setup.zsh`.
@@ -324,7 +427,7 @@ colcon build --packages-select guide_msgs \
 shadows the venv's numpy 1.26 with the system 3.12 numpy and CMake's `FindPython3 NumPy`
 then fails.) The launchers prepend `install_isaac/guide_msgs` to GUIDE's PYTHONPATH/
 LD_LIBRARY_PATH so GUIDE uses the cp311 copy while system tools use the cp312 main install.
-Pure-Python `guide_core`/`guide_ex`/`block_bin`/`guide` stay on the 3.12 build (they import
+Pure-Python `guide_core`/`guide_ex`/`block_bin` stay on the 3.12 build (they import
 fine under 3.11).
 
 **Runtime consequence:** the venv's uv-built interpreter is *statically* linked, so the
@@ -338,7 +441,7 @@ to `LD_LIBRARY_PATH` automatically.
 
 ### 5.1 rclpy for the Isaac Python (3.11)
 
-- **Files:** `guide_core/launch/bringup.launch.py`, `isaac_sim.launch.py`.
+- **Files:** `guide_core/launch/bringup.launch.py`.
 - **What:** the launchers prepend Isaac Sim's **bundled** rclpy to the spawned process's
   `PYTHONPATH`:
   `env_isaaclab/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/$ROS_DISTRO/rclpy`

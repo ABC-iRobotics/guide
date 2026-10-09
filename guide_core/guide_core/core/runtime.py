@@ -189,7 +189,8 @@ class IsaacSimRuntime:
         """Creates Isaac Sim instance based on the given startup config. Initializes command queue.
 
         Args:
-            config (dict): Total config. Startup, extensions, commands.
+            config (dict): Total config: ``startup``, ``extensions`` and ``world`` sections.
+                Defaults to guide_core's ``config/init.yaml``.
         """
         self._logger.debug(f"{self.state}")
         assert self.state == UNINITIALIZED
@@ -204,12 +205,62 @@ class IsaacSimRuntime:
         self._step_hz: float = startup_config.get("step_freq", 60.0)
         self._dt = 1.0 / self._step_hz
 
+        # PhysX ticks faster than the renderer; Isaac derives substeps from the ratio
+        # (isaacsim.core.api SimulationContext.set_simulation_dt). This is the clock
+        # `current_time_step_index` counts and SceneManager measures its record
+        # interval against -- NOT step_freq. Keep them in one place.
+        self._physics_hz: float = startup_config.get("physics_freq", 2 * self._step_hz)
+
+        # Pace the loop to sim time. False lets a scene that renders faster than its
+        # frame budget run ahead of real time, which is what batch demonstration
+        # generation wants.
+        self._realtime: bool = startup_config.get("realtime", True)
+
+        # PhysX on the GPU. NVIDIA documents GPU dynamics as a win at scale -- many
+        # bodies, many contacts -- and this scene is one arm, two bins and four
+        # blocks. It also puts PhysX on the same card the renderer is saturating.
+        # Where PhysX runs: "cpu", or "cuda:N" as CUDA numbers devices -- which is NOT
+        # how nvidia-smi or render_device number them. CUDA defaults to FASTEST_FIRST,
+        # nvidia-smi and Kit go by PCI bus id, so the same N can name different cards.
+        # Pinning CUDA_DEVICE_ORDER would unify them but is a process-global change
+        # that also relocates every component defaulting to device 0 -- measured at
+        # ~7 ms a frame here, and unavailable on a host where the environment is not
+        # ours to set. So both keys log the card they resolved to instead; check the
+        # startup lines against nvidia-smi rather than trusting either convention.
+        physics_device = str(startup_config.get("physics_device", "cpu")).strip().lower()
+        self._gpu_dynamics: bool = physics_device != "cpu"
+        self._physics_gpu: int = int(physics_device.split(":")[1]) if self._gpu_dynamics else -1
+
+        # PhysX worker threads (/persistent/physics/numThreads). 0 runs the solver
+        # synchronously on the calling thread; -1 leaves Isaac's default of 8.
+        self._physics_threads: int = int(startup_config.get("physics_threads", -1))
+
         self.state = INITIALIZING
         try:
             if SimulationApp is None:
                 raise RuntimeError(
                     "Isaac Sim is not available (isaacsim.SimulationApp import failed)."
                 )
+            # "cuda:N" -> the active_gpu index SimulationApp wants. Same N nvidia-smi
+            # shows, because Kit numbers cards by PCI bus id too (see above; nothing
+            # pins CUDA_DEVICE_ORDER). Kept single-GPU: these two cards have no peer
+            # access, and Isaac's multi-GPU renderer deadlocks on them ("Failed to
+            # begin render graph ... semaphore timed out").
+            render_device = str(startup_config.get("render_device", "")).strip().lower()
+            if render_device.startswith("cuda:"):
+                startup_config["active_gpu"] = int(render_device.split(":")[1])
+                startup_config["multi_gpu"] = False
+                self._logger.info(f"Renderer on {render_device}.")
+
+            if self._physics_gpu >= 0:
+                # Has to go in before the app starts: SimulationApp turns physics_gpu
+                # into --/physics/cudaDevice=N on the Kit command line, and PhysX builds
+                # its CUDA context during startup. Setting the carb value afterwards
+                # logs a pin that never happens -- measured: the setting read cuda:1
+                # while nvidia-smi showed the A2000 idle at 1% throughout.
+                startup_config["physics_gpu"] = self._physics_gpu
+                self._logger.info(f"PhysX on cuda:{self._physics_gpu}.")
+
             # Start Isaac Sim
             self.simulation_app = SimulationApp(startup_config)
 
@@ -328,26 +379,29 @@ class IsaacSimRuntime:
         self._logger.debug("Importing command functions...")
         attach_cmd_functions(self, debug=self._debug)
 
-    def _check_assets(self) -> None:
-        assert self.state in [INITIALIZING, STOPPED, READY, PAUSED]
-
-        assets_root_path = get_assets_root_path()
-        if assets_root_path is None:
-            carb.log_error("Could not find Isaac Sim assets folder")
-            self.state = ERROR
-
     def _create_world(self) -> None:
         try:
             self._logger.debug("Creating World...")
+
+            if self._physics_threads >= 0:
+                import carb.settings
+
+                carb.settings.get_settings().set_int(
+                    "/persistent/physics/numThreads", self._physics_threads
+                )
+                self._logger.info(
+                    f"PhysX worker threads: {self._physics_threads}"
+                    f"{' (synchronous)' if self._physics_threads == 0 else ''}."
+                )
+
             self._world = World(
-                stage_units_in_meters=1.0, physics_dt=self._dt, rendering_dt=self._dt
+                stage_units_in_meters=1.0,
+                physics_dt=1.0 / self._physics_hz,
+                rendering_dt=self._dt,
             )
 
             self._pc = self._world.get_physics_context()
-            self._pc.enable_gpu_dynamics(True)
-
-            self._pc.set_physics_dt(self._dt / 2, substeps=4)
-            self._world.instance().set_simulation_dt(physics_dt=self._dt / 2, rendering_dt=self._dt)
+            self._pc.enable_gpu_dynamics(self._gpu_dynamics)
 
         except Exception as e:
             self._logger.error(f"Error in create_world: {e}")
@@ -382,19 +436,9 @@ class IsaacSimRuntime:
     # -------------------------
     # Stepping interface
     # -------------------------
-    def step(self, n: int = 1) -> None:
-        """Steps simulation by the given number of steps. If internal state is RUNNING, it also renders.
-
-        Args:
-            n (int, optional): Number of steps. Defaults to 1.
-        """
-        assert self.state == RUNNING
-
-        for _ in range(n):
-            self._world.step(render=True)
-
     def update(self, n: int = 1) -> None:
-        """Updates the application by the given number of steps. If internal state is RUNNING, it also renders.
+        """Ticks the Kit app ``n`` times via ``SimulationApp.update()``, in any state but
+        UNINITIALIZED.
 
         Args:
             n (int, optional): Number of steps. Defaults to 1.
@@ -407,32 +451,86 @@ class IsaacSimRuntime:
     # -------------------------
     # Runtime loop
     # -------------------------
+    # Frames between frame-budget reports: ~5 s of sim time at 60 Hz.
+    FRAME_LOG_EVERY = 300
+
+    def _gate_render(self, frame_index: int = 0, enabled: bool | None = None) -> None:
+        """Hand the render-product gate to the scene manager, if there is one yet.
+
+        ``enabled=True`` overrides the schedule and holds the products open, which is
+        what the loop does whenever it is not RUNNING.
+        """
+        scene_manager = getattr(getattr(self, "_simulator", None), "_scene_manager", None)
+        if scene_manager is None:
+            return
+        try:
+            scene_manager.gate_render(frame_index, self._step_hz, enabled=enabled)
+        except Exception as e:
+            self._logger.debug(f"Could not gate render products: {e}")
+
     def run_loop(self) -> None:
         """Runs the runtime loop. \\
         This is a blocking method, but needs to be run in the main thread. \\
         Ends when objects internal state is SHUTTING_DOWN.
         """
+        frames = 0
+        step_s = 0.0
+        loop_s = 0.0
+        window_start = time.perf_counter()
+        # Monotonic count of RENDERED frames, which is the clock the camera render
+        # products have to be gated on -- see SceneManager.gate_render.
+        frame_index = 0
 
-        while True:
-            print(f"[DEBUG_FREEZE] run_loop: outer loop iteration, state={self.state}")
-            while self.state not in [SHUTTING_DOWN, UNINITIALIZED]:
-                start = time.time()
+        while self.state not in [SHUTTING_DOWN, UNINITIALIZED]:
+            start = time.perf_counter()
 
-                self._process_commands(max_per_cycle=50)
+            self._process_commands(max_per_cycle=50)
 
-                if self.state == RUNNING:
-                    try:
-                        self._world.step()
-                    except BaseException as e:
-                        print(f"[FATAL ERROR IN STEP] {type(e).__name__}: {e}")
-                        import traceback
+            if self.state != RUNNING:
+                # Nothing renders, so don't make commands wait a frame period for the
+                # next pass: every call() in the between-episode reset/randomize/home
+                # chain queues up here.
+                #
+                # Leave the render products ON while stopped. The gate below only runs
+                # while RUNNING, so whatever it last wrote would otherwise stick for
+                # the whole reset/randomize chain -- five frames in six that is "off",
+                # and a camera topic that goes quiet across a scene change looks to a
+                # policy evaluation exactly like a simulator that died.
+                self._gate_render(enabled=True)
+                time.sleep(0.001)
+                continue
 
-                        traceback.print_exc()
+            # Open the render window for exactly this frame, before the step that
+            # renders it. Doing it here rather than in the physics callback is the
+            # whole point: see SceneManager.gate_render.
+            self._gate_render(frame_index=frame_index)
 
-                sleep_s = max(0.0, start + self._dt - time.time())
-                time.sleep(sleep_s)
+            step_start = time.perf_counter()
+            try:
+                self._world.step()
+            except BaseException as e:
+                self._logger.error(f"Error in simulation step: {e}", exc_info=True)
+            frame_index += 1
 
-            print(f"[DEBUG_FREEZE] run_loop: inner loop EXITED, state={self.state}")
+            now = time.perf_counter()
+            step_s += now - step_start
+            loop_s += now - start
+            frames += 1
+            if frames >= self.FRAME_LOG_EVERY:
+                # RTF < 1 means the frame costs more than its budget -- the sleep below
+                # is already 0 and the sim is falling behind. Split out so a slow
+                # command handler is not mistaken for a slow renderer.
+                wall = now - window_start
+                self._logger.info(
+                    f"[runtime] {1e3 * step_s / frames:.1f} ms/step + "
+                    f"{1e3 * (loop_s - step_s) / frames:.1f} ms/cmds "
+                    f"(budget {1e3 * self._dt:.1f} ms), RTF {frames * self._dt / wall:.2f}"
+                )
+                frames, step_s, loop_s = 0, 0.0, 0.0
+                window_start = time.perf_counter()
+
+            if self._realtime:
+                time.sleep(max(0.0, start + self._dt - time.perf_counter()))
 
     def _process_commands(self, max_per_cycle: int) -> None:
         for _ in range(max_per_cycle):
@@ -454,22 +552,12 @@ class IsaacSimRuntime:
                     result = True
                 cmd.reply_q.put(result)
                 self._logger.debug("Command processed successfully")
-                # [DEBUG_FREEZE] Check if state changed during command execution
-                if self.state in [SHUTTING_DOWN, UNINITIALIZED]:
-                    print(
-                        f"[DEBUG_FREEZE] _process_commands: state changed to {self.state} AFTER executing '{cmd.name}'"
-                    )
             except BaseException as e:
                 cmd.reply_q.put(e)
                 self._logger.error(
                     f"Error processing command '{cmd.name}': {type(e).__name__} - {e}",
                     exc_info=True,
                 )
-                # [DEBUG_FREEZE] Check if state changed during exception
-                if self.state in [SHUTTING_DOWN, UNINITIALIZED]:
-                    print(
-                        f"[DEBUG_FREEZE] _process_commands: state changed to {self.state} AFTER exception in '{cmd.name}': {e}"
-                    )
 
     def is_running(self) -> bool:
         return self.state == RUNNING

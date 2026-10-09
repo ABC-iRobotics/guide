@@ -14,7 +14,9 @@ class Scene(SceneOrchestrator):
         return super().reset_postprocess(result)
 
     def randomize_preprocess(self, randomizer):
-        # Seeded, captured discrete draws through the single Randomizer.
+        # Seeded, captured discrete draws through the single Randomizer. Runs
+        # BEFORE the pose draws, so self.c (the target colour) is known when
+        # zone_target() is queried to place that block in the requested zone.
         self.c = randomizer.draw("color", Categorical(tuple(self.colors)))
         self.s = randomizer.draw("side", Categorical(tuple(self.sides)))
 
@@ -22,6 +24,12 @@ class Scene(SceneOrchestrator):
         print(f"Task: {self.task}")
 
         return randomizer
+
+    def zone_target(self):
+        # The color-selected block is the one placed in the requested zone; the
+        # other three blocks (from the same /blocks/* grid instruction) stay free.
+        c = getattr(self, "c", None)
+        return f"/Scene_{self._scene_id}/blocks/{c}_block" if c else None
 
     def randomize_postprocess(self, result):
         return f"{{ \"goal\": \"/bin_{0 if self.s == 'left' else 1}\", \"target\": \"/blocks/{self.c}_block\", \"task\": \"{self.task}\" }}"
@@ -48,9 +56,6 @@ class Scene(SceneOrchestrator):
         return all(bool(r) for r in result)
 
     def check_warmup(self):
-        # Default implementation: warmup is always complete after the required frames
+        # No task-specific check: warmup is complete once SceneManager's warm-up frames
+        # have passed (SceneOrchestrator.check_warmup is abstract).
         return True
-
-    def reset_lightweight(self):
-        # To be implemented with actual scene reset logic
-        pass

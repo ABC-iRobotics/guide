@@ -22,7 +22,7 @@ def _execute_instructions_directly(self, instructions: list) -> list:
     return results
 
 
-def _cmd_randomize_scene(self, scene_id: int, seed=None, params=None):
+def _cmd_randomize_scene(self, scene_id: int, seed=None, params=None, use_zone=False, zone=0):
     simulator = getattr(self, "_simulator", None)
     if simulator is None:
         raise RuntimeError("Simulator reference not set on IsaacSimRuntime!")
@@ -33,8 +33,11 @@ def _cmd_randomize_scene(self, scene_id: int, seed=None, params=None):
         from guide_core.types.randomization import RandomizationRecord
 
         inject = RandomizationRecord.from_json(params)
+    # `use_zone` gates zoning so a caller that leaves the field default never
+    # silently targets zone 0 (see Randomize.srv).
+    zone_arg = int(zone) if use_zone else None
     instructions = simulator._scene_manager.randomize_preprocess(
-        scene_id, seed=seed, inject=inject
+        scene_id, seed=seed, inject=inject, zone=zone_arg
     )
     results = self._execute_instructions_directly(instructions)
     return simulator._scene_manager.randomize_postprocess(scene_id, results)
@@ -46,6 +49,7 @@ def _cmd_reset_scene(self, scene_id: int) -> bool:
         raise RuntimeError("Simulator reference not set on IsaacSimRuntime!")
     instructions = simulator._scene_manager.reset_preprocess(scene_id)
     results = self._execute_instructions_directly(instructions)
+    simulator._scene_manager._scenes[scene_id].reset_fire()  # Replicator reset file, if any
     return simulator._scene_manager.reset_postprocess(scene_id, results)
 
 
@@ -118,6 +122,11 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 frame=camera.get("frame", "cam"),
                 namespace=f"{simulator._sim_path}{scene_path}",
                 topic=camera.get("topic", "/rgb"),
+                # Resolved in SceneOrchestrator.resolve_cameras(); the fallbacks
+                # here only apply to a caller that builds the list by hand.
+                rgb=camera.get("rgb", True),
+                encoding=camera.get("encoding", "rgb"),
+                publish_fps=camera.get("fps", 0.0),
             )
             self._cmd_create_tf_graph(
                 namespace=f"{simulator._sim_path}{scene_path}",
@@ -125,5 +134,9 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 parent_prim=f"{scene_path}",
                 path=f'{scene_path}/Graph{camera.get("path", "/cam")}_tf_graph',
             )
+
+    scene = simulator._scene_manager._scenes[id]
+    if getattr(scene, "replicator_files", None):
+        scene.build_replicator()
 
     return id, offset
