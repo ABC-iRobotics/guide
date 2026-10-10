@@ -77,7 +77,7 @@ guide/
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   git curl build-essential cmake psmisc iproute2 \
-  python3-colcon-common-extensions python3-vcstool python3-rosdep \
+  python3-colcon-common-extensions python3-rosdep \
   ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-xacro ros-jazzy-robot-state-publisher \
   ros-jazzy-ros2-control ros-jazzy-ros2-controllers ros-jazzy-controller-manager \
   ros-jazzy-moveit-ros-move-group ros-jazzy-moveit-planners-ompl ros-jazzy-moveit-kinematics \
