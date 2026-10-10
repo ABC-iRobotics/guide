@@ -86,8 +86,8 @@ uv pip check --python .venv/bin/python || true   # must list only lerobot's nump
 - `-c $PINS` on every torch-dependent install: lerobot 0.6.0 caps `numpy<2.3.0`, so
   without it uv downgrades numpy to 2.2.6 and drags torch to 2.10.0 / torchvision to
   0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins. Isaac
-  also pins `packaging==26.0` and `click==8.1.7`, which lerobot's dependencies would move
-  (to 25.0 and 8.5.0), so they are in `$PINS` too.
+  also pins `packaging==26.0` and `click==8.1.7`, which installing lerobot would move (to
+  25.0 by lerobot's own cap, to 8.5.0 by a newer huggingface-hub), so they are in `$PINS` too.
 - `--override $OVERRIDES`: a uv constraint can only narrow a range, never widen one, and
   lerobot 0.6.0 caps `numpy<2.3.0` and `packaging<26.0` below Isaac's exact pins, so
   `-c $PINS` alone is unsatisfiable ("No solution found"). The override replaces lerobot's
