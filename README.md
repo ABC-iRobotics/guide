@@ -120,7 +120,10 @@ cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
 PINS=src/guide/modules/isaac6-safe-pins.txt
 # Constraints protecting Isaac Sim 6.0.1's exact pins (not tracked: modules/ is git-ignored):
-printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
+printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\npackaging==26.0\nclick==8.1.7\n' > $PINS
+# lerobot 0.6.0 caps numpy<2.3.0 and packaging<26.0, below Isaac's pins; these override the caps:
+OVERRIDES=src/guide/modules/lerobot-overrides.txt
+printf 'numpy==2.3.1\npackaging==26.0\n' > $OVERRIDES
 
 # PyTorch first — match the wheel index to the machine's CUDA version (cu130 shown):
 uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
@@ -130,14 +133,17 @@ uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 
-# GUIDE runtime deps (-c protects Isaac's torch/numpy pins from being upgraded):
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
-uv pip check --python .venv/bin/python     # must report no incompatibilities
+# GUIDE runtime deps (-c keeps Isaac's pins, --override lifts lerobot's caps):
+uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" \
+  -c $PINS --override $OVERRIDES
+uv pip check --python .venv/bin/python || true   # must list only lerobot's numpy and packaging caps
 ```
 > Always pass `-c $PINS` when installing torch-dependent packages — without it the resolver
-> re-resolves torch/numpy and breaks the CUDA/Isaac stack. lerobot 0.6.0 caps `numpy<2.3.0`,
-> which conflicts with Isaac's exact `numpy==2.3.1`; `-c $PINS` forces Isaac's version (works
-> for lerobot at runtime). lerobot 0.6.0 also needs `transformers 5.4-5.6` + `huggingface-hub 1.x`.
+> re-resolves torch/numpy and breaks the CUDA/Isaac stack. lerobot 0.6.0 caps `numpy<2.3.0` and
+> `packaging<26.0`, which conflict with Isaac's exact `numpy==2.3.1` and `packaging==26.0`; a
+> constraint cannot satisfy both, so `--override` replaces lerobot's caps with Isaac's versions
+> (lerobot works with them at runtime) and `uv pip check` lists exactly those two caps.
+> lerobot 0.6.0 also needs `transformers 5.4-5.6` + `huggingface-hub 1.x`.
 
 **4. Build the workspace** (`.venv` is hidden, so colcon skips it automatically):
 ```bash
@@ -414,8 +420,8 @@ which the injection does not reach.
   takes `127.0.0.1:50050` and kills its holder. Use one simulator and add scenes instead.
 - **Every camera image comes back empty:** `CUDA_DEVICE_ORDER` is set in the simulator's
   environment; unset it.
-- **`uv pip check` reports incompatibilities** (a torch-dependent install without `-c`):
-  `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
+- **`uv pip check` reports more than lerobot's two caps** (a torch-dependent install without
+  `-c`): restore Isaac's pins with `uv pip install --python .venv/bin/python -r $PINS`.
 - **Depth videos do not play in a browser or the Hugging Face viewer:** browsers cannot decode
   12-bit HEVC; read them with the `pyav` backend as above.
 - Official docs: [Isaac Sim 6.0](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html) · [MoveIt 2](https://moveit.picknik.ai/main/index.html) · [LeRobot](https://github.com/huggingface/lerobot)

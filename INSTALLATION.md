@@ -66,24 +66,37 @@ committed), so the two modules are cloned by hand.
 cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
 PINS=src/guide/modules/isaac6-safe-pins.txt
-printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
+printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\npackaging==26.0\nclick==8.1.7\n' > $PINS
+OVERRIDES=src/guide/modules/lerobot-overrides.txt
+printf 'numpy==2.3.1\npackaging==26.0\n' > $OVERRIDES
 uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
   --index-url https://download.pytorch.org/whl/cu130
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
-uv pip check --python .venv/bin/python     # must report no incompatibilities
+uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" \
+  -c $PINS --override $OVERRIDES
+uv pip check --python .venv/bin/python || true   # must list only lerobot's numpy and packaging caps
 ```
 
 - `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
   which uv skips by default.
 - `-c $PINS` on every torch-dependent install: lerobot 0.6.0 caps `numpy<2.3.0`, so
   without it uv downgrades numpy to 2.2.6 and drags torch to 2.10.0 / torchvision to
-  0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins (numpy
-  2.3.1 runs fine for lerobot). lerobot 0.6.0 also needs `transformers 5.4–5.6` and
-  `huggingface-hub 1.x`.
-- After a drift (also a cu128 torch pulled in by another project), restore with
-  `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
+  0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins. Isaac
+  also pins `packaging==26.0` and `click==8.1.7`, which lerobot's dependencies would move
+  (to 25.0 and 8.5.0), so they are in `$PINS` too.
+- `--override $OVERRIDES`: a uv constraint can only narrow a range, never widen one, and
+  lerobot 0.6.0 caps `numpy<2.3.0` and `packaging<26.0` below Isaac's exact pins, so
+  `-c $PINS` alone is unsatisfiable ("No solution found"). The override replaces lerobot's
+  two caps with Isaac's versions; lerobot runs fine on numpy 2.3.1 and packaging 26.0.
+  Only those two go in the override file: overriding `click` too would force it on
+  huggingface-hub, whose newer releases need `click>=8.4.2` (with a constraint uv picks a
+  hub that accepts 8.1.7).
+- `uv pip check` reads each package's declared requirements, so it always lists lerobot's
+  two overridden caps and exits 1 (hence `|| true`); anything else it lists is a drift.
+  lerobot 0.6.0 also needs `transformers 5.4–5.6` and `huggingface-hub 1.x`.
+- After a drift (also a cu128 torch pulled in by another project), restore Isaac's pins
+  with `uv pip install --python .venv/bin/python -r $PINS`.
 - The venv is uv's: it has no `pip`; always `uv pip ... --python .venv/bin/python`.
 
 ### 3. Build
