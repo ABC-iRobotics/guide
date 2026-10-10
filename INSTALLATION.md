@@ -584,8 +584,8 @@ for reference.
 </details>
 
 ### 6.2 Optional: lean experience to speed GUIDE startup
-GUIDE's `SimulationApp(startup_config)` loads Isaac's default **full editor**
-experience (`isaacsim.exp.full.kit`); first run spends ~2 min compiling RTX shaders.
+GUIDE's `SimulationApp(startup_config)` passes no experience, so Isaac Sim 6.0.1 loads its
+default, `isaacsim.exp.base.python.kit`; first run spends ~2 min compiling RTX shaders.
 Not a bug — but passing a leaner Kit experience (e.g. `isaaclab.python.rendering.kit`)
 via `SimulationApp(cfg, experience=<path>)` would cut startup. Left as-is for now.
 
