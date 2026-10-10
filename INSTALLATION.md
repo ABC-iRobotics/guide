@@ -5,8 +5,8 @@ first part is the current setup; the second part is the log of the earlier Isaac
 port, kept as history.
 
 > **Reproducibility guardrails**
-> - **No system packages are modified.** Every Python install goes into the workspace
->   virtualenv `~/ros2_ws/.venv`; no `apt`, no changes to `/opt/ros/jazzy`.
+> - **No system packages are modified** beyond the prerequisites (§0). Every Python install
+>   goes into the workspace virtualenv `~/ros2_ws/.venv`; no changes to `/opt/ros/jazzy`.
 > - Isaac Sim's exact pins are protected with a constraints file
 >   (`modules/isaac6-safe-pins.txt`) on every install of a torch-dependent package.
 > - The shell here is **zsh**: always source the `.zsh` ROS setup files.
@@ -19,6 +19,22 @@ Isaac Sim 6.0 runs on **Python 3.12, the interpreter of ROS 2 Jazzy**, so GUIDE 
 system rclpy natively: no bundled rclpy, no `/opt/ros` scrubbing, no `guide_msgs` overlay.
 Requirements: Ubuntu 24.04, ROS 2 Jazzy with MoveIt 2, an NVIDIA GPU with a recent driver,
 [`uv`](https://docs.astral.sh/uv/).
+
+### 0. Prerequisites
+
+The `apt` block of the README's [Prerequisites](README.md#prerequisites), on top of ROS 2
+Jazzy ros-base, then `rosdep` and `uv`. The Docker image runs that block verbatim.
+
+- The `ros-jazzy-*` packages: what `colcon build` needs for the FR3 MoveIt config,
+  `topic_based_ros2_control` and GUIDE (the workspace is built without `rosdep install`),
+  and what the task launches start (move_group, OMPL, pick_ik, ros2_control).
+- `psmisc`: the recorder frees its port with `fuser`. `iproute2`: the Docker runner
+  reads its addresses with `ip`.
+- The `lib*` X/GL/Vulkan libraries: Isaac Sim's Kit loads them, even headless. A desktop
+  Ubuntu has them; a server or a container does not.
+- `rosdep init`/`update`: `Register` with `bringup: true` installs a fetched task's system
+  dependencies with `rosdep install`.
+- `uv` 0.11.26 is the version this guide was tested with.
 
 ### 1. Sources
 
@@ -91,9 +107,11 @@ source install/setup.zsh
 
 ### 4. Run
 
-Every shell that talks to GUIDE (launches, `ros2` CLI, rqt) uses the localhost DDS config
-(§5.4 explains why this host needs it):
+Every shell that talks to GUIDE (launches, `ros2` CLI, rqt) uses Cyclone DDS with the
+localhost config (§5.4 explains why this host needs it; Jazzy's default RMW is Fast DDS,
+which ignores `CYCLONEDDS_URI`):
 ```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/ros2_ws/install/guide_core/share/guide_core/config/cyclonedds_localhost.xml
 ros2 launch guide_core bringup.launch.py                   # Isaac Sim + the GUIDE node
 ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin'}"

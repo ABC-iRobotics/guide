@@ -72,6 +72,23 @@ guide/
 - NVIDIA GPU with a recent driver (Isaac Sim 6.0 requirement)
 - [`uv`](https://docs.astral.sh/uv/) — used to create the Python 3.12 environment
 
+```bash
+# Ubuntu 24.04 with ROS 2 Jazzy (ros-base) installed:
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+  git curl build-essential cmake psmisc iproute2 \
+  python3-colcon-common-extensions python3-vcstool python3-rosdep \
+  ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-xacro ros-jazzy-robot-state-publisher \
+  ros-jazzy-ros2-control ros-jazzy-ros2-controllers ros-jazzy-controller-manager \
+  ros-jazzy-moveit-ros-move-group ros-jazzy-moveit-planners-ompl ros-jazzy-moveit-kinematics \
+  ros-jazzy-moveit-simple-controller-manager ros-jazzy-moveit-configs-utils \
+  ros-jazzy-moveit-ros-planning-interface ros-jazzy-pick-ik ros-jazzy-std-srvs \
+  libglu1-mesa libvulkan1 libegl1 libxt6 libxrandr2 libxi6 libsm6 libice6
+sudo rosdep init 2>/dev/null || true   # Register installs a task's system dependencies with rosdep
+rosdep update
+curl -LsSf https://astral.sh/uv/0.11.26/install.sh | sh
+```
+
 > **Isaac Sim 6.0.1** is installed with `pip` into a project virtual environment during
 > [Installation](#installation) — no standalone install is needed. Because 6.0 runs on **Python 3.12,
 > the same interpreter as ROS 2 Jazzy**, ROS 2 works *natively* (no bundled rclpy, no message overlay).
@@ -132,9 +149,10 @@ source install/setup.bash                 # or setup.zsh
 
 ## Usage
 
-Every terminal that talks to GUIDE uses the bundled localhost DDS config (see
+Every terminal that talks to GUIDE uses Cyclone DDS with the bundled localhost config (see
 [Troubleshooting](#troubleshooting)):
 ```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/ros2_ws/install/guide_core/share/guide_core/config/cyclonedds_localhost.xml
 ```
 
