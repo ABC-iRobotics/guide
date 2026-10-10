@@ -290,11 +290,16 @@ def test_shutdown_runs_once_finalize_announce_tasks_isaac_ros(isaac_import, monk
     module = isaac_import("guide_core.ros.guide_ros")
     order = []
     monkeypatch.setattr(module.rclpy, "try_shutdown", lambda: order.append("ros"))
+    monkeypatch.setattr(module.RecorderServer, "stop", lambda: order.append("recorder"))
     scenes = SimpleNamespace(
         finalize_all_recordings=lambda: order.append("finalize") or [(0, "/s/d0"), (1, "")]
     )
     me = SimpleNamespace(
-        _backend=SimpleNamespace(_scene_manager=scenes, call=lambda name, timeout=None: order.append(name)),
+        _backend=SimpleNamespace(
+            _scene_manager=scenes,
+            stop=lambda: order.append("stop"),
+            call=lambda name, timeout=None: order.append(name),
+        ),
         _logger=MagicMock(),
         _tasks=SimpleNamespace(shutdown=lambda: order.append("tasks")),
         _shutdown_lock=threading.Lock(),
@@ -304,7 +309,10 @@ def test_shutdown_runs_once_finalize_announce_tasks_isaac_ros(isaac_import, monk
     module.GUIDEROS2Interface.shutdown(me)
     module.GUIDEROS2Interface.shutdown(me)  # a second Ctrl-C or request changes nothing
 
-    assert order == ["finalize", ("announce", 0, "/s/d0"), "tasks", "shutdown", "ros"]
+    # The world stops before the recorder so no physics step polls a recorder that is gone.
+    assert order == [
+        "finalize", ("announce", 0, "/s/d0"), "tasks", "stop", "recorder", "shutdown", "ros"
+    ]
 
 
 def test_the_shutdown_service_answers_before_shutting_down(isaac_import):

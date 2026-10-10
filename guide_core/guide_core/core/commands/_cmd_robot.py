@@ -62,10 +62,9 @@ def _cmd_create_clock(self, namespace: str = "", path: str | None = None) -> Non
 
     print("Creating clock")
     _finalize_graph(clock)
-    # make_graph ignores _node_namespace (Isaac 6.0.1), so the clock would stay on /clock.
-    og.Controller.edit(
-        clock._og_path, {og.Controller.Keys.SET_VALUES: [("PublishClock.inputs:nodeNamespace", namespace)]}
-    )
+    # make_graph ignores _node_namespace (Isaac 6.0.1), so the clock would stay on /clock. An
+    # absolute attribute path: Controller.edit cannot resolve a relative one on an existing graph.
+    og.Controller.attribute(f"{clock._og_path}/PublishClock.inputs:nodeNamespace").set(namespace)
 
 
 def _cmd_create_robot_control(

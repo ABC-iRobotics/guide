@@ -132,6 +132,8 @@ def test_the_clock_publishes_under_the_sim_namespace(command_module, monkeypatch
 
     robot._cmd_create_clock(host(state=IsaacState.READY), namespace="Sim_3")
 
-    (path, edits), _ = robot.og.Controller.edit.call_args
-    assert path == robot.Ros2ClockGraph.return_value._og_path
-    assert edits[robot.og.Controller.Keys.SET_VALUES] == [("PublishClock.inputs:nodeNamespace", "Sim_3")]
+    # An absolute attribute path: Controller.edit on the existing graph could not resolve the
+    # relative one live ("node=None, graph=None"), and the clock stayed on /clock.
+    graph = robot.Ros2ClockGraph.return_value._og_path
+    robot.og.Controller.attribute.assert_called_once_with(f"{graph}/PublishClock.inputs:nodeNamespace")
+    robot.og.Controller.attribute.return_value.set.assert_called_once_with("Sim_3")

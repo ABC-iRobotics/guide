@@ -60,6 +60,7 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from guide_core.core.guide_simulator import GUIDESimulator
+from guide_core.core.recorder_manager import RecorderServer
 from guide_core.ros.task_bringup import TaskBringup
 from guide_core.types.geometry import Pose
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
@@ -221,6 +222,8 @@ class GUIDEROS2Interface(Node):
                     self._announce_finalized(scene_id, path)
             if self._tasks:
                 self._tasks.shutdown()
+            self._backend.stop()  # no physics step may poll the recorder once it is gone
+            RecorderServer.stop()
         except Exception as e:  # Isaac must still close and ROS end, or only SIGKILL stops us
             self._logger.error(f"Shutdown: finalizing or stopping tasks failed: {e}")
         try:

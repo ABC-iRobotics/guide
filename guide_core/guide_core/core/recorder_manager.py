@@ -111,6 +111,14 @@ class RecorderServer:
         )
 
     @classmethod
+    def stop(cls):
+        """Stop the recorder process. Kit ends GUIDE with a hard exit inside close(), which skips
+        BaseManager's own cleanup and would leave this process holding the port."""
+        if cls._manager is not None:
+            cls._manager.shutdown()
+            cls._manager = cls._singleton_proxy = None
+
+    @classmethod
     def get_client(cls, address=("127.0.0.1", 50050), authkey=b"isaac_sim_recorder"):
         class ClientRecorderManager(BaseManager):
             pass
