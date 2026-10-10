@@ -157,24 +157,35 @@ def test_a_plan_is_read_from_a_file_or_s3(tmp_path):
 MOCK = Path(__file__).resolve().parents[1] / "mock" / "mock_sim.py"
 
 FAKE_GUIDE = """
-import json, pathlib, sys, time
+import json, os, pathlib, signal, sys, time
 import rclpy
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import String
 d = pathlib.Path(sys.argv[1]); (d / "meta").mkdir(parents=True)
 (d / "meta" / "info.json").write_text("{}")
+stopped = []
+if "stop" in sys.argv:  # stand in for docker stop: the runner must hand the SIGTERM on to us
+    signal.signal(signal.SIGTERM, lambda *_: stopped.append(1))
+    os.kill(os.getppid(), signal.SIGTERM)
+    while not stopped:
+        time.sleep(0.1)
 rclpy.init()
 node = rclpy.create_node("GUIDE", namespace="Sim_7")
-pub = node.create_publisher(String, "dataset_finalized",
-                            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL))
-pub.publish(String(data=json.dumps({"scene": 0, "path": str(d)})))
-time.sleep(5)  # long enough for the runner to discover us and read the latched message
+latched = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+delivered = []
+node.create_subscription(String, "dataset_delivered", lambda m: delivered.append(m.data), latched)
+node.create_publisher(String, "dataset_finalized", latched).publish(
+    String(data=json.dumps({"scene": 0, "path": str(d)})))
+deadline = time.monotonic() + 30
+while not delivered and time.monotonic() < deadline:
+    rclpy.spin_once(node, timeout_sec=0.1)
+pathlib.Path(__file__).with_suffix(".json").write_text(delivered[0] if delivered else "null")
 """
 
 
 def env_for(tmp_path, monkeypatch, **extra):
     monkeypatch.setenv("CYCLONEDDS_URI", "")  # main() sets it; monkeypatch restores it
-    monkeypatch.setenv("ROS_DOMAIN_ID", str(random.randint(100, 200)))  # private: never meet a live GUIDE
+    monkeypatch.setenv("ROS_DOMAIN_ID", str(random.randint(1, 101)))  # private: never meet a live GUIDE; > 101 is ephemeral ports
     return {**os.environ, "GUIDE_SCRATCH": str(tmp_path / "scratch"), **extra}
 
 
@@ -190,6 +201,22 @@ def test_slave_mode_delivers_what_guide_finalizes(tmp_path, monkeypatch):
 
     assert code == 0
     assert (out / "Sim_7" / "dataset_7_0_x" / "meta" / "info.json").is_file()
+    assert json.loads(fake.with_suffix(".json").read_text()) == {
+        "dataset": "dataset_7_0_x", "target": str(out / "Sim_7" / "dataset_7_0_x"), "complete": True}
+
+
+def test_docker_stop_delivers_the_dataset_incomplete(tmp_path, monkeypatch):
+    fake = tmp_path / "fake_guide.py"
+    fake.write_text(FAKE_GUIDE)
+    made = tmp_path / "scratch" / "Sim_7" / "dataset_7_0_x"
+    out = tmp_path / "out"
+    out.mkdir()
+
+    c.main(env_for(tmp_path, monkeypatch, GUIDE_SIM_ID="7", GUIDE_OUTPUT=str(out),
+                   GUIDE_CMD=f"{sys.executable} {fake} {made} stop"))
+
+    assert json.loads(fake.with_suffix(".json").read_text()) == {
+        "dataset": "dataset_7_0_x", "target": str(out / "Sim_7" / "dataset_7_0_x"), "complete": False}
 
 
 def test_an_unreachable_bucket_keeps_the_dataset(tmp_path, monkeypatch):
@@ -206,6 +233,8 @@ def test_an_unreachable_bucket_keeps_the_dataset(tmp_path, monkeypatch):
 
     assert code == 0  # GUIDE was fine; the dataset just could not leave
     assert (made / "meta" / "info.json").is_file()
+    assert json.loads(fake.with_suffix(".json").read_text()) == {
+        "dataset": "dataset_7_0_x", "target": None, "complete": False}
 
 
 def test_a_plan_runs_to_the_end_on_the_mock(tmp_path, monkeypatch):
@@ -229,6 +258,15 @@ def test_a_bad_plan_never_starts_guide(tmp_path, monkeypatch):
     marker = tmp_path / "started"
 
     code = c.main(env_for(tmp_path, monkeypatch, GUIDE_PLAN=str(plan),
+                          GUIDE_CMD=f"touch {marker}"))
+
+    assert code == 1 and not marker.exists()
+
+
+def test_a_missing_output_folder_never_starts_guide(tmp_path, monkeypatch):
+    marker = tmp_path / "started"
+
+    code = c.main(env_for(tmp_path, monkeypatch, GUIDE_OUTPUT=str(tmp_path / "unmounted"),
                           GUIDE_CMD=f"touch {marker}"))
 
     assert code == 1 and not marker.exists()

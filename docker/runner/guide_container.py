@@ -3,11 +3,13 @@
 Container glue only -- GUIDE itself runs unchanged as `GUIDE --id N`. Environment:
   GUIDE_SIM_ID      simulator id -> /Sim_<id> (default 0)
   GUIDE_PLAN        plan file or s3:// URL; unset = slave mode (a master drives GUIDE)
-  GUIDE_OUTPUT      directory or s3://bucket/prefix for finished datasets (overrides the plan's)
+  GUIDE_OUTPUT      existing directory or s3://bucket/prefix for finished datasets (overrides the plan's)
   GUIDE_MAX_SCENES  scenes a plan may use (default: one per job)
   GUIDE_MASTER      the master's name or address on guide-net: the DDS peer besides us
   GUIDE_DDS_NET     guide-net's subnet, e.g. 10.42.0.0/24 (unset: DDS on localhost only)
   GUIDE_SCRATCH     recording directory (default /scratch)
+Slave mode announces a dataset complete unless docker stop cut it short; after a master's own
+/shutdown, whether it is complete is the master's call.
 """
 
 from __future__ import annotations
@@ -167,11 +169,14 @@ def deliver(dataset: Path, output: str, ns: str, s3=None) -> str:
         shutil.rmtree(dataset)
         return f"s3://{bucket}/{base}"
     target = Path(output) / ns / dataset.name
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target.parent.mkdir(exist_ok=True)  # never parents: a missing output is a missing volume
     shutil.move(str(dataset), str(target))
-    owner = Path(output).stat()  # the container runs as root: hand the files to the folder's owner
-    for p in [target.parent, target, *target.rglob("*")]:
-        os.chown(p, owner.st_uid, owner.st_gid)
+    try:  # the container runs as root: hand the files to the folder's owner
+        owner = Path(output).stat()
+        for p in [target.parent, target, *target.rglob("*")]:
+            os.chown(p, owner.st_uid, owner.st_gid)
+    except OSError as e:  # delivered all the same
+        print(f"[container] {target} stays root's: {e}", flush=True)
     return str(target)
 
 
@@ -295,18 +300,24 @@ def main(env=None) -> int:
     from std_msgs.msg import String
 
     env = os.environ if env is None else env
-    sim_id = int(env.get("GUIDE_SIM_ID") or 0)
-    ns = f"Sim_{sim_id}"
-    try:
+    try:  # all of it before Isaac starts
+        sim_id = int(env.get("GUIDE_SIM_ID") or 0)
+        ns = f"Sim_{sim_id}"
         plan = load_plan(read_text(env["GUIDE_PLAN"])) if env.get("GUIDE_PLAN") else None
         cap = int(env.get("GUIDE_MAX_SCENES") or (len(plan["jobs"]) if plan else 0))
         if plan and len(plan["jobs"]) > cap:
             raise ValueError(f"plan: {len(plan['jobs'])} jobs need as many scenes; GUIDE_MAX_SCENES is {cap}")
-    except (OSError, ValueError) as e:
-        print(f"[container] {e}", flush=True)
-        return 1  # before Isaac starts
-    output = env.get("GUIDE_OUTPUT") or (plan or {}).get("output")
-    scratch = Path(env.get("GUIDE_SCRATCH") or "/scratch") / ns
+        output = env.get("GUIDE_OUTPUT") or (plan or {}).get("output")
+        if output and not output.startswith("s3://") and not Path(output).is_dir():
+            raise ValueError(f"output {output} is no directory: is its volume mounted?")
+    except Exception as e:
+        print(f"[container] {e!r}", flush=True)
+        return 1
+    root = Path(env.get("GUIDE_SCRATCH") or "/scratch")
+    if not os.path.ismount(root):
+        print(f"[container] {root} is no volume: datasets kept in scratch go with the container",
+              flush=True)
+    scratch = root / ns
     scratch.mkdir(parents=True, exist_ok=True)
     master = env.get("GUIDE_MASTER")
     if master:
@@ -316,8 +327,13 @@ def main(env=None) -> int:
     guide = subprocess.Popen(guide_cmd(sim_id, env))
     # docker stop / service rm: hand SIGTERM to GUIDE, which shuts down as /shutdown does; we
     # keep delivering what it finalizes until it is gone.
-    previous = {s: signal.signal(s, lambda *_: guide.send_signal(signal.SIGTERM))
-                for s in (signal.SIGTERM, signal.SIGINT)}
+    stopping = threading.Event()
+
+    def stop(*_):
+        stopping.set()
+        guide.send_signal(signal.SIGTERM)
+
+    previous = {s: signal.signal(s, stop) for s in (signal.SIGTERM, signal.SIGINT)}
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = rclpy.create_node("guide_container", namespace=ns)
     latched = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -330,13 +346,17 @@ def main(env=None) -> int:
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
 
+    handled: dict = {}  # path -> result: GUIDE can announce a dataset twice; the first one stands
+
     def handle(event: dict, scene: dict | None = None) -> bool:
         if not event["path"]:
             print(f"[container] scene {event['scene']} recorded nothing", flush=True)
             return False
+        if event["path"] in handled:
+            return handled[event["path"]]
         dataset = Path(event["path"])
-        # Slave mode: the runner cannot know what a master asked for, so "complete" is true.
-        ok = complete(scene, zone_counts(dataset)) if scene else plan is None
+        # Slave mode: the runner cannot know what a master asked for, only that docker stop cut it.
+        ok = complete(scene, zone_counts(dataset)) if scene else (plan is None and not stopping.is_set())
         try:
             target = deliver(dataset, output, ns) if output else str(dataset)
         except Exception as e:  # keep policy: the dataset stays in scratch
@@ -344,6 +364,7 @@ def main(env=None) -> int:
             target, ok = None, False
         announce.publish(String(data=json.dumps(
             {"dataset": dataset.name, "target": target, "complete": ok})))
+        handled[event["path"]] = ok
         return ok
 
     try:
