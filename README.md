@@ -222,6 +222,84 @@ bring-up with `num_env:=N`; each scene's `generate_demonstration` writes its own
 **one GUIDE simulator per machine**: a second one takes over the recorder's port and kills the
 first one's recorder.
 
+## Docker
+
+GUIDE also runs in containers: one simulator per GPU, several scenes per simulator, started by
+hand or as a swarm service. The images build from this checkout and run the
+[Prerequisites](#prerequisites) and [Installation](#installation) blocks above verbatim, so the
+image build is also the install test.
+
+**Host setup** (once per GPU node, needs sudo): Docker Engine, and the NVIDIA Container Toolkit
+as Docker's *default* runtime — swarm services cannot request GPUs, so every container on a GPU
+node runs under it.
+```bash
+# Docker Engine, from Docker's apt repository
+sudo apt-get update && sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER   # log out and back in
+
+# NVIDIA Container Toolkit as the default runtime
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
+sudo systemctl restart docker
+```
+Check: every GPU is listed without `--gpus`. The runtime hands a container the GPUs only when
+the container sets `NVIDIA_VISIBLE_DEVICES` (the GUIDE images do):
+```bash
+docker run --rm -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=utility ubuntu:24.04 nvidia-smi -L
+```
+
+**Swarm** (once, on the manager node): the GPU-node label, the private `guide-net` overlay that
+carries ROS 2, the `guide-egress` overlay for internet access, and the S3 key as a swarm secret.
+```bash
+docker swarm init
+docker node update --label-add guide.gpu=a4000 $(docker node ls -q --filter role=manager)
+docker network create -d overlay --attachable --internal --opt encrypted --subnet 10.42.0.0/24 guide-net
+docker network create -d overlay --attachable guide-egress
+mkdir -p docker/secrets   # git-ignored
+printf '[default]\naws_access_key_id = guide\naws_secret_access_key = guidesecret\n' > docker/secrets/guide_s3
+docker secret create guide_s3 docker/secrets/guide_s3
+docker network ls --filter name=guide   # guide-net and guide-egress, both "overlay"
+```
+The `guide_s3` key above is the local MinIO test key; for real runs it is replaced by the Ceph
+key, write-only and scoped to one bucket/prefix. Every further GPU node joins with the
+`docker swarm join` command that `docker swarm init` prints, gets the `guide.gpu=a4000` label, and
+needs ESP (IP protocol 50), 2377/tcp, 7946/tcp+udp and 4789/udp open between the nodes.
+
+**Build** from the repository root (`guide:test` runs the test suite, no GPU needed):
+```bash
+docker build -f docker/Dockerfile --target build -t guide:build .
+docker build -f docker/Dockerfile --target test -t guide:test . && docker run --rm guide:test
+```
+
+**One simulator on a plan** — record, deliver to a folder, exit:
+```bash
+mkdir -p ~/dataset/block_bin   # the output folder must exist
+printf 'jobs:\n  - {task: block_bin, zones: [], counts: [5]}\n' > plan.yaml
+docker run --rm --init --shm-size=8g \
+  -e GUIDE_PLAN=/plan.yaml -e GUIDE_OUTPUT=/out -e GUIDE_MAX_SCENES=1 \
+  -v "$PWD/plan.yaml:/plan.yaml:ro" -v ~/dataset/block_bin:/out -v guide-scratch:/scratch \
+  guide:build bash -c 'source /opt/ros/jazzy/setup.bash && source /root/ros2_ws/install/setup.bash && exec /root/ros2_ws/.venv/bin/python /root/ros2_ws/src/guide/docker/runner/guide_container.py'
+```
+The runner (`docker/runner/guide_container.py`) starts GUIDE, registers each job's task with its
+bring-up, spreads the jobs over `GUIDE_MAX_SCENES` scenes, and moves every finished dataset to
+`<output>/Sim_<id>/dataset_<sim>_<scene>_<time>/`, owned by the output folder's owner. It then
+shuts GUIDE down and exits 0 when every dataset is complete. Recording happens in `/scratch` (a
+volume, so a dataset that cannot be delivered survives the container). The first start compiles
+Isaac's shaders and downloads the scene assets, which takes minutes. Without `GUIDE_PLAN` the
+container waits for a master over ROS 2; the `GUIDE_*` variables are listed at the top of
+`docker/runner/guide_container.py`.
+
 ## Writing a task
 
 A task package, `block_bin` as the example:
