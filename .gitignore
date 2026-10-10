@@ -91,3 +91,7 @@ CATKIN_IGNORE
 env_isaaclab
 cli_runner/
 *.claude
+
+# Docker secrets (Ceph/MinIO keys) and env files never enter git
+docker/secrets/
+*.env

@@ -8,22 +8,27 @@
 
 FROM ros:jazzy-ros-base AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# uv's cache is a build cache mount (kept between builds, never in an image); hardlinks
+# cannot cross into it, so uv copies.
 ENV DEBIAN_FRONTEND=noninteractive \
     RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
     OMNI_KIT_ACCEPT_EULA=YES \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=all \
-    PATH=/root/.local/bin:$PATH
+    PATH=/root/.local/bin:$PATH \
+    UV_LINK_MODE=copy
 RUN apt-get update && apt-get install -y --no-install-recommends sudo curl
 COPY README.md docker/readme_steps.sh /tmp/guide/
 RUN /tmp/guide/readme_steps.sh /tmp/guide/README.md Prerequisites && rm -rf /var/lib/apt/lists/*
 
 FROM base AS build
 COPY . /root/ros2_ws/src/guide
-RUN /tmp/guide/readme_steps.sh /root/ros2_ws/src/guide/README.md Installation
+RUN --mount=type=cache,target=/root/.cache/uv \
+    /tmp/guide/readme_steps.sh /root/ros2_ws/src/guide/README.md Installation
 
 FROM build AS test
-RUN uv pip install --python /root/ros2_ws/.venv/bin/python pytest lark \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /root/ros2_ws/.venv/bin/python pytest lark \
       -c /root/ros2_ws/src/guide/modules/isaac6-safe-pins.txt
 WORKDIR /root/ros2_ws/src/guide
 # INSTALLATION.md §7 plus the runner's tests. No GPU: the tests stub Isaac.

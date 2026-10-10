@@ -8,4 +8,5 @@ log
 **/__pycache__
 docker/secrets
 .superpowers
-.pytest_cache
+**/.pytest_cache
+**/*.env
