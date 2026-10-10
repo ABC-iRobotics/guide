@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -173,6 +174,7 @@ time.sleep(5)  # long enough for the runner to discover us and read the latched 
 
 def env_for(tmp_path, monkeypatch, **extra):
     monkeypatch.setenv("CYCLONEDDS_URI", "")  # main() sets it; monkeypatch restores it
+    monkeypatch.setenv("ROS_DOMAIN_ID", str(random.randint(100, 200)))  # private: never meet a live GUIDE
     return {**os.environ, "GUIDE_SCRATCH": str(tmp_path / "scratch"), **extra}
 
 

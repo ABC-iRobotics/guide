@@ -3,4 +3,3 @@
 source /opt/ros/jazzy/setup.bash
 source "${GUIDE_WS:-/root/ros2_ws/install}/setup.bash"
 exec "${GUIDE_PYTHON:-/root/ros2_ws/.venv/bin/python}" /opt/guide/guide_container.py "$@"
-```

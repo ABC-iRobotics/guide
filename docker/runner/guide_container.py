@@ -241,7 +241,7 @@ def zone_count(package: str) -> int:
     return grid.num_zones if grid is not None else 1
 
 
-def run_plan(node, plan, cap, scratch, finalized, handle, guide) -> bool:
+def run_plan(node, plan, cap, scratch, finalized, handle, guide, scenes) -> bool:
     from guide_msgs.srv import Demonstration, RegisterScene
     from std_srvs.srv import Trigger
 
@@ -260,7 +260,6 @@ def run_plan(node, plan, cap, scratch, finalized, handle, guide) -> bool:
     items = [work(job, zone_count(pkg) if job["zones"] == [-1] else 1)
              for job, (_, pkg) in zip(jobs, firsts)]
     shares = allocate([sum(n for _, n in it) for it in items], [capacity(it) for it in items], cap)
-    scenes = {}
     for job, (first, _), it, k in zip(jobs, firsts, items, shares):
         parts = deal(it, k)
         scenes[first] = parts[0]
@@ -323,6 +322,7 @@ def main(env=None) -> int:
     node = rclpy.create_node("guide_container", namespace=ns)
     latched = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
     finalized: queue.Queue = queue.Queue()
+    scenes: dict = {}  # scene id -> its share of the plan, filled by run_plan
     node.create_subscription(String, "dataset_finalized",
                              lambda m: finalized.put(json.loads(m.data)), latched)
     announce = node.create_publisher(String, "dataset_delivered", latched)
@@ -335,7 +335,8 @@ def main(env=None) -> int:
             print(f"[container] scene {event['scene']} recorded nothing", flush=True)
             return False
         dataset = Path(event["path"])
-        ok = complete(scene, zone_counts(dataset)) if scene else True
+        # Slave mode: the runner cannot know what a master asked for, so "complete" is true.
+        ok = complete(scene, zone_counts(dataset)) if scene else plan is None
         try:
             target = deliver(dataset, output, ns) if output else str(dataset)
         except Exception as e:  # keep policy: the dataset stays in scratch
@@ -346,7 +347,7 @@ def main(env=None) -> int:
         return ok
 
     try:
-        ok = run_plan(node, plan, cap, scratch, finalized, handle, guide) if plan else True
+        ok = run_plan(node, plan, cap, scratch, finalized, handle, guide, scenes) if plan else True
     except Exception as e:
         print(f"[container] {e}", flush=True)
         ok = False
@@ -357,7 +358,8 @@ def main(env=None) -> int:
     quiet_since = None
     while True:
         try:
-            handle(finalized.get(timeout=1.0))
+            event = finalized.get(timeout=1.0)
+            handle(event, scenes.get(event["scene"]))
             quiet_since = None
         except queue.Empty:
             if guide.poll() is None:
