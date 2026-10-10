@@ -144,7 +144,8 @@ uv pip check --python .venv/bin/python || true   # lists lerobot's numpy and pac
 > re-resolves torch/numpy and breaks the CUDA/Isaac stack. lerobot 0.6.0 caps `numpy<2.3.0` and
 > `packaging<26.0`, which conflict with Isaac's exact `numpy==2.3.1` and `packaging==26.0`; a
 > constraint cannot satisfy both, so `--override` replaces lerobot's caps with Isaac's versions
-> (lerobot works with them at runtime) and `uv pip check` lists exactly those two caps.
+> (checked with them: the lerobot modules GUIDE imports load and GUIDE's tests pass) and
+> `uv pip check` lists exactly those two caps.
 > lerobot 0.6.0 also needs `transformers 5.4-5.6` + `huggingface-hub 1.x`.
 
 **4. Build the workspace** (`.venv` is hidden, so colcon skips it automatically):

@@ -92,7 +92,8 @@ uv pip check --python .venv/bin/python || true   # lists lerobot's numpy and pac
 - `--override $OVERRIDES`: a uv constraint can only narrow a range, never widen one, and
   lerobot 0.6.0 caps `numpy<2.3.0` and `packaging<26.0` below Isaac's exact pins, so
   `-c $PINS` alone is unsatisfiable ("No solution found"). The override replaces lerobot's
-  two caps with Isaac's versions; lerobot runs fine on numpy 2.3.1 and packaging 26.0.
+  two caps with Isaac's versions. Checked on numpy 2.3.1 and packaging 26.0: every lerobot
+  module GUIDE imports loads, and the §7 tests pass.
   Only those two go in the override file: overriding `click` too would force it on
   huggingface-hub, whose newer releases need `click>=8.4.2` (with a constraint uv picks a
   hub that accepts 8.1.7).
