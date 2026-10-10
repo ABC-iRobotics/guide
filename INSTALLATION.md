@@ -83,7 +83,7 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
 uv pip install --python .venv/bin/python python-fcl "lerobot[dataset]==0.6.0" "transformers>=5.4,<5.6" \
   -c $PINS --override $OVERRIDES
 uv pip check --python .venv/bin/python || true   # lists lerobot's numpy and packaging caps
-[ "$(uv pip check --python .venv/bin/python 2>&1 | grep -c ' requires ')" = 2 ]   # fails on any other drift
+[ "$(uv pip check --python .venv/bin/python 2>&1 | grep -c ' requires ')" = 2 ] || { echo "Isaac pins drifted: see INSTALLATION §2"; false; }
 ```
 
 - `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
