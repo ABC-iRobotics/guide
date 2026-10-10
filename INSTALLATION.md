@@ -78,7 +78,8 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 uv pip install --python .venv/bin/python python-fcl "lerobot[dataset]==0.6.0" "transformers>=5.4,<5.6" \
   -c $PINS --override $OVERRIDES
-uv pip check --python .venv/bin/python || true   # must list only lerobot's numpy and packaging caps
+uv pip check --python .venv/bin/python || true   # lists lerobot's numpy and packaging caps
+[ "$(uv pip check --python .venv/bin/python 2>&1 | grep -c ' requires ')" = 2 ]   # fails on any other drift
 ```
 
 - `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
@@ -99,7 +100,11 @@ uv pip check --python .venv/bin/python || true   # must list only lerobot's nump
   `dataset` extra (`datasets`, `av`, `torchcodec`, `pyarrow`, `pandas`, `jsonlines`); a
   bare `lerobot==0.6.0` installs none of them.
 - `uv pip check` reads each package's declared requirements, so it always lists lerobot's
-  two overridden caps and exits 1 (hence `|| true`); anything else it lists is a drift.
+  two overridden caps and exits 1 (hence `|| true`). The next line is the drift gate:
+  `$PINS` holds five of Isaac's exact pins, and a new release in lerobot's floating tree
+  can move any other (it moved `click`). The gate counts the reported conflicts (uv
+  writes them to stderr, hence `2>&1`) and fails unless there are exactly those two, so
+  such a move fails the install instead of the simulator.
   lerobot 0.6.0 also needs `transformers 5.4–5.6` and `huggingface-hub 1.x`.
 - After a drift (also a cu128 torch pulled in by another project), restore Isaac's pins
   with `uv pip install --python .venv/bin/python -r $PINS`.
