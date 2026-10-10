@@ -13,10 +13,19 @@ Container glue only -- GUIDE itself runs unchanged as `GUIDE --id N`. Environmen
 from __future__ import annotations
 
 import ipaddress
+import itertools
 import json
 import os
+import queue
+import shlex
 import shutil
+import signal
+import socket
 import subprocess
+import sys
+import tempfile
+import threading
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -164,3 +173,203 @@ def deliver(dataset: Path, output: str, ns: str, s3=None) -> str:
     for p in [target.parent, target, *target.rglob("*")]:
         os.chown(p, owner.st_uid, owner.st_gid)
     return str(target)
+
+
+def guide_cmd(sim_id: int, env) -> list:
+    if env.get("GUIDE_CMD"):  # the mock image's stand-in simulator; tests
+        return shlex.split(env["GUIDE_CMD"]) + ["--id", str(sim_id)]
+    from ament_index_python.packages import get_package_prefix
+
+    exe = Path(get_package_prefix("guide_core")) / "lib" / "guide_core" / "GUIDE"
+    return [env.get("ISAACSIM_PYTHON", sys.executable), str(exe), "--id", str(sim_id)]
+
+
+def dds_uri(net, master) -> str:
+    if not net:  # sealed: the localhost config GUIDE ships
+        from ament_index_python.packages import get_package_share_directory
+
+        return f"file://{get_package_share_directory('guide_core')}/config/cyclonedds_localhost.xml"
+    path = Path(tempfile.gettempdir()) / "cyclonedds.xml"
+    path.write_text(dds_config(overlay_ip(net), [master] if master else []))
+    return f"file://{path}"
+
+
+def wait_for_name(host: str) -> None:
+    """Cyclone resolves peer names once, at start: wait until the master's name resolves."""
+    for attempt in itertools.count():
+        try:
+            socket.gethostbyname(host)
+            return
+        except OSError:
+            if attempt % 30 == 0:
+                print(f"[container] waiting for {host} to resolve...", flush=True)
+            time.sleep(1.0)
+
+
+def wait(client, guide, timeout: float = 1800.0) -> None:
+    # A cold start compiles shaders (minutes); a solver waits for MoveIt and joint states.
+    deadline = time.monotonic() + timeout
+    while not client.wait_for_service(timeout_sec=1.0):
+        if guide.poll() is not None:
+            raise RuntimeError("GUIDE exited")
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"{client.srv_name} did not come up in {timeout:.0f} s")
+
+
+def call(client, request, guide, timeout: float):
+    done = threading.Event()
+    future = client.call_async(request)
+    future.add_done_callback(lambda _: done.set())
+    deadline = time.monotonic() + timeout
+    while not done.wait(1.0):
+        if guide.poll() is not None:
+            raise RuntimeError("GUIDE exited")
+        if time.monotonic() > deadline:
+            raise TimeoutError(f"{client.srv_name} did not answer in {timeout:.0f} s")
+    return future.result()
+
+
+def zone_count(package: str) -> int:
+    """The task's zone grid, read the way its solver reads it (block_bin solve_task.scene_num_zones)."""
+    from ament_index_python.packages import get_package_share_directory
+
+    from guide_core.ros.task_bringup import TaskBringup
+    from guide_core.types.randomization.replicator_guide import zone_grid
+
+    TaskBringup(0).activate()  # tasks GUIDE fetched live in its overlay
+    grid = zone_grid(str(Path(get_package_share_directory(package)) / "config" / "randomize.yaml"))
+    return grid.num_zones if grid is not None else 1
+
+
+def run_plan(node, plan, cap, scratch, finalized, handle, guide) -> bool:
+    from guide_msgs.srv import Demonstration, RegisterScene
+    from std_srvs.srv import Trigger
+
+    register = node.create_client(RegisterScene, "Register")
+    wait(register, guide)
+
+    def add(task):
+        # Register fetches and builds an unknown task first: allow for a long build.
+        reply = call(register, RegisterScene.Request(path=task, bringup=True), guide, 3600)
+        if not reply.success:
+            raise RuntimeError(f"Register {task!r}: {reply.message}")
+        return reply.id, reply.package
+
+    jobs = plan["jobs"]
+    firsts = [add(job["task"]) for job in jobs]
+    items = [work(job, zone_count(pkg) if job["zones"] == [-1] else 1)
+             for job, (_, pkg) in zip(jobs, firsts)]
+    shares = allocate([sum(n for _, n in it) for it in items], [capacity(it) for it in items], cap)
+    scenes = {}
+    for job, (first, _), it, k in zip(jobs, firsts, items, shares):
+        parts = deal(it, k)
+        scenes[first] = parts[0]
+        for part in parts[1:]:
+            scenes[add(job["task"])[0]] = part
+    for sid, part in scenes.items():
+        client = node.create_client(Demonstration, f"Scene_{sid}/generate_demonstration")
+        wait(client, guide)
+        request = Demonstration.Request(
+            path=str(scratch / f"scene_{sid}"), zones=part["zones"], counts=part["counts"])
+        reply = call(client, request, guide, 60)
+        if not reply.success:
+            raise RuntimeError(f"scene {sid}: {reply.message}")
+    results = {}
+    while len(results) < len(scenes):
+        if guide.poll() is not None:
+            raise RuntimeError("GUIDE exited before the plan finished")
+        try:
+            event = finalized.get(timeout=1.0)
+        except queue.Empty:
+            continue
+        results[event["scene"]] = handle(event, scenes.get(event["scene"]))
+    # The same exit a master uses.
+    call(node.create_client(Trigger, "shutdown"), Trigger.Request(), guide, 60)
+    return all(results.values())
+
+
+def main(env=None) -> int:
+    import rclpy
+    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.qos import DurabilityPolicy, QoSProfile
+    from rclpy.signals import SignalHandlerOptions
+    from std_msgs.msg import String
+
+    env = os.environ if env is None else env
+    sim_id = int(env.get("GUIDE_SIM_ID") or 0)
+    ns = f"Sim_{sim_id}"
+    try:
+        plan = load_plan(read_text(env["GUIDE_PLAN"])) if env.get("GUIDE_PLAN") else None
+        cap = int(env.get("GUIDE_MAX_SCENES") or (len(plan["jobs"]) if plan else 0))
+        if plan and len(plan["jobs"]) > cap:
+            raise ValueError(f"plan: {len(plan['jobs'])} jobs need as many scenes; GUIDE_MAX_SCENES is {cap}")
+    except (OSError, ValueError) as e:
+        print(f"[container] {e}", flush=True)
+        return 1  # before Isaac starts
+    output = env.get("GUIDE_OUTPUT") or (plan or {}).get("output")
+    scratch = Path(env.get("GUIDE_SCRATCH") or "/scratch") / ns
+    scratch.mkdir(parents=True, exist_ok=True)
+    master = env.get("GUIDE_MASTER")
+    if master:
+        wait_for_name(master)
+    os.environ["CYCLONEDDS_URI"] = dds_uri(env.get("GUIDE_DDS_NET"), master)  # GUIDE, its launches, us
+
+    guide = subprocess.Popen(guide_cmd(sim_id, env))
+    # docker stop / service rm: hand SIGTERM to GUIDE, which shuts down as /shutdown does; we
+    # keep delivering what it finalizes until it is gone.
+    previous = {s: signal.signal(s, lambda *_: guide.send_signal(signal.SIGTERM))
+                for s in (signal.SIGTERM, signal.SIGINT)}
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    node = rclpy.create_node("guide_container", namespace=ns)
+    latched = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+    finalized: queue.Queue = queue.Queue()
+    node.create_subscription(String, "dataset_finalized",
+                             lambda m: finalized.put(json.loads(m.data)), latched)
+    announce = node.create_publisher(String, "dataset_delivered", latched)
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    threading.Thread(target=executor.spin, daemon=True).start()
+
+    def handle(event: dict, scene: dict | None = None) -> bool:
+        if not event["path"]:
+            print(f"[container] scene {event['scene']} recorded nothing", flush=True)
+            return False
+        dataset = Path(event["path"])
+        ok = complete(scene, zone_counts(dataset)) if scene else True
+        try:
+            target = deliver(dataset, output, ns) if output else str(dataset)
+        except Exception as e:  # keep policy: the dataset stays in scratch
+            print(f"[container] delivering {dataset} failed, kept in scratch: {e}", flush=True)
+            target, ok = None, False
+        announce.publish(String(data=json.dumps(
+            {"dataset": dataset.name, "target": target, "complete": ok})))
+        return ok
+
+    try:
+        ok = run_plan(node, plan, cap, scratch, finalized, handle, guide) if plan else True
+    except Exception as e:
+        print(f"[container] {e}", flush=True)
+        ok = False
+        if guide.poll() is None:
+            guide.send_signal(signal.SIGTERM)
+    # Slave mode serves until GUIDE exits (a master's /shutdown, or SIGTERM); a finished plan has
+    # asked it to shut down already. Deliver whatever it finalizes on the way out.
+    quiet_since = None
+    while True:
+        try:
+            handle(finalized.get(timeout=1.0))
+            quiet_since = None
+        except queue.Empty:
+            if guide.poll() is None:
+                continue
+            quiet_since = quiet_since or time.monotonic()
+            if time.monotonic() - quiet_since > 3.0:  # the last announcements are in
+                break
+    for s, h in previous.items():
+        signal.signal(s, h)
+    rclpy.try_shutdown()
+    return 0 if ok and guide.returncode == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

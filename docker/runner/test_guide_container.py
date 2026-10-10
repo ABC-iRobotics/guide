@@ -1,6 +1,9 @@
 """The container runner's pure parts: plan, splitting, DDS config, completeness, delivery."""
 
 import json
+import os
+import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -148,3 +151,82 @@ def test_a_plan_is_read_from_a_file_or_s3(tmp_path):
             return {"Body": Body()}
 
     assert c.read_text("s3://plans/a/plan.yaml", s3=S3()) == PLAN
+
+
+MOCK = Path(__file__).resolve().parents[1] / "mock" / "mock_sim.py"
+
+FAKE_GUIDE = """
+import json, pathlib, sys, time
+import rclpy
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
+d = pathlib.Path(sys.argv[1]); (d / "meta").mkdir(parents=True)
+(d / "meta" / "info.json").write_text("{}")
+rclpy.init()
+node = rclpy.create_node("GUIDE", namespace="Sim_7")
+pub = node.create_publisher(String, "dataset_finalized",
+                            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+pub.publish(String(data=json.dumps({"scene": 0, "path": str(d)})))
+time.sleep(5)  # long enough for the runner to discover us and read the latched message
+"""
+
+
+def env_for(tmp_path, monkeypatch, **extra):
+    monkeypatch.setenv("CYCLONEDDS_URI", "")  # main() sets it; monkeypatch restores it
+    return {**os.environ, "GUIDE_SCRATCH": str(tmp_path / "scratch"), **extra}
+
+
+def test_slave_mode_delivers_what_guide_finalizes(tmp_path, monkeypatch):
+    fake = tmp_path / "fake_guide.py"
+    fake.write_text(FAKE_GUIDE)
+    made = tmp_path / "scratch" / "Sim_7" / "dataset_7_0_x"
+    out = tmp_path / "out"
+    out.mkdir()
+
+    code = c.main(env_for(tmp_path, monkeypatch, GUIDE_SIM_ID="7", GUIDE_OUTPUT=str(out),
+                          GUIDE_CMD=f"{sys.executable} {fake} {made}"))
+
+    assert code == 0
+    assert (out / "Sim_7" / "dataset_7_0_x" / "meta" / "info.json").is_file()
+
+
+def test_an_unreachable_bucket_keeps_the_dataset(tmp_path, monkeypatch):
+    fake = tmp_path / "fake_guide.py"
+    fake.write_text(FAKE_GUIDE)
+    made = tmp_path / "scratch" / "Sim_7" / "dataset_7_0_x"
+    # boto3 reads the process environment, not the runner's env argument.
+    for key, value in {"AWS_ENDPOINT_URL": "http://127.0.0.1:9", "AWS_ACCESS_KEY_ID": "x",
+                       "AWS_SECRET_ACCESS_KEY": "y", "AWS_MAX_ATTEMPTS": "1"}.items():
+        monkeypatch.setenv(key, value)
+
+    code = c.main(env_for(tmp_path, monkeypatch, GUIDE_SIM_ID="7", GUIDE_OUTPUT="s3://guide/out",
+                          GUIDE_CMD=f"{sys.executable} {fake} {made}"))
+
+    assert code == 0  # GUIDE was fine; the dataset just could not leave
+    assert (made / "meta" / "info.json").is_file()
+
+
+def test_a_plan_runs_to_the_end_on_the_mock(tmp_path, monkeypatch):
+    plan = tmp_path / "plan.yaml"
+    plan.write_text("jobs:\n  - {task: block_bin, zones: [1, 2], counts: [2, 1]}\n"
+                    "  - {task: s3://t/cube_stack.tar.gz, counts: [2]}\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    started = time.monotonic()
+    code = c.main(env_for(tmp_path, monkeypatch, GUIDE_PLAN=str(plan), GUIDE_OUTPUT=str(out),
+                          GUIDE_MAX_SCENES="3", GUIDE_CMD=f"{sys.executable} {MOCK}"))
+
+    assert code == 0 and time.monotonic() - started < 120
+    assert len(list((out / "Sim_0").iterdir())) == 3  # block_bin split in two, cube_stack whole
+
+
+def test_a_bad_plan_never_starts_guide(tmp_path, monkeypatch):
+    plan = tmp_path / "plan.yaml"
+    plan.write_text("jobs:\n  - {task: block_bin, zones: [1, 1], counts: [2, 2]}\n")
+    marker = tmp_path / "started"
+
+    code = c.main(env_for(tmp_path, monkeypatch, GUIDE_PLAN=str(plan),
+                          GUIDE_CMD=f"touch {marker}"))
+
+    assert code == 1 and not marker.exists()
