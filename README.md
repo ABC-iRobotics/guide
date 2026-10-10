@@ -82,7 +82,7 @@ sudo apt-get install -y --no-install-recommends \
   ros-jazzy-ros2-control ros-jazzy-ros2-controllers ros-jazzy-controller-manager \
   ros-jazzy-moveit-ros-move-group ros-jazzy-moveit-planners-ompl ros-jazzy-moveit-kinematics \
   ros-jazzy-moveit-simple-controller-manager ros-jazzy-moveit-configs-utils \
-  ros-jazzy-moveit-ros-planning-interface ros-jazzy-pick-ik ros-jazzy-std-srvs ros-jazzy-cv-bridge \
+  ros-jazzy-moveit-ros-planning-interface ros-jazzy-pick-ik ros-jazzy-std-srvs \
   ros-jazzy-ros-testing ros-jazzy-ament-cmake-clang-format \
   libgl1 libglu1-mesa libvulkan1 libegl1 libxt6 libxrandr2 libxi6 libsm6 libice6
 sudo rosdep init 2>/dev/null || true   # Register installs a task's system dependencies with rosdep
