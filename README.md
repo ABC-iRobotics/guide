@@ -134,7 +134,7 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 
 # GUIDE runtime deps (-c keeps Isaac's pins, --override lifts lerobot's caps):
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" \
+uv pip install --python .venv/bin/python python-fcl "lerobot[dataset]==0.6.0" "transformers>=5.4,<5.6" \
   -c $PINS --override $OVERRIDES
 uv pip check --python .venv/bin/python || true   # must list only lerobot's numpy and packaging caps
 ```

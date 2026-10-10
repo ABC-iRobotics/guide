@@ -73,7 +73,7 @@ uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
   --index-url https://download.pytorch.org/whl/cu130
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" \
+uv pip install --python .venv/bin/python python-fcl "lerobot[dataset]==0.6.0" "transformers>=5.4,<5.6" \
   -c $PINS --override $OVERRIDES
 uv pip check --python .venv/bin/python || true   # must list only lerobot's numpy and packaging caps
 ```
@@ -92,6 +92,9 @@ uv pip check --python .venv/bin/python || true   # must list only lerobot's nump
   Only those two go in the override file: overriding `click` too would force it on
   huggingface-hub, whose newer releases need `click>=8.4.2` (with a constraint uv picks a
   hub that accepts 8.1.7).
+- `lerobot[dataset]`: GUIDE's recorder writes through `lerobot.datasets`, which needs the
+  `dataset` extra (`datasets`, `av`, `torchcodec`, `pyarrow`, `pandas`, `jsonlines`); a
+  bare `lerobot==0.6.0` installs none of them.
 - `uv pip check` reads each package's declared requirements, so it always lists lerobot's
   two overridden caps and exits 1 (hence `|| true`); anything else it lists is a drift.
   lerobot 0.6.0 also needs `transformers 5.4–5.6` and `huggingface-hub 1.x`.
