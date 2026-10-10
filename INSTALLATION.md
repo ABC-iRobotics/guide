@@ -37,7 +37,11 @@ Jazzy ros-base, then `rosdep` and `uv`. The Docker image runs that block verbati
   Ubuntu has them; a server or a container does not.
 - `rosdep init`/`update`: `Register` with `bringup: true` installs a fetched task's system
   dependencies with `rosdep install`.
-- `uv` 0.11.26 is the version this guide was tested with.
+- `uv` 0.11.26 is the version this guide was tested with. Its installer puts `~/.local/bin`
+  on the PATH of new shells only, so without the `export` the next `uv venv` fails with
+  `uv: command not found`. (The `source $HOME/.local/bin/env` it suggests does the same,
+  but that file is written only when `~/.local/bin` is not on PATH yet, e.g. not in the
+  Docker image.)
 
 ### 1. Sources
 

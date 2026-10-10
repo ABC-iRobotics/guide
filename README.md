@@ -88,6 +88,7 @@ sudo apt-get install -y --no-install-recommends \
 sudo rosdep init 2>/dev/null || true   # Register installs a task's system dependencies with rosdep
 rosdep update
 curl -LsSf https://astral.sh/uv/0.11.26/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"   # the installer puts uv on the PATH of new shells only
 ```
 
 > **Isaac Sim 6.0.1** is installed with `pip` into a project virtual environment during
