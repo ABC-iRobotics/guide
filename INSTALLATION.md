@@ -28,13 +28,17 @@ Jazzy ros-base, then `rosdep` and `uv`. The Docker image runs that block verbati
 - The `ros-jazzy-*` packages: what `colcon build` needs for the FR3 MoveIt config,
   `topic_based_ros2_control` and GUIDE (the workspace is built without `rosdep install`),
   and what the task launches start (move_group, OMPL, pick_ik, ros2_control).
+  `ros-jazzy-cv-bridge`: the solvers' cameras (`irob_lerobot_ros.ros2camera`) decode
+  images with it; without it every solver dies at start with lerobot's "Could not locate
+  device class 'ROS2Camera'".
 - `ros-testing`, `ament-cmake-clang-format`: `colcon build` also configures the packages'
   tests, where `topic_based_ros2_control` requires `ros_testing` and `franka_ros2`'s
   `franka_spine_examples` (built, though GUIDE does not use it) `ament_cmake_clang_format`.
 - `psmisc`: the recorder frees its port with `fuser`. `iproute2`: the Docker runner
   reads its addresses with `ip`.
 - The `lib*` X/GL/Vulkan libraries: Isaac Sim's Kit loads them, even headless. A desktop
-  Ubuntu has them; a server or a container does not.
+  Ubuntu has them; a server or a container does not. Without `libgl1` (`libGL.so.1`) the
+  MDL material plugin (`omni.iray.libs`' `libneuray.so`) fails to load.
 - `rosdep init`/`update`: `Register` with `bringup: true` installs a fetched task's system
   dependencies with `rosdep install`.
 - `uv` 0.11.26 is the version this guide was tested with. Its installer puts `~/.local/bin`
