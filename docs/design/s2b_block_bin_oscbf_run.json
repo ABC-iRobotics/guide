@@ -170,5 +170,44 @@
    103.3
   ]
  },
- "moveit_regression_successes": 2
+ "moveit_regression_successes": 2,
+ "deviations": [
+  "MoveIt regression: trailing_still_frames 48 and 46 (bar 48). The position drives settle (1.6, then 0.59 mm/frame) after MoveIt reports the trajectory executed; about 50 frames follow the trajectory's end, against 11 under the old wall-clock wait, so the waits run on sim time (accepted, controller ruling on C5)."
+ ],
+ "base_probe": {
+  "method": "headless Isaac, block_bin.usd at /Scene_0 placed at (0, 0, 1) as GUIDE places it, world.reset + 60 physics steps (/tmp/s2b_checks/plan_c/base_probe.py)",
+  "fr3_link0_in_scene": {
+   "guide_get_world_poses": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "usd_xform_cache": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "physx_root_transform": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "physx_link_transform": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "root_joint_composed": [
+    -0.3,
+    0.0,
+    0.0
+   ],
+   "rpy_deg": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "verdict": "PhysX agrees with the xform: BASE_OFFSET (-0.30669, -0.00004, 0.01307) is stale for the Isaac 6.0 assets"
+ }
 }
