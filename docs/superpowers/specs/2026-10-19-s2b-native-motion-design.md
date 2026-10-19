@@ -69,12 +69,13 @@ No Isaac imports, no ROS imports. It is a plain pyproject package installed into
   - `step(target, q, qd) -> command`: returns torques (torque mode) or joint velocities (velocity mode).
   - Barriers: joint limits, self-collision from the XRDF spheres, singularity, and an end-effector workspace box. Obstacles are added as spheres or half-spaces when a task needs them.
 - **`targets`:** the `Target` dataclass (mode, pose, twist, joints, gripper width).
-  - `libero_action_to_target(action, measured_pose)` reproduces robosuite's `OSC_POSE` goal semantics:
-    1. clip the action to [−1, 1];
-    2. scale linearly to ±0.05 m / ±0.5 rad;
-    3. apply it as a delta from the **measured** end-effector pose at the policy step (`goal_pos = p + Δp`, `goal_ori = R(Δω)·R`), not from the previous target;
-    4. map the gripper ±1 to the gripper width;
-    5. hold the result for one 50 ms step.
+  - **Actions are metric everywhere in GUIDE** (user decision 2026-10-19): Δp in metres, Δω as a rotation vector in radians, gripper width in metres. LeRobot normalizes the recorded data for training, so no [−1, 1] interval is used in recording, the controller or the target topic.
+  - `delta_action_to_target(action, measured_pose)` reproduces robosuite `OSC_POSE`'s goal semantics in metric units:
+    1. clamp Δp to ±0.05 m and Δω to ±0.5 rad per axis (LIBERO's per-step bound, kept as a safety limit);
+    2. apply it as a delta from the **measured** end-effector pose at the policy step (`goal_pos = p + Δp`, `goal_ori = R(Δω)·R`), not from the previous target;
+    3. hold the result for one 50 ms step.
+  - `from_libero_normalized(action)` / `to_libero_normalized(action)` convert to and from LIBERO's normalized convention (×0.05 m, ×0.5 rad, gripper ±1 ↔ width). They are used **only** at the 2×2 evaluation boundary, chosen by a per-checkpoint flag: when a LIBERO-trained policy runs in GUIDE, or a GUIDE-trained policy runs in MuJoCo LIBERO.
+  - **Recorded action** = the commanded target delta (target − measured pose at the policy step) taken from `MotionTarget`, at the 20 Hz action rate. It is not the achieved pose change between frames, which trails the command by the tracking lag (≈ 15 mm at 10 cm/s). The recorder change itself belongs to S6/S7, which own the dataset schema.
 - **`planner`:** `plan(goal, q) -> list[Target]` with Pink IK, used for moves larger than one target step. It runs only on new goals.
 - **`description`:** the pipeline in 4.2, run as a CLI.
 
@@ -198,8 +199,9 @@ The OSCBF call is 2.6× slower inside Isaac than standalone (thread contention).
 **Unit tests (`guide_motion/test`, no Isaac):**
 - kinematics and dynamics against Pinocchio on the same URDF;
 - the controller step against recorded inputs (deterministic outputs);
-- `libero_action_to_target` against actions and end-effector poses from `~/Downloads/libero_spatial` HDF5 demos;
+- `delta_action_to_target` against actions and end-effector poses from `~/Downloads/libero_spatial` HDF5 demos (via `from_libero_normalized`);
 - the description post-processor against the exporter defects found by the XRDF test;
+- `delta_action_to_target` and the LIBERO-normalized converters round-trip on real LIBERO HDF5 actions, and the clamp holds at ±0.05 m / ±0.5 rad;
 - the target holder (latest value wins, stale detection).
 
 **Headless Isaac integration (`guide_core/test`, run manually):**
