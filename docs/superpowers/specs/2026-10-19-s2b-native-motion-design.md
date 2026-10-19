@@ -69,7 +69,12 @@ No Isaac imports, no ROS imports. It is a plain pyproject package installed into
   - `step(target, q, qd) -> command`: returns torques (torque mode) or joint velocities (velocity mode).
   - Barriers: joint limits, self-collision from the XRDF spheres, singularity, and an end-effector workspace box. Obstacles are added as spheres or half-spaces when a task needs them.
 - **`targets`:** the `Target` dataclass (mode, pose, twist, joints, gripper width).
-  - `libero_action_to_target(action, current_pose)` converts LIBERO's normalized OSC delta (×0.05 m, ×0.5 rad, gripper ±1) into an absolute target held for one 50 ms step.
+  - `libero_action_to_target(action, measured_pose)` reproduces robosuite's `OSC_POSE` goal semantics:
+    1. clip the action to [−1, 1];
+    2. scale linearly to ±0.05 m / ±0.5 rad;
+    3. apply it as a delta from the **measured** end-effector pose at the policy step (`goal_pos = p + Δp`, `goal_ori = R(Δω)·R`), not from the previous target;
+    4. map the gripper ±1 to the gripper width;
+    5. hold the result for one 50 ms step.
 - **`planner`:** `plan(goal, q) -> list[Target]` with Pink IK, used for moves larger than one target step. It runs only on new goals.
 - **`description`:** the pipeline in 4.2, run as a CLI.
 
@@ -165,7 +170,7 @@ The topic is `/Sim_0/Scene_<i>/<robot>/motion_target`, published at 20 Hz.
 
 | Mode | Where used | Rate | Gains | Measured, model matched (Panda, light scene) |
 |---|---|---|---|---|
-| Torque (default where the model matches) | FR3, and the Panda with the inertial override | every substep, 120 Hz | LIBERO-like: kp 150, critically damped; nullspace kp 10 / kd 5 | hold 0.03 mm; 20 Hz square path deviation 1.7 mm mean, 4.6 mm peak; lag 15 mm behind the held target |
+| Torque (default where the model matches) | FR3, and the Panda with the inertial override | every substep, 120 Hz | LIBERO-like (the law of robosuite `OSC_POSE` as LIBERO configures it): task kp 150 and kd 2√150 ≈ 24.5 on all six axes (ζ = 1); nullspace kp 10, kd 2√10 ≈ 6.32 towards the joint configuration at the episode start. Known differences: 120 Hz vs 500 Hz recomputation, coupled vs uncoupled Λ, PhysX vs MuJoCo. Details: tracker report "What LIBERO-like gains means". | hold 0.03 mm; 20 Hz square path deviation 1.7 mm mean, 4.6 mm peak; lag 15 mm behind the held target |
 | Velocity (fallback) | a robot whose mass properties are not trusted; UR5e later | once per frame, 60 Hz | OSCBF velocity gains | hold 0.09 mm; path deviation 0.7 mm mean, 2.0 mm peak |
 
 240 Hz physics was **not** needed for stability once the model matched (0.07 → 0.01 mm hold), and it costs ≈ 2× the callback time plus 1 ms of physics per frame. Physics stays at 120 Hz.
