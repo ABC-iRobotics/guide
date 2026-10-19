@@ -21,7 +21,7 @@ from guide_motion.targets import JOINTS, POSE, Target
 
 DT = 0.05  # one target step, s (20 Hz)
 MAX_SPEED = 0.5  # m/s: the cruise speed at GUIDE-EX speed 1.0
-SPEED = 0.1  # m/s: the cruise speed at the default speed 0.2
+SPEED = 0.1  # m/s: the cruise speed at plan()'s default speed 0.2
 ANGULAR_SPEED = 1.0  # rad/s of hand turn at SPEED; scales with speed like the line
 JOINT_SPEED = 1.0  # rad/s of the fastest joint at SPEED, joint goals; scales likewise
 OMEGA = math.sqrt(GAINS["torque"]["kp"])  # rad/s, the task-space PD's natural frequency

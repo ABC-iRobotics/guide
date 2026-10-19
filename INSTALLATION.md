@@ -209,7 +209,7 @@ Both are ament_python packages in `src/`, so the same `colcon build` builds them
 ```bash
 cd ~/ros2_ws/src/guide
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/python -m pytest -q \
-  guide_core/test guide_ex/test guide_tasks/cube_stack/test \
+  guide_core/test guide_ex/test guide_tasks/cube_stack/test guide_motion/test \
   --ignore-glob='*test_flake8.py' --ignore-glob='*test_pep257.py' --ignore-glob='*test_copyright.py'
 ```
 Run it from a shell with the workspace sourced; the tests import the installed packages

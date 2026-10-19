@@ -51,6 +51,7 @@ guide/
 ├── guide_msgs/        ROS 2 interfaces: Register, Randomize, Demonstration, recording, …
 ├── guide_core/        the simulator node: Isaac Sim runtime, scenes, recorder
 ├── guide_ex/          GUIDE-EX: composite nodes, steps (motion, gripper, scene queries), utilities
+├── guide_motion/      S2b motion layer (plain Python): targets, Pink IK planner, OSCBF control, robot descriptions
 ├── guide_tasks/
 │   ├── block_bin/     put a block in a bin
 │   └── cube_stack/    stack the cubes
@@ -86,7 +87,7 @@ The short version; [INSTALLATION.md](INSTALLATION.md) has the reasons behind eac
 mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
 git clone -b dev https://github.com/ABC-iRobotics/guide.git
 git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_ros2.git
-git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git
+git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git franka_description
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 ```
 

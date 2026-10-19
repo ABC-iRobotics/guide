@@ -15,6 +15,7 @@ version = "0.1.0"
 description = "Pink IK planning and OSCBF control for GUIDE robots"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
+license-files = ["external/oscbf/LICENSE"]  # OSCBF's MIT notice, shipped with its code in any wheel
 dependencies = [
     "numpy",
     "scipy",
