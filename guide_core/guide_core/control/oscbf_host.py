@@ -68,6 +68,9 @@ class OscbfHost:
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
+        if np.min(self._controller.barrier_values(self._controller.q_rest)) <= 0.0:  # attach sends the arm there
+            self._refuse(f"q_rest {np.round(self._controller.q_rest, 4).tolist()} breaks the controller's barriers "
+                         f"(joints outside their limits: {self._outside(self._controller.q_rest)})")
         self._arm = Articulation(articulation_root)
         self._attached, self._switched, self._t, self._k = False, False, 0.0, 0
         self._u, self._hold, self._width, self._home, self._homing = None, None, None, None, None
@@ -84,6 +87,9 @@ class OscbfHost:
         target instead ran joints past their URDF velocity limits (controller, B3b)."""
         self._home = Target(mode=JOINTS, joints=self.model.home.copy())
         self.holder.put(self._home)
+
+    def _outside(self, q) -> list:
+        return [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
 
     def _log(self, level, message):
         if self._logger is not None:
@@ -199,14 +205,11 @@ class OscbfHost:
             # A stop reverts the joints to the asset's authored state (the FR3's zeros break its j4 and j6
             # limits). Started outside its barriers the controller deadlocks against PhysX's joint limits,
             # so the arm goes where position drives would take it: q_rest (GUIDE's default_joint_states).
-            rest = np.asarray(self._controller.q_rest, float)
-            outside = [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
-            where = f"q {np.round(q, 4).tolist()} is outside the controller's barriers (joints outside their limits: {outside})"
-            if np.min(self._controller.barrier_values(rest)) <= 0.0:
-                return self._refuse(f"{where}, and so is q_rest {rest.tolist()}")
+            rest = np.asarray(self._controller.q_rest, float)  # inside the barriers: checked at registration
             arm.set_dof_positions(rest[None], dof_indices=self._arm_dofs)
             arm.set_dof_velocities(np.zeros((1, len(rest))), dof_indices=self._arm_dofs)
-            self._log("warning", f"{where}: set to q_rest")
+            self._log("warning", f"q {np.round(q, 4).tolist()} is outside the controller's barriers "
+                                 f"(joints outside their limits: {self._outside(q)}): set to q_rest")
         if self.mode == "velocity":  # read before the switch: velocity mode keeps the drives' damping
             # tau_g / D needs force drives: an acceleration drive scales its force by the joint inertia
             types = [arm.get_dof_drive_types()[0][i] for i in self._arm_dofs]

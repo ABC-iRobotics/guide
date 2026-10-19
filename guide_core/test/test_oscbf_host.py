@@ -493,9 +493,11 @@ def test_an_arm_restarted_outside_its_safe_set_is_put_at_q_rest(host_module, mon
     np.testing.assert_allclose(held.position, host.model.ee_pose(host._controller.q_rest)[0], atol=1e-6)
 
 
-def test_a_restart_outside_the_safe_set_with_an_unsafe_q_rest_refuses_the_robot(host_module, monkeypatch):
+def test_an_unsafe_q_rest_refuses_the_robot_at_registration(host_module, monkeypatch):
+    """Controller (B5-2): q_rest outside the barriers refuses the robot when it registers, not later,
+    when another scene's RegisterScene restarts the sim and the arm would be sent there."""
     host, arm = make_host(host_module, monkeypatch, q_rest=[0.0] * 7)
+    assert "fr3_joint4" in host.diagnostics["refused"] and "q_rest" in host.diagnostics["refused"]
     arm.q[:7] = 0.0
     run(host, 2)
-    assert "fr3_joint4" in host.diagnostics["refused"] and "q_rest" in host.diagnostics["refused"]
     assert arm.modes == [] and arm.efforts == [] and arm.teleports == []

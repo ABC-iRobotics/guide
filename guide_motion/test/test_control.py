@@ -144,3 +144,11 @@ def test_a_float32_pose_target_does_not_recompile(controller):
 def test_gravity_is_public_and_the_models_own(controller):
     """Plan B's velocity feedforward calls it (controller, B4 M1): the compiled gravity the attach check matches to PhysX."""
     np.testing.assert_allclose(controller.gravity(HOME), controller.model.manipulator.gravity_vector(HOME), atol=1e-9)
+
+
+def test_warm_up_compiles_the_barrier_check(fr3_model):
+    """Plan B checks the barriers at registration and attach (controller, B5-2): their ~0.2 s first
+    compile belongs in warm_up, never unlogged inside the physics step."""
+    c = Controller(fr3_model, "torque")
+    c.warm_up()
+    assert c._h._cache_size() == 1

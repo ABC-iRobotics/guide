@@ -57,6 +57,7 @@ class Controller:
         position, rotation = self.model.ee_pose(self.q_rest)
         self.step(Target(position=position, rotation=rotation), self.q_rest, np.zeros_like(self.q_rest))
         self.gravity(self.q_rest)  # the fallback's, so an infeasible step never compiles mid-episode
+        self.barrier_values(self.q_rest)  # the host checks the barriers at registration and attach
         self.events["infeasible"] = 0
         return time.perf_counter() - start
 
