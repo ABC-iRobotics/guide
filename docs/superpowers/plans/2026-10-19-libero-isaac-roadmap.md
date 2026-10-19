@@ -80,7 +80,10 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 
 - [x] Branch `feat/libero` from local `dev` (834bb48, = content of `origin/main`, GUIDE 2.0.0), worktree `src/guide/.claude/worktrees/libero`
 - [x] This roadmap
-- [ ] Memory: file memory + claude-mem observations + a graphify graph of this worktree (code AST + docs), refreshed with `--update` after each step
+- [x] Memory (2026-10-19):
+  - file memory `guide-libero-isaac`;
+  - claude-mem corpus `libero-isaac` (322 decisions/discoveries for the project; rebuild with a LIBERO query once claude-mem's search backend works);
+  - graphify graph of this worktree in `graphify-out/` (git-ignored): 1,459 nodes, 94 labelled communities, code AST + 33 docs. Refresh after each step with `/graphify . --update` from the worktree root.
 - [ ] Decide: put `guide_dataset_tools` and `vla_training` under git. Both are touched by S7/S8 and are **not** repositories today (user decision).
 
 ## S1 — Asset route (spike, LIBERO-Spatial)
