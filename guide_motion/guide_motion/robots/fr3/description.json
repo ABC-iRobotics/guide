@@ -374,6 +374,10 @@
    0.6271432638168335,
    0.6271432862
   ],
+  "fr3_link8": [
+   1.0,
+   null
+  ],
   "fr3_hand": [
    0.7300000190734863,
    0.6544
@@ -385,6 +389,10 @@
   "fr3_rightfinger": [
    0.015135428868234158,
    0.0291
+  ],
+  "fr3_hand_tcp": [
+   1.0,
+   null
   ]
  },
  "source_usd": "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/Isaac/Robots/FrankaRobotics/FrankaFR3/fr3.usd",

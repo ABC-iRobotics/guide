@@ -386,11 +386,14 @@ def main(argv=None) -> None:
         fail("dynamics", f"M {worst_M:.2e}, g {worst_g:.2e} relative > 1e-3")
     checks["mass_matrix_rel"], checks["gravity_rel"] = worst_M, worst_g
 
-    # Spec 9: the FR3's masses come from PhysX's colliders; compare once with franka_description's.
+    # Spec 9, informational (no tolerance): the FR3's masses come from PhysX's colliders; compare once
+    # with franka_description's. Every PhysX link is listed, None where franka_description has no such
+    # link: Isaac 6.0's FR3 has 13 PhysX links, fr3_link8 and fr3_hand_tcp being 1.0 kg rigid bodies.
     datasheet = franka_inertials(ROBOTS[robot]["datasheet"], args.franka_description)
-    meta["mass_check_kg"] = {n: [float(m), datasheet[n][0]] for n, m in zip(names, masses) if n in datasheet}
+    meta["mass_check_kg"] = {n: [float(m), datasheet[n][0] if n in datasheet else None] for n, m in zip(names, masses)}
     for name, (physx, sheet) in meta["mass_check_kg"].items():
-        print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet:.3f} kg")
+        sheet = "none" if sheet is None else f"{sheet:.3f} kg"
+        print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
     meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
     (out / "description.json").write_text(json.dumps(meta, indent=1))
     if robot == "panda":
