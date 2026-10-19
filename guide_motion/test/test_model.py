@@ -1,7 +1,7 @@
 import numpy as np
 import pinocchio as pin
 
-from fr3_fixture import ARM, HOME, fd_dynamics, simulator_mass_properties
+from fr3_fixture import ARM, HOME, fd_dynamics, fd_with_camera, simulator_mass_properties
 
 RNG = np.random.default_rng(0)
 
@@ -49,14 +49,35 @@ def test_same_mass_properties_keep_the_compiled_model(fr3_model):
     assert fr3_model.manipulator is man
 
 
+def with_camera(mass=0.2):
+    masses, coms, inertias = simulator_mass_properties()
+    T = np.eye(4)
+    T[:3, 3] = [0.05, 0.0, 0.0]
+    return ({**masses, "camera": mass}, {**coms, "camera": np.zeros(3)}, {**inertias, "camera": 1e-4 * np.eye(3)},
+            {"camera": ("fr3_hand", T)}), T
+
+
 def test_an_extra_simulator_link_is_folded_into_its_parent(fr3_dir):
     from guide_motion.model import Model
 
     model = Model.load(fr3_dir)
-    masses, coms, inertias = simulator_mass_properties()
-    T = np.eye(4)
-    T[:3, 3] = [0.05, 0.0, 0.0]
-    model.set_mass_properties({**masses, "camera": 0.2}, {**coms, "camera": np.zeros(3)},
-                              {**inertias, "camera": 1e-4 * np.eye(3)}, extra_links={"camera": ("fr3_hand", T)})
-    g, g_ref = np.asarray(model.manipulator.gravity_vector(HOME)), fd_dynamics(HOME)[1]
-    assert np.linalg.norm(g - g_ref) / np.linalg.norm(g_ref) > 1e-3  # 0.2 kg on the hand shows in g
+    (masses, coms, inertias, extra), T = with_camera()
+    assert model.set_mass_properties(masses, coms, inertias, extra_links=extra)
+    g, g_ref = np.asarray(model.manipulator.gravity_vector(HOME)), fd_dynamics(HOME, fd_with_camera(T, 0.2))[1]
+    assert np.linalg.norm(g - g_ref) / np.linalg.norm(g_ref) < 1e-6
+    assert np.linalg.norm(g - fd_dynamics(HOME)[1]) / np.linalg.norm(g_ref) > 1e-3  # 0.2 kg on the hand shows in g
+
+
+def test_the_same_extra_link_twice_keeps_the_compiled_model(fr3_dir):
+    """A re-registration (next episode, Reset) hands the same camera over again."""
+    from guide_motion.model import Model
+
+    model = Model.load(fr3_dir)
+    (masses, coms, inertias, extra), _ = with_camera()
+    assert model.set_mass_properties(masses, coms, inertias, extra_links=extra)
+    man = model.manipulator
+    assert model.set_mass_properties(masses, coms, inertias, extra_links=extra) is False
+    assert model.manipulator is man and model.urdf_text.count('<link name="camera"') == 1
+    (masses, coms, inertias, extra), _ = with_camera(mass=0.3)  # a heavier camera replaces it, not adds to it
+    assert model.set_mass_properties(masses, coms, inertias, extra_links=extra)
+    assert model.urdf_text.count('<link name="camera"') == 1 and model.manipulator is not man

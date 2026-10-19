@@ -18,6 +18,7 @@ class Model:
 
     def __init__(self, urdf_text: str, xrdf: dict, usd_to_urdf: dict | None = None):
         self.urdf_text, self.xrdf = urdf_text, xrdf
+        self._description_urdf = urdf_text  # set_mass_properties always starts from it, never accumulates
         self.usd_to_urdf = {name: np.asarray(X, float) for name, X in (usd_to_urdf or {}).items()}
         self.arm_joints = list(xrdf["cspace"]["joint_names"])
         self.gripper_joint = self.arm_joints[0].rsplit("_joint", 1)[0] + "_finger_joint1"
@@ -106,7 +107,7 @@ class Model:
         Returns False, and keeps the compiled dynamics, when nothing changed.
         """
         inertials = description.to_urdf_frames(masses, coms, inertias, self.usd_to_urdf)
-        text = description.set_inertials(self.urdf_text, inertials, extra_links)
+        text = description.set_inertials(self._description_urdf, inertials, extra_links)
         if text == self.urdf_text:
             return False
         self.urdf_text = text
