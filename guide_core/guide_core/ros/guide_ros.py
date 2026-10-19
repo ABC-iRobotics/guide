@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import traceback
 from threading import Thread
 from typing import Optional
@@ -304,7 +305,10 @@ class GUIDEROS2Interface(Node):
                 raise Exception("Getting pose failed!")
             if request.frame_id:  # Ruling 4: GUIDE converts into the requesting robot's frame, per scene
                 frame = pose_frame(self._backend._scene_manager._scenes, path, request.frame_id)
-                pose = self._backend.call("get_world_poses", prim_path=frame).inv() * pose
+                base = self._backend.call("get_world_poses", prim_path=frame)
+                if not isinstance(base, Pose):  # None: no such prim
+                    raise ValueError(f"{frame.split('/')[1]} has no prim {frame}")
+                pose = base.inv() * pose
 
             response.pose = pose.to_ros()
             response.message = ""
@@ -472,15 +476,16 @@ def pose_frame(scenes, path: str, frame_id: str) -> str:
     """The prim whose frame a PoseRequest for `path` answers in (S2b Ruling 4), looked up in the
     scene `path` lies in: the scene root for frame_id "Scene_<i>", else the robot of that scene
     whose base_name (init.yaml, directly under the robot's path) is frame_id."""
-    scene = path.split("/")[1]  # "/Scene_<i>/..." -> "Scene_<i>"
+    match = re.match(r"/(Scene_(\d+))(/|$)", path)
+    if match is None:
+        raise ValueError(f"PoseRequest path must be under /Scene_<i>/, got '{path}'")
+    scene = match.group(1)
     if frame_id == scene:
         return f"/{scene}"
-    robots = scenes[int(scene.removeprefix("Scene_"))]._config.get("robots", {})
-    # ponytail: the first robot with this base_name; two robots of one scene sharing one need the robot's name in the request
-    for robot in robots.values():
-        if robot.get("base_name") == frame_id:
-            return f"/{scene}{robot['path']}/{frame_id}"
-    raise ValueError(f"{scene} has no robot with base_name '{frame_id}'")
+    robots = [r for r in scenes[int(match.group(2))]._config.get("robots", {}).values() if r.get("base_name") == frame_id]
+    if len(robots) != 1:  # two robots sharing a base_name: the request would need the robot's name too
+        raise ValueError(f"{scene} has {'no robot' if not robots else 'more than one robot'} with base_name '{frame_id}'")
+    return f"/{scene}{robots[0]['path']}/{frame_id}"
 
 
 def target_from_msg(msg: MotionTarget) -> Target:

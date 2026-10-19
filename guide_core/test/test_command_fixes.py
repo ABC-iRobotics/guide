@@ -413,3 +413,28 @@ def test_a_pose_request_answers_in_the_requesting_robots_base_frame(isaac_import
     assert np.allclose([p.x, p.y, p.z], [-0.3, 10.4, 1.413])
     reply = ask("ur_base_link")
     assert not reply.success and "ur_base_link" in reply.message
+
+
+def test_a_pose_request_says_what_it_cannot_answer_in(isaac_import):
+    """C3b review M2/M3: two robots sharing a base_name, a missing base prim and a path outside a
+    scene are refused with a message that says so (get_world_poses answers None for a missing prim)."""
+    from guide_msgs.srv import Pose as PoseSrv
+
+    from guide_core.types.geometry import Point, Pose
+
+    ros = isaac_import("guide_core.ros.guide_ros").GUIDEROS2Interface
+    world = {"/Scene_0/blocks/red_block": Pose(Point([0.4, 0.0, 0.0])), "/World/light": Pose()}
+    two = {"robots": {"left": {"path": "/fr3_left", "base_name": "fr3_link0"},
+                      "right": {"path": "/fr3_right", "base_name": "fr3_link0"}}}
+    scenes = [SimpleNamespace(_config=two)]
+    backend = SimpleNamespace(call=lambda name, prim_path: world.get(prim_path), _scene_manager=SimpleNamespace(_scenes=scenes))
+    me = SimpleNamespace(_backend=backend)
+
+    def ask(path):
+        return ros._pose_request_callback(me, PoseSrv.Request(path=path, frame_id="fr3_link0"), None)
+
+    reply = ask("/Scene_0/blocks/red_block")
+    assert not reply.success and reply.message == "Scene_0 has more than one robot with base_name 'fr3_link0'"
+    scenes[0] = SimpleNamespace(_config={"robots": {"franka": {"path": "/fr3", "base_name": "fr3_link0"}}})
+    assert ask("/Scene_0/blocks/red_block").message == "Scene_0 has no prim /Scene_0/fr3/fr3_link0"
+    assert ask("/World/light").message == "PoseRequest path must be under /Scene_<i>/, got '/World/light'"
