@@ -1,0 +1,105 @@
+import time
+
+import numpy as np
+import pytest
+
+from fr3_fixture import HOME
+from guide_motion.control import Controller
+from guide_motion.targets import JOINTS, TWIST, Target
+
+
+@pytest.fixture(scope="module", params=["torque", "velocity"])
+def controller(request, fr3_model):
+    c = Controller(fr3_model, request.param)
+    c.warm_up()
+    return c
+
+
+def hold(model, q=HOME):
+    p, R = model.ee_pose(q)
+    return Target(position=p, rotation=R)
+
+
+def test_every_barrier_is_satisfied_at_home(controller):
+    assert controller.barrier_values(HOME).min() > 0
+
+
+def test_hold_is_gravity_compensation_or_rest(controller):
+    u = controller.step(hold(controller.model), HOME, np.zeros(7))
+    if controller.mode == "torque":
+        np.testing.assert_allclose(u, np.asarray(controller.model.manipulator.gravity_vector(HOME)), atol=0.02)
+    else:
+        assert np.abs(u).max() < 0.05
+
+
+def test_recorded_inputs_give_the_same_command_twice(controller):
+    rng = np.random.default_rng(1)
+    for _ in range(5):
+        q, qd = HOME + 0.1 * rng.standard_normal(7), 0.1 * rng.standard_normal(7)
+        target = hold(controller.model, HOME + 0.05 * rng.standard_normal(7))
+        assert np.array_equal(controller.step(target, q, qd), controller.step(target, q, qd))
+
+
+def test_a_target_ahead_pulls_the_tool_forward(controller):
+    model = controller.model
+    p, R = model.ee_pose(HOME)
+    u = controller.step(Target(position=p + [0.01, 0, 0], rotation=R), HOME, np.zeros(7))
+    J = np.asarray(model.manipulator.ee_jacobian(HOME))[:3]
+    if controller.mode == "torque":
+        man = model.manipulator
+        u = np.linalg.solve(np.asarray(man.mass_matrix(HOME)), u - np.asarray(man.gravity_vector(HOME)))
+    assert (J @ u)[0] > 0 and abs((J @ u)[0]) > 5 * np.abs((J @ u)[1:]).max()
+
+
+def test_twist_and_joint_targets(controller):
+    u = controller.step(Target(mode=TWIST, twist=np.r_[0.05, 0, 0, 0, 0, 0]), HOME, np.zeros(7))
+    assert np.all(np.isfinite(u))
+    u = controller.step(Target(mode=JOINTS, joints=HOME), HOME, np.zeros(7))
+    assert np.all(np.isfinite(u))
+
+
+def test_infeasible_step_falls_back_to_damping_and_gravity(controller, monkeypatch):
+    """Ruling 1 (2026-10-19): torque mode applies joint damping plus gravity compensation, never damping alone."""
+    before = controller.events["infeasible"]
+    monkeypatch.setattr(controller, "_fn", lambda *a: (np.full(7, np.nan), 0.0))
+    qd = np.full(7, 0.1)
+    u = controller.step(hold(controller.model), HOME, qd)
+    assert controller.events["infeasible"] == before + 1
+    if controller.mode == "torque":
+        g = np.asarray(controller.model.manipulator.gravity_vector(HOME))
+        np.testing.assert_allclose(u, g - controller.gains["kd_null"] * qd, atol=1e-12)
+    else:
+        np.testing.assert_allclose(u, 0.0)
+
+
+def test_command_is_clamped_to_the_urdf_limits(controller, monkeypatch):
+    monkeypatch.setattr(controller, "_fn", lambda *a: (np.full(7, 1e3), 0.0))
+    np.testing.assert_allclose(controller.step(hold(controller.model), HOME, np.zeros(7)), controller.limit)
+
+
+def test_step_cost_regression(controller):
+    """Standalone guard only; the RTF gate is the Isaac check (Plan B)."""
+    target, rng = hold(controller.model), np.random.default_rng(2)
+    times = []
+    for _ in range(200):
+        q = HOME + 0.01 * rng.standard_normal(7)
+        start = time.perf_counter()
+        controller.step(target, q, np.zeros(7))
+        times.append(time.perf_counter() - start)
+    assert np.mean(times[20:]) < (0.5e-3 if controller.mode == "torque" else 0.3e-3), np.mean(times[20:])
+
+
+def test_a_state_past_a_joint_limit_gives_a_finite_inward_command(controller):
+    q = HOME.copy()
+    q[3] = controller.model.upper[3] + 0.01  # joint 4 a hair past its upper limit (a measurement can be)
+    u = controller.step(hold(controller.model, HOME), q, np.zeros(7))
+    assert np.all(np.isfinite(u))
+    if controller.mode == "velocity":
+        assert u[3] < 0
+
+
+def test_float32_states_give_the_float64_command(controller):
+    q32 = (HOME + 0.01).astype(np.float32)
+    target = hold(controller.model)
+    np.testing.assert_array_equal(controller.step(target, q32, np.zeros(7, np.float32)),
+                                  controller.step(target, q32.astype(np.float64), np.zeros(7)))
