@@ -57,10 +57,19 @@ def include_attached_bodies(stage, articulation_root: str, links) -> list:
     articulation links the attach fold models them. Only fixed joints under the robot's prim with one
     body a link of this robot (transitively: a body that joined counts) and the other a rigid body
     under the robot's prim in no other articulation; never the world, never a loop between two links.
+    Nor a body a non-excluded joint already ties into a tree (a loop) or any joint fixes to the world
+    (a second anchor, e.g. a pedestal): FIX B5-4.
     Returns [(joint, body, authored mass or None)] for the joints it changed.
     """
     root = stage.GetPrimAtPath(articulation_root)
     members = {str(prim.GetPath()) for prim in Usd.PrimRange(root) if prim.GetName() in links}
+    tied = set()
+    for prim in stage.Traverse():
+        if prim.IsA(UsdPhysics.Joint):
+            joint = UsdPhysics.Joint(prim)
+            bodies = [str(path) for rel in (joint.GetBody0Rel(), joint.GetBody1Rel()) for path in rel.GetTargets()]
+            if not joint.GetExcludeFromArticulationAttr().Get() or len(bodies) == 1:  # in a tree, or fixed to the world
+                tied.update(bodies)
     changed, growing = [], True
     while growing:
         growing = False
@@ -71,7 +80,10 @@ def include_attached_bodies(stage, articulation_root: str, links) -> list:
             bodies = [str(path) for rel in (joint.GetBody0Rel(), joint.GetBody1Rel()) for path in rel.GetTargets()]
             if len(bodies) != 2 or sum(body in members for body in bodies) != 1:  # the world, no robot link, or a loop
                 continue
-            body = stage.GetPrimAtPath(next(b for b in bodies if b not in members))
+            other = next(b for b in bodies if b not in members)
+            if other in tied:
+                continue
+            body = stage.GetPrimAtPath(other)
             owner = body
             while owner.IsValid() and not owner.HasAPI(UsdPhysics.ArticulationRootAPI):
                 owner = owner.GetParent()

@@ -505,7 +505,7 @@ def test_an_unsafe_q_rest_refuses_the_robot_at_registration(host_module, monkeyp
     assert arm.modes == [] and arm.efforts == [] and arm.teleports == []
 
 
-def camera_stage():
+def camera_stage(camera_joint_parent="/Scene_0/fr3/mount"):
     """block_bin's wrist camera on the scene's FR3: two rigid bodies hung off fr3_hand by fixed joints
     excluded from the articulation (the mount, then the RSD455 on the mount)."""
     from pxr import Sdf, UsdPhysics
@@ -518,7 +518,7 @@ def camera_stage():
         if mass:
             UsdPhysics.MassAPI.Apply(body).CreateMassAttr(mass)
     for path, body0, body1 in (("/Scene_0/fr3/fr3_hand/mount_joint", "/Scene_0/fr3/fr3_hand", "/Scene_0/fr3/mount"),
-                               ("/Scene_0/fr3/mount/camera_joint", "/Scene_0/fr3/mount", "/Scene_0/fr3/rsd455/RSD455")):
+                               (f"{camera_joint_parent}/camera_joint", "/Scene_0/fr3/mount", "/Scene_0/fr3/rsd455/RSD455")):
         joint = UsdPhysics.FixedJoint.Define(stage, path)
         joint.CreateBody0Rel().SetTargets([Sdf.Path(body0)])
         joint.CreateBody1Rel().SetTargets([Sdf.Path(body1)])
@@ -546,23 +546,47 @@ def test_bodies_hung_off_the_robot_join_its_articulation_at_registration(host_mo
         ("mount_joint", "mount", None), ("camera_joint", "RSD455", pytest.approx(0.103))]
 
 
-@pytest.mark.parametrize("case", ["world", "other articulation", "loop between two links", "body outside the robot"])
+def test_the_walk_joins_a_chain_in_any_traversal_order(host_module):
+    """REVIEWER C (B5-3 minor): the camera's joint is visited before the mount's; a second pass joins it."""
+    stage = camera_stage(camera_joint_parent="/Scene_0/fr3/fr3_link0")  # fr3_link0 is traversed before fr3_hand
+    changed = host_module.include_attached_bodies(stage, "/Scene_0/fr3", Model.load(ROBOT).usd_to_urdf)
+    assert [b.rsplit("/", 1)[1] for _, b, _ in changed] == ["mount", "RSD455"]
+
+
+NEVER_TOUCHED = ["world", "other articulation", "loop between two links", "body outside the robot", "body without a rigid body",
+                 "loop through a body already in the tree", "body fixed to the world", "body fixed to the world by an excluded joint"]
+
+
+@pytest.mark.parametrize("case", NEVER_TOUCHED)
 def test_joints_to_the_world_or_other_articulations_are_never_touched(host_module, case):
+    """FIX B5-4 (reviewer C): besides the world, other articulations and loops between links, a body that a
+    non-excluded joint already ties into a tree (a loop) or that is fixed to the world (a second anchor:
+    LIBERO's Panda pedestal) never joins, and neither does a body without a rigid body."""
     from pxr import Sdf, UsdPhysics
 
     stage = robot_stage()
     UsdPhysics.ArticulationRootAPI.Apply(stage.GetPrimAtPath("/Scene_0/fr3"))
-    other = {"world": None, "loop between two links": "/Scene_0/fr3/fr3_link7",
-             "other articulation": "/Scene_0/fr3/tool/link", "body outside the robot": "/Scene_0/table"}[case]
+
+    def fixed(path, body0, body1, exclude):
+        joint = UsdPhysics.FixedJoint.Define(stage, path)
+        for rel, body in ((joint.CreateBody0Rel(), body0), (joint.CreateBody1Rel(), body1)):
+            if body:
+                rel.SetTargets([Sdf.Path(body)])
+        joint.CreateExcludeFromArticulationAttr(exclude)
+
+    other = {"world": None, "loop between two links": "/Scene_0/fr3/fr3_link7", "other articulation": "/Scene_0/fr3/tool/link",
+             "body outside the robot": "/Scene_0/table"}.get(case, "/Scene_0/fr3/extra")
     if case == "other articulation":
         UsdPhysics.ArticulationRootAPI.Apply(stage.DefinePrim("/Scene_0/fr3/tool", "Xform"))
     if other and case != "loop between two links":
-        UsdPhysics.RigidBodyAPI.Apply(stage.DefinePrim(other, "Xform"))
-    joint = UsdPhysics.FixedJoint.Define(stage, "/Scene_0/fr3/fr3_hand/joint")
-    joint.CreateBody0Rel().SetTargets([Sdf.Path("/Scene_0/fr3/fr3_hand")])
-    if other:
-        joint.CreateBody1Rel().SetTargets([Sdf.Path(other)])
-    joint.CreateExcludeFromArticulationAttr(True)
+        body = stage.DefinePrim(other, "Xform")
+        if case != "body without a rigid body":
+            UsdPhysics.RigidBodyAPI.Apply(body)
+    if case == "loop through a body already in the tree":
+        fixed("/Scene_0/fr3/fr3_link7/extra_joint", "/Scene_0/fr3/fr3_link7", other, False)
+    if case.startswith("body fixed to the world"):
+        fixed("/Scene_0/fr3/extra/world_joint", None, other, case.endswith("excluded joint"))
+    fixed("/Scene_0/fr3/fr3_hand/joint", "/Scene_0/fr3/fr3_hand", other, True)
     assert host_module.include_attached_bodies(stage, "/Scene_0/fr3", Model.load(ROBOT).usd_to_urdf) == []
     assert excluded(stage, "/Scene_0/fr3/fr3_hand/joint")
 
