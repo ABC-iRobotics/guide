@@ -2097,7 +2097,7 @@ cd ~/ros2_ws/src/guide && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/p
 from guide_motion.model import Model; from guide_motion.control import Controller
 m = Model.load('fr3'); c = Controller(m, 'velocity'); print(m.robot_dir, m.base_link, m.tool_frame, round(float(c.barrier_values(m.home).min()), 4))"
 ```
-Expected: `description.json fr3.urdf fr3.xrdf`; an `<inertial>` per PhysX link (11 for the FR3 asset); `fr3 1 https://…/Isaac/Robots/FrankaRobotics/FrankaFR3/fr3.usd [...]`; the last line ends with a positive number.
+Expected: `description.json fr3.urdf fr3.xrdf`; an `<inertial>` per PhysX link (13 for Isaac 6.0's FR3 asset: link0–7, link8, hand, hand_tcp, 2 fingers); `fr3 1 https://…/Isaac/Robots/FrankaRobotics/FrankaFR3/fr3.usd [...]`; the last line ends with a positive number.
 
 - [ ] **Step 6: Commit**
 
