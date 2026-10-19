@@ -159,7 +159,7 @@ Every shell that talks to GUIDE (launches, `ros2` CLI, rqt) uses the localhost D
 export CYCLONEDDS_URI=file://$HOME/ros2_ws/install/guide_core/share/guide_core/config/cyclonedds_localhost.xml
 ros2 launch guide_core bringup.launch.py                   # Isaac Sim + the GUIDE node
 ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin'}"
-ros2 launch block_bin bringup.launch.py                    # MoveIt + the solver, per scene
+ros2 launch block_bin bringup.launch.py                    # the solver per scene (+ MoveIt under controller: moveit)
 ```
 
 - `bringup.launch.py` runs Isaac through `~/ros2_ws/.venv/bin/python` (override:
@@ -190,9 +190,10 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
 - Output: `<path>/dataset_<sim>_<scene>_<YYYY_MM_DD_HH_MM_SS>/`, a LeRobot v3.0 dataset plus
   `meta/guide_info.json` and `meta/guide_episodes.jsonl`. An empty `path` means `~/dataset`.
 - **Motion layer (S2b):** `robots.franka.controller` in `guide_tasks/block_bin/config/init.yaml` is
-  `moveit` (move_group + ros2_control) or `oscbf` (guide_motion's OSCBF controller in Isaac's physics
-  step; ROS2Robot streams `guide_msgs/MotionTarget` at 20 Hz). GUIDE and the block_bin bring-up both
-  read it: rebuild block_bin after changing it, then register the scene again.
+  `moveit` (move_group + ros2_control; what the shipped file selects) or `oscbf` (guide_motion's OSCBF
+  controller in Isaac's physics step; ROS2Robot streams `guide_msgs/MotionTarget` at 20 Hz, and the
+  bring-up starts no move_group). GUIDE and the block_bin bring-up both read it: rebuild block_bin
+  after changing it, then register the scene again.
 - **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
   base**: the prim named by `robots.<name>.base_name` in the task's `config/init.yaml`
   (`fr3_link0` for both FR3 tasks; the robot prim when unset), whatever the scene index.
