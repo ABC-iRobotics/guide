@@ -87,6 +87,8 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     if not speed > 0:
         raise ValueError(f"speed must be > 0, got {speed}")
     q = np.asarray(q, float)
+    if not all(np.all(np.isfinite(v)) for v in (q, goal.position, goal.rotation, goal.twist, goal.joints)):
+        raise PlanningError(f"non-finite goal or configuration q={np.round(q, 4).tolist()}")  # a NaN length never ends
     v_max, width = speed * MAX_SPEED, goal.gripper_width
     if goal.mode == JOINTS:
         goal_q = np.asarray(goal.joints, float)

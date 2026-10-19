@@ -52,6 +52,20 @@ def test_joint_goal_outside_the_limits_raises(fr3_model):
         plan(fr3_model, Target(mode=JOINTS, joints=fr3_model.upper + 0.1), HOME)
 
 
+def test_a_non_finite_goal_or_configuration_raises(fr3_model):
+    """Plan C review I1: a NaN path length kept profile() looping forever (send_action, the host's home())."""
+    p, R = fr3_model.ee_pose(HOME)
+    nan_q = HOME.copy()
+    nan_q[0] = np.nan
+    for goal, q in [
+        (Target(position=p + [np.nan, 0, 0], rotation=R), HOME),
+        (Target(mode=JOINTS, joints=nan_q), HOME),
+        (Target(position=p + [0.1, 0, 0], rotation=R), nan_q),
+    ]:
+        with pytest.raises(PlanningError):
+            plan(fr3_model, goal, q)
+
+
 def test_a_half_turn_of_the_hand_is_planned(fr3_model):
     p, R = fr3_model.ee_pose(HOME)
     goal = Target(position=p, rotation=Rotation.from_euler("z", np.radians(179)).as_matrix() @ R)
