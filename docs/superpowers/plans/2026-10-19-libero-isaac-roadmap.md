@@ -68,7 +68,7 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 | Step | State | Branch / artifact | Updated |
 |---|---|---|---|
 | S0 Workspace & tracking | in progress | `feat/libero` (guide), this file | 2026-10-19 |
-| S1 Asset route (spike) | in progress | `spike/libero-assets` | 2026-10-19 |
+| S1 Asset route (spike) | spike done — adopt with fixes, conditional (licence check open) | `spike/libero-assets`, [findings](../../design/libero-asset-spike.md) | 2026-10-19 |
 | S2 Embodiments | not started | — | — |
 | S2b Native motion planning + OSC | later | `feat/libero-native-motion` | 2026-10-19 |
 | S3 BDDL → GUIDE compiler | not started | — | — |
@@ -104,7 +104,7 @@ Question: which route gives Isaac-loadable USD with sane colliders, working arti
 
 | Option | For | Against |
 |---|---|---|
-| a. `mujoco_usd_converter` (in `.venv`) on LIBERO's MJCF | exact geometry + joints; already installed; handles `.msh` via MuJoCo | needs the LIBERO repo assets; MuJoCo materials, not photoreal |
+| a. `mujoco_usd_converter` (in `.venv`) on LIBERO's MJCF | exact geometry + joints; already installed; MuJoCo 3.8 loads `.msh`, but the converter reads only OBJ/STL (`mujoco_usd_converter/_impl/mesh.py:58-64`), so `.msh` needs a patch step | needs the LIBERO repo assets; MuJoCo materials, not photoreal |
 | b. Isaac MJCF importer (`isaacsim.asset.importer.mjcf`) | Isaac-native physics schemas | same visual ceiling; per-asset tuning |
 | c. RobotLearningLab `libero/USD` (Apache-2.0, HF) | possibly done already, includes replay HDF5s | robot, fidelity, completeness unknown |
 | d. Lightwheel assets (LW-BenchHub / SDK) | "refreshed", higher visual quality, all 130 tasks | SDK access; asset licence unclear (their simready repo is CC BY-NC); geometry may differ from LIBERO |
@@ -115,9 +115,19 @@ semantics" constrains geometry and poses, not appearance.
 User decision (2026-10-19): probe option **a** (`mujoco_usd_converter`) on branch
 `spike/libero-assets`, placing the objects from the BDDL regions with **Replicator**.
 
-- [ ] Probe a on the Spatial object set: load in Isaac 6.0.1, Replicator placement, drop test, drawer open/close, render
+- [x] Probe a on the Spatial object set: load in Isaac 6.0.1, Replicator placement, drop test, drawer open/close, render
 - [ ] Check licences of LIBERO's asset families (scanned, HOPE, TurboSquid, articulated)
-- [ ] Recommendation recorded here
+- [x] Recommendation recorded here
+
+**Result (2026-10-19): adopt with fixes.** All 6 Spatial asset types convert once LIBERO's `.msh`
+meshes are turned into `.obj`; they load in Isaac 6.0.1, rest on the table with `build_scene` workarounds, the cabinet drawers and
+the stove knob reach their limits, textures of the bowl, cookies and plate are byte-identical (cabinet and stove not checked), and a Replicator YAML generated
+from the BDDL regions places movables (in region 50/50 and drift < 1 cm in 47/50 with the bowl offset compensated, `docs/design/spike_libero_place_offset.json`; baseline without it: bowls drift < 1 cm 0/10). Fixes
+needed in the patch step: merge the colliderless outer body, drop the world weld for movables,
+hide group-0 geoms. Open: fixture placement during play (works only with the timeline stopped),
+overlap rejection, 12 of 71 init facts in the Spatial BDDLs use predicate shapes the generator
+does not express, and asset licences were not checked (hence the box above stays open). Details:
+[`docs/design/libero-asset-spike.md`](../../design/libero-asset-spike.md).
 
 ## S2 — Embodiments
 

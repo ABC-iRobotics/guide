@@ -1,0 +1,550 @@
+{
+ "_isaac": "6.0.1.0",
+ "_articulation": {
+  "wooden_cabinet_1": {
+   "joints": {
+    "top_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.1599,
+     "reached_closed": 0.0099
+    },
+    "middle_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.1599,
+     "reached_closed": 0.0099
+    },
+    "bottom_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.16,
+     "reached_closed": 0.0099
+    }
+   },
+   "render_positions": {
+    "top_level": -0.16,
+    "middle_level": -0.0002,
+    "bottom_level": -0.0002
+   }
+  },
+  "flat_stove_1": {
+   "joints": {
+    "button": {
+     "type": "PhysicsRevoluteJoint",
+     "lower": -0.005,
+     "upper": 2.1,
+     "open_at": "upper",
+     "reached_open": 2.0999,
+     "reached_closed": -0.0049
+    }
+   }
+  }
+ },
+ "_renders": [
+  "/home/user/libero_assets/spike/renders/isaac_overview.png",
+  "/home/user/libero_assets/spike/renders/isaac_cabinet_open.png"
+ ],
+ "_render_ptp": {
+  "isaac_overview.png": 250,
+  "isaac_cabinet_open.png": 216
+ },
+ "akita_black_bowl_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/akita_black_bowl_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/akita_black_bowl_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/akita_black_bowl_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 40,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1118,
+   0.1113,
+   0.0526
+  ],
+  "place_prim": "/Scene_0/objects/akita_black_bowl_1/Geometry/Body",
+  "placed_xy": [
+   -0.25,
+   -0.2
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   -0.25,
+   -0.1,
+   -0.0016,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0016,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "akita_black_bowl_2": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/akita_black_bowl_2/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/akita_black_bowl_2"
+    ],
+    "body1": [
+     "/Scene_0/objects/akita_black_bowl_2/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 40,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1118,
+   0.1113,
+   0.0526
+  ],
+  "place_prim": "/Scene_0/objects/akita_black_bowl_2/Geometry/Body",
+  "placed_xy": [
+   0.0,
+   -0.2
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   0.0,
+   -0.1,
+   -0.0016,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0016,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "cookies_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/cookies_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/cookies_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/cookies_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 1,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.0614,
+   0.0836,
+   0.0201
+  ],
+  "place_prim": "/Scene_0/objects/cookies_1/Geometry/Body",
+  "placed_xy": [
+   0.25,
+   -0.2
+  ],
+  "dropped_from_z": 0.06,
+  "rest_pose": [
+   0.25,
+   -0.2,
+   0.0094,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.0094,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "flat_stove_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/flat_stove_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/flat_stove_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/flat_stove_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [],
+  "hidden_collision_geoms": 20,
+  "massless_bodies_given_0.1g": [],
+  "bbox_size": [
+   0.2945,
+   0.19,
+   0.0739
+  ],
+  "place_prim": "/Scene_0/objects/flat_stove_1",
+  "placed_xy": [
+   0.25,
+   0.3
+  ],
+  "dropped_from_z": null,
+  "rest_pose": [
+   0.1522,
+   0.3,
+   0.02,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.02,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "glazed_rim_porcelain_ramekin_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/glazed_rim_porcelain_ramekin_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 25,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.0887,
+   0.0887,
+   0.0433
+  ],
+  "place_prim": "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body",
+  "placed_xy": [
+   -0.125,
+   -0.45
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   -0.125,
+   -0.45,
+   -0.0007,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0007,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "plate_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/plate_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/plate_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/plate_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 10,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1372,
+   0.137,
+   0.0166
+  ],
+  "place_prim": "/Scene_0/objects/plate_1/Geometry/Body",
+  "placed_xy": [
+   0.125,
+   -0.45
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   0.125,
+   -0.45,
+   0.0025,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.0025,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "wooden_cabinet_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/wooden_cabinet_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/wooden_cabinet_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/wooden_cabinet_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [],
+  "hidden_collision_geoms": 36,
+  "massless_bodies_given_0.1g": [],
+  "bbox_size": [
+   0.2564,
+   0.2218,
+   0.217
+  ],
+  "place_prim": "/Scene_0/objects/wooden_cabinet_1",
+  "placed_xy": [
+   -0.25,
+   0.3
+  ],
+  "dropped_from_z": null,
+  "rest_pose": [
+   -0.2536,
+   0.2992,
+   -0.0046,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0046,
+  "final_speed": 0.0001,
+  "fell_through": false
+ },
+ "_findings": [
+  {
+   "defect": "fallback mass on the converter's geom-less outer body tips the bowls over",
+   "detail": "MJCF's unnamed outer <body> (sites only) becomes rigid body Geometry/Body with no collider and no MassAPI; PhysX falls back to a default mass. In the bowl that body sits 0.1 m off the bowl (MJCF <body name='object' pos='0 -0.1 0'>), welded to the colliding 'object' body.",
+   "evidence": "run 1, 2026-10-19 (/home/user/libero_assets/spike/spike_libero_isaac_run1.json and .log): world welds disabled, no mass patch, 5 cm drop, 3 s at 60 Hz",
+   "unpatched": {
+    "log": "The rigid body at /Scene_0/objects/<inst>/Geometry/Body has a possibly invalid inertia tensor of {1.0, 1.0, 1.0} and a negative mass, small sphere approximated inertia was used (all 7 instances)",
+    "akita_black_bowl_1": {
+     "dropped_from_z": 0.05,
+     "rest_xyz": [
+      -0.2465,
+      -0.1837,
+      -0.0574
+     ],
+     "tilt_deg": 76.8,
+     "final_speed": 0.0,
+     "fell_through": true
+    },
+    "akita_black_bowl_2": {
+     "dropped_from_z": 0.05,
+     "rest_xyz": [
+      -0.0032,
+      -0.2014,
+      -0.0574
+     ],
+     "tilt_deg": 78.1,
+     "final_speed": 0.0,
+     "fell_through": true
+    },
+    "note": "fell_through is true under the brief's rule (body origin z < -0.05): the bowl lies tipped on the table while its colliderless body origin, 0.1 m away, hangs below the table top (run-1 overview render shows the tipped bowls). plate_1 / ramekin / cookies_1 (outer body at the object origin) stayed upright: rest z 0.0021 / -0.0009 / 0.0087 vs 0.0025 / -0.0007 / 0.0094 patched."
+   },
+   "workaround": "build_scene: MassAPI mass 1e-4 kg, diagonalInertia 1e-9, on each movable rigid body with no MassAPI and no own collider (massless_bodies_given_0.1g). Final run: both bowls upright, rest z -0.0016, speed 0.",
+   "fix_in_task1_converter": true,
+   "why": "every consumer of the USD hits it; the converter step should merge jointless nested bodies into one rigid body (MuJoCo semantics) or give the geom-less body a negligible mass"
+  },
+  {
+   "defect": "every asset is welded to the world",
+   "detail": "Geometry/Body/PhysicsFixedJoint has body0 = the asset's root Xform (no RigidBodyAPI, so PhysX anchors it to the world) and body1 = Geometry/Body (see world_joints per instance). LIBERO object MJCFs have no freejoint; robosuite adds one when placing.",
+   "evidence": "static: USD inspection (world_joints in this file); dynamic: one-off run 2026-10-19 (/home/user/libero_assets/spike/spike_weld_oneoff.py and .log): build_scene, then the movables' world joints re-enabled, each placed via its root 5 cm above rest, 3 s at 60 Hz",
+   "unpatched": {
+    "akita_black_bowl_1": {
+     "released_z": 0.05,
+     "z_after_3s": 0.05,
+     "speed": 0.0
+    },
+    "plate_1": {
+     "released_z": 0.05,
+     "z_after_3s": 0.05,
+     "speed": 0.0
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "released_z": 0.05,
+     "z_after_3s": 0.05,
+     "speed": 0.0
+    },
+    "cookies_1": {
+     "released_z": 0.06,
+     "z_after_3s": 0.06,
+     "speed": 0.0
+    },
+    "note": "every movable hangs in the air at its release height"
+   },
+   "workaround": "build_scene sets physics:jointEnabled = false on movables' world joints (disabled_world_joints); fixtures keep theirs (furniture)",
+   "fix_in_task1_converter": true,
+   "why": "Task 1's asset table already says object vs fixture; it should drop the root weld for objects and keep it for fixtures"
+  },
+  {
+   "defect": "a fixture placed by moving its body snaps back to the world-joint anchor",
+   "detail": "the fixture's world weld anchors to the reference root (body0 = root Xform, localPos0 = 0); writing Geometry/Body's translate leaves the joint disjointed and PhysX snaps the body back to the root",
+   "evidence": "run 1: fixtures placed by writing Geometry/Body xformOp:translate in USD before play",
+   "unpatched": {
+    "log": "PhysicsUSD: CreateJoint - found a joint with disjointed body transforms, the simulation will most likely snap objects together (wooden_cabinet_1, flat_stove_1)",
+    "wooden_cabinet_1": {
+     "placed_xy": [
+      -0.25,
+      0.3
+     ],
+     "rest_xyz": [
+      -0.0003,
+      -0.0001,
+      0.0004
+     ],
+     "final_speed": 0.141
+    },
+    "flat_stove_1": {
+     "placed_xy": [
+      0.25,
+      0.3
+     ],
+     "rest_xyz": [
+      0.0016,
+      0.0002,
+      0.0194
+     ],
+     "yaw_deg": 7.2,
+     "final_speed": 0.7686
+    },
+    "side_effect": "both fixtures at the origin interpenetrate; cabinet bottom_level stuck: reached_open -0.0241, reached_closed -0.0233 (limits -0.16 / 0.01)"
+   },
+   "workaround": "place fixtures by writing the reference root (place_prim); final run: cabinet at (-0.2536, 0.2992), stove at (0.1522, 0.3), speed 0, every drawer reaches its limits",
+   "fix_in_task1_converter": false,
+   "why": "anchoring furniture to its root is correct; placement code (Task 3 Replicator) must write the root, not body_prim"
+  },
+  {
+   "defect": "collision-only geoms (MJCF group 0) render as grey cubes over the textured meshes",
+   "detail": "the converter keeps group-0 geoms as renderable Cube prims (displayColor 0.8, displayOpacity 0.3, which RTX does not honour without an opacity material); robosuite never renders group 0. Counts per instance: hidden_collision_geoms (bowl 40, ramekin 25, plate 10, cookies 1, cabinet 36, stove 20).",
+   "evidence": "run 3 (/home/user/libero_assets/spike/spike_libero_isaac_run3.json, /home/user/libero_assets/spike/renders/run3_collision_visible/) vs the final renders, same cameras",
+   "unpatched": {
+    "cabinet drawer front mean RGB, isaac_cabinet_open.png px box x 210..260 y 370..430": {
+     "run3_visible": [
+      169.6,
+      164.8,
+      159.6
+     ],
+     "final_hidden": [
+      33.1,
+      28.1,
+      23.9
+     ],
+     "dark_fine_wood.png_mean": [
+      52.2,
+      45.2,
+      39.2
+     ]
+    },
+    "stove top mean RGB, isaac_overview.png px box x 800..900 y 40..120": {
+     "run3_visible": [
+      13.0,
+      13.0,
+      13.0
+     ],
+     "final_hidden": [
+      131.3,
+      131.2,
+      131.2
+     ],
+     "note": "black = collision_burner (rgba 0 0 0 0 in MJCF)"
+    }
+   },
+   "workaround": "build_scene sets purpose = guide on CollisionAPI Gprims whose mjc:group is not 1; PhysX ignores purpose",
+   "fix_in_task1_converter": true,
+   "why": "a render property of the asset; mapping MJCF group 0 to purpose guide at conversion fixes every scene"
+  },
+  {
+   "defect": "camera near plane is 1 m (not an asset defect)",
+   "detail": "UsdGeom.Camera's default clippingRange is (1, 1e6) scene units; with metersPerUnit = 1 everything closer than 1 m to the camera is clipped",
+   "evidence": "run 1-2 close-ups (/home/user/libero_assets/spike/renders/run1/isaac_cabinet_open.png) and three diagnostic runs 2026-10-19 (scripts deleted; numbers from their output, quoted in the task-2 report)",
+   "unpatched": {
+    "eye (-0.05, -0.25, 0.41) looking +Y": "uniform image, ptp 0",
+    "close-up eye 0.66 m from the cabinet": "only geometry beyond 1 m rendered; the cabinet missing",
+    "same close-up pose as 4x4 xformOp / translate+orient ops / rep.create.camera(look_at)": "identical images, ptp 216 / 216 / 217",
+    "overview eye >= 1.2 m from all geometry": "unaffected"
+   },
+   "workaround": "render() sets clippingRange (0.01, 100)",
+   "fix_in_task1_converter": false,
+   "why": "camera setup, not the asset; any camera in a metre-unit stage that is closer than 1 m to its subject needs an explicit near plane"
+  }
+ ],
+ "_texture_check": {
+  "akita_black_bowl": {
+   "texture": "/home/user/libero_assets/LIBERO/libero/libero/assets/stable_scanned_objects/akita_black_bowl/texture.png",
+   "converted_texture_identical": true,
+   "atlas": "4096x4096 UV atlas, mean RGB [59.5, 60.3, 59.5]: 66.6% unused black background; islands mean RGB [178.2, 180.5, 178.1] (light ceramic) with a black floral pattern (4.4% of island pixels luma < 64)",
+   "reference": "/home/user/libero_assets/spike/renders/libero_agentview_next_to_plate_demo0_frame0.png (LIBERO MuJoCo agentview, next-to-plate task, demo_0 frame 0, flipped upright)",
+   "isaac_render": "/home/user/libero_assets/spike/renders/isaac_overview.png",
+   "observation": "both show light bowls with a dark floral pattern; bowl/table luma: Isaac 0.98 (px box x 415..445 y 360..390), LIBERO 0.70 (px box x 335..355 y 232..252)",
+   "verdict": "agree: texture and UVs are correct; 'black' is the asset's name, not its look. Isaac renders the bowl brighter relative to the table than MuJoCo does (lighting/material, not texture)"
+  },
+  "cookies": {
+   "texture": "/home/user/libero_assets/LIBERO/libero/libero/assets/stable_hope_objects/cookies/texture_map.png",
+   "converted_texture_identical": true,
+   "reference": "/home/user/libero_assets/spike/renders/libero_agentview_next_to_plate_demo0_frame0.png",
+   "isaac_render": "/home/user/libero_assets/spike/renders/isaac_overview.png",
+   "observation": "printed label legible ('Oatmeal Raisin', 'COOKIES') and upright; 18.9% red pixels in px box x 815..872 y 358..425; LIBERO frame shows the same red/yellow box",
+   "verdict": "texture and UVs correct (no v flip)"
+  },
+  "plate": {
+   "texture": "/home/user/libero_assets/LIBERO/libero/libero/assets/stable_scanned_objects/plate/texture.png",
+   "converted_texture_identical": true,
+   "reference": "/home/user/libero_assets/spike/renders/libero_agentview_next_to_plate_demo0_frame0.png",
+   "isaac_render": "/home/user/libero_assets/spike/renders/isaac_overview.png",
+   "observation": "white plate with concentric red rings; 12.2% red pixels in px box x 690..815 y 528..650; LIBERO frame shows a white plate with a pink-red rim (rings blur at 384 px)",
+   "verdict": "texture and UVs correct"
+  }
+ }
+}
