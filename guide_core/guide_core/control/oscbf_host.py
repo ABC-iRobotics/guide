@@ -53,15 +53,20 @@ class OscbfHost:
         self.mode, self.rate, self._logger = mode, rate or RATE[mode], logger
         self.diagnostics = {"stale": True, "infeasible": 0, "refused": None}
         self.model = Model.load(robot)
-        missing = apply_mass_overrides(get_current_stage(), articulation_root, robot)
-        if missing:  # else the step would recompile to the asset's masses at attach and pass its M/g check
+        layer = description.ROBOTS_DIR / robot / f"{robot}.usda"
+        if "mass_override" not in description.ROBOTS.get(robot, {}):
+            pass  # no override recipe: the description was built on the asset's own masses
+        elif not layer.is_file():
+            self._refuse(f"mass overrides: {layer} does not exist")
+        elif missing := apply_mass_overrides(get_current_stage(), articulation_root, robot):
+            # else the step would recompile to the asset's masses at attach and pass its M/g check
             self._refuse(f"mass overrides: {articulation_root} has no {missing}")
         self._settings = (mode, gains, barriers, q_rest)
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
         self._arm = Articulation(articulation_root)
-        self._attached, self._t, self._k = False, 0.0, 0
+        self._attached, self._switched, self._t, self._k = False, False, 0.0, 0
         self._u, self._hold, self._width, self._home = None, None, None, None
         self._ids = [
             SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP),
@@ -86,7 +91,7 @@ class OscbfHost:
         return False
 
     def _on_stop(self, event) -> None:
-        self._attached = False  # PhysX rebuilds the articulation (gains, modes) on the next play
+        self._attached = self._switched = False  # PhysX rebuilds the articulation (gains, modes) on the next play
         # The physics clock restarts on play: a target from before the stop would turn fresh again
         # once the new clock passed the time it was put at. Targets put from now on go to the new slot.
         # ponytail: a put racing this swap lands in the old slot and is lost; the next 20 Hz target replaces it
@@ -96,8 +101,27 @@ class OscbfHost:
             self.holder.put(latest)  # Ruling 2: Reset's home hold never goes stale, a stop included
 
     def _on_step(self, dt, context) -> None:
-        if self.diagnostics["refused"] or not (self._attached or self._attach(dt)):
+        if self.diagnostics["refused"]:
             return
+        try:
+            if self._attached or self._attach(dt):
+                self._control(dt)
+        except Exception as error:  # in the physics callback: never leave an effort-driven arm limp, nor retry
+            self._refuse(f"{type(error).__name__}: {error}")
+            self._release()
+
+    def _release(self) -> None:
+        """After an error: the arm back on its position drives at its current pose, if they were switched."""
+        if not self._switched:
+            return
+        try:
+            q = self._arm.get_dof_positions().numpy()[0][self._arm_dofs]
+            self._arm.switch_dof_control_mode("position", dof_indices=self._arm_dofs)
+            self._arm.set_dof_position_targets(np.asarray(q)[None], dof_indices=self._arm_dofs)
+        except Exception as error:
+            self._log("error", f"could not put the arm back on its position drives: {type(error).__name__}: {error}")
+
+    def _control(self, dt) -> None:
         self._t += dt
         self._k += 1
         # the first substep after attach steps the controller: there are no efforts to repeat yet
@@ -161,6 +185,7 @@ class OscbfHost:
         if max(error_M, error_g) > DYNAMICS_TOL:
             return self._refuse(f"dynamics check failed: M {error_M:.1e}, g {error_g:.1e} relative > {DYNAMICS_TOL}; PhysX links {names}")
         arm.switch_dof_control_mode("effort" if self.mode == "torque" else "velocity", dof_indices=self._arm_dofs)
+        self._switched = True
         if self._view is not None:
             sample = self._view.get_dof_positions()  # its device: "cpu", or the GPU with GPU physics
             self._buffer, self._device = np.zeros(sample.shape, np.float32), sample.device

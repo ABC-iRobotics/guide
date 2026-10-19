@@ -312,6 +312,9 @@ def test_the_first_substep_after_attach_runs_the_controller(host_module, monkeyp
     run(host, 3)
     assert host.every == 2 and len(host._controller.targets) == 2
     assert len(arm.efforts) == 3 and all(np.isfinite(np.asarray(u, float)).all() for u in arm.efforts)
+    host._on_stop(None)
+    run(host, 1)  # after a stop too: the first write is a fresh controller output, not the last play's efforts
+    assert len(host._controller.targets) == 3 and len(arm.efforts) == 4
 
 
 def test_a_stop_does_not_revive_the_last_target_on_the_next_play(host_module, monkeypatch):
@@ -337,3 +340,48 @@ def test_the_home_hold_survives_a_stop(host_module, monkeypatch):
     host._on_stop(None)
     run(host, 60)
     assert all(t is home for t in host._controller.targets) and not host.diagnostics["stale"]
+
+
+def test_an_error_in_the_physics_step_refuses_the_robot_and_restores_its_position_drives(host_module, monkeypatch):
+    """REVIEWER C B2-I2: an exception in the callback left an effort-driven arm limp (stiffness and
+    damping 0, no effort) and was retried every substep. Now it refuses the robot, named, and puts
+    the arm back on its position drives at its current pose."""
+    host, arm = make_host(host_module, monkeypatch)
+    run(host, 2)
+
+    def broken(*args):
+        raise RuntimeError("XLA runtime error")
+
+    host._controller.step = broken
+    run(host, 3)
+    assert host.diagnostics["refused"] == "RuntimeError: XLA runtime error"
+    assert arm.modes[-1] == ("position", list(range(7))) and arm.finger_targets[-1][1] == list(range(7))
+    assert len(arm.efforts) == 2
+
+
+def test_an_error_before_the_drives_switch_refuses_the_robot_once(host_module, monkeypatch):
+    """REVIEWER C B2-I2: an error at attach (Isaac left the physics view None, say) was retried every
+    substep and never became a refusal. Now it refuses once; nothing was switched, nothing is reverted."""
+    host, arm = make_host(host_module, monkeypatch)
+    attempts = []
+    arm.get_link_masses = lambda: attempts.append(1) or (_ for _ in ()).throw(AssertionError("no physics view"))
+    run(host, 3)
+    assert host.diagnostics["refused"] == "AssertionError: no physics view" and attempts == [1]
+    assert arm.modes == [] and arm.finger_targets == [] and arm.efforts == []
+
+
+def test_a_missing_override_layer_refuses_the_robot_unless_it_has_no_override(host_module, monkeypatch, tmp_path):
+    """Controller (B2 minor): a robot whose ROBOTS entry has a mass_override needs its <robot>.usda;
+    without the file the robot is refused, with the path named. Without a mass_override: nothing to copy."""
+    import shutil
+
+    shutil.copytree(description.ROBOTS_DIR / ROBOT, tmp_path / ROBOT, ignore=shutil.ignore_patterns("*.usda"))
+    monkeypatch.setattr(description, "ROBOTS_DIR", tmp_path)
+    host, arm = make_host(host_module, monkeypatch)
+    run(host, 2)
+    assert str(tmp_path / ROBOT / f"{ROBOT}.usda") in host.diagnostics["refused"] and arm.modes == []
+
+    monkeypatch.setitem(description.ROBOTS, ROBOT, {k: v for k, v in description.ROBOTS[ROBOT].items() if k != "mass_override"})
+    host, arm = make_host(host_module, monkeypatch)
+    run(host, 2)
+    assert host.diagnostics["refused"] is None and arm.modes == [("effort", list(range(7)))]
