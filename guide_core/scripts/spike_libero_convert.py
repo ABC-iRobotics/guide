@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +58,34 @@ def msh_to_obj(src, dst):
     Path(dst).write_text("\n".join(lines) + "\n")
 
 
+def dedupe_textures(text):
+    """mujoco 3.x rejects repeated texture names (flat_stove). One document-order pass:
+    a repeat gets a _N suffix; a material takes the most recent preceding definition of its texture."""
+    seen, cur = {}, {}
+    def sub(m):
+        tag = m[0]
+        if tag.startswith("<texture"):
+            k = re.search(r'name="([^"]+)"', tag)[1]
+            seen[k] = seen.get(k, 0) + 1
+            cur[k] = k if seen[k] == 1 else f"{k}_{seen[k]}"
+            return tag.replace(f'name="{k}"', f'name="{cur[k]}"', 1)
+        return re.sub(r'texture="([^"]+)"', lambda t: f'texture="{cur.get(t[1], t[1])}"', tag)
+    return re.sub(r"<(?:texture|material)\b[^>]*>", sub, text)
+
+
+def source_stats(xml_path):
+    """What the patched MJCF actually uses: mesh geoms, distinct materials on geoms, their texture files."""
+    root = ET.parse(xml_path).getroot()
+    mats = {m.get("name"): m.get("texture") for m in root.iter("material")}
+    texs = {t.get("name"): Path(t.get("file", "")).name for t in root.iter("texture")}
+    used = {g.get("material") for g in root.iter("geom") if g.get("material")}
+    return {"source_meshes": sum(g.get("mesh") is not None for g in root.iter("geom")),
+            "source_materials": len(used),
+            # converter drops <mesh> assets no geom references (flat_stove stove_knob_base_vis)
+            "unused_mesh_assets": sorted({m.get("name") for m in root.iter("mesh")} - {g.get("mesh") for g in root.iter("geom")}),
+            "source_textures": sorted({texs[mats[m]] for m in used if mats.get(m) in texs})}
+
+
 def patch(name):
     """Copy the asset into MJCF/<name>/, .msh -> .obj; return (patched xml, #msh converted)."""
     xml = SRC / ASSETS[name]
@@ -75,31 +104,25 @@ def patch(name):
     out = dst / xml.name
     text = re.sub(r'(file="[^"]*)\.msh"', r'\1.obj"', out.read_text())
     text = re.sub(r'<mujoco model="[^"]*"', f'<mujoco model="{name}"', text)  # usd is named after the model
-    # flat_stove reuses a texture name; mujoco 3.x rejects it. Rename repeats, materials follow the latest def.
-    seen, cur = {}, {}
-    def tex(m):
-        k = m[1]; seen[k] = seen.get(k, 0) + 1
-        cur[k] = k if seen[k] == 1 else f"{k}_{seen[k]}"
-        return m[0].replace(f'name="{k}"', f'name="{cur[k]}"')
-    text = re.sub(r'<texture [^>]*name="([^"]+)"[^>]*>', tex, text)
-    text = re.sub(r'(<material [^>]*texture=")([^"]+)"', lambda m: f'{m[1]}{cur.get(m[2], m[2])}"', text)
+    text = dedupe_textures(text)
     out.write_text(text)
     return out, n
 
 
 def convert(name):
     res = {"ok": False, "error": None, "usd": str(USD / name / f"{name}.usda"),
-           "msh_converted": 0, "bodies": 0, "joints": [], "meshes": 0}
+           "msh_converted": 0, "warnings": [], "bodies": 0, "usd_materials": 0, "joints": [], "meshes": 0}
     try:
         shutil.rmtree(USD / name, ignore_errors=True)
         xml, res["msh_converted"] = patch(name)
         p = subprocess.run([str(CONVERTER), str(xml), str(USD / name), "--no-physics-scene"],
                            capture_output=True, text=True, timeout=600)
+        res["warnings"] = [l for l in p.stderr.splitlines() if "[Warning]" in l]
         if p.returncode:
             res["error"] = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1]
             return res
         import usdex.core  # noqa: F401  (needed for standalone pxr)
-        from pxr import Usd, UsdGeom, UsdPhysics
+        from pxr import Usd, UsdGeom, UsdPhysics, UsdShade
         stage = Usd.Stage.Open(res["usd"])
         for prim in stage.Traverse():
             if prim.HasAPI(UsdPhysics.RigidBodyAPI) or prim.HasAPI(UsdPhysics.ArticulationRootAPI):
@@ -108,7 +131,16 @@ def convert(name):
                 res["joints"].append({"name": prim.GetName(), "type": prim.GetTypeName()})
             if prim.IsA(UsdGeom.Mesh):
                 res["meshes"] += 1
-        res["ok"] = True
+            if prim.IsA(UsdShade.Material):
+                res["usd_materials"] += 1
+        res["textures"] = sorted(f.name for f in (USD / name / "Payload/Textures").glob("*"))
+        res.update(source_stats(xml))
+        # fidelity: every used mesh geom / material / texture file made it into the USD
+        bad = [k for k, ok in [("meshes", res["meshes"] >= res["source_meshes"]),
+                               ("materials", res["usd_materials"] >= res["source_materials"]),
+                               ("textures", set(res["source_textures"]) <= set(res["textures"]))] if not ok]
+        res["ok"] = not bad
+        res["error"] = f"fidelity mismatch: {bad}" if bad else None
     except Exception as e:  # spike: record and move on
         res["error"] = f"{type(e).__name__}: {e}"
     return res
@@ -135,6 +167,17 @@ def _selftest():
         text = obj.read_text()
         assert "vt 0 0.75" in text, text          # v flipped
         assert "f 1/1 2/2 3/3" in text, text      # 1-based, texcoords, no normals
+        n = np.array([[0, 0, 1]] * 3, "<f4")
+        for nn, nt, want in [(3, 0, "f 1//1 2//2 3//3"), (3, 3, "f 1/1/1 2/2/2 3/3/3")]:
+            msh.write_bytes(np.array([3, nn, nt, 1], "<i4").tobytes() + verts.tobytes() + n.tobytes()
+                            + (tex.tobytes() if nt else b"") + faces.tobytes())
+            msh_to_obj(msh, obj)
+            assert want in obj.read_text(), (want, obj.read_text())
+    x = ('<texture name="t" file="a.png"/><material name="m1" texture="t"/>'
+         '<texture name="t" file="b.png"/><material name="m2" texture="t"/>')
+    out = dedupe_textures(x)
+    assert '<material name="m1" texture="t"/>' in out and '<material name="m2" texture="t_2"/>' in out \
+        and '<texture name="t_2" file="b.png"/>' in out, out
     print("selftest ok")
 
 

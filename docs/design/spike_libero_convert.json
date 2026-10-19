@@ -15,7 +15,18 @@
     "meshes": 1,
     "msh_converted": 1,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/akita_black_bowl/akita_black_bowl.usda"
+    "source_materials": 1,
+    "source_meshes": 1,
+    "source_textures": [
+      "texture.png"
+    ],
+    "textures": [
+      "texture.png"
+    ],
+    "unused_mesh_assets": [],
+    "usd": "/home/user/libero_assets/usd/akita_black_bowl/akita_black_bowl.usda",
+    "usd_materials": 2,
+    "warnings": []
   },
   "cookies": {
     "bodies": 2,
@@ -33,7 +44,18 @@
     "meshes": 1,
     "msh_converted": 1,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/cookies/cookies.usda"
+    "source_materials": 1,
+    "source_meshes": 1,
+    "source_textures": [
+      "texture_map.png"
+    ],
+    "textures": [
+      "texture_map.png"
+    ],
+    "unused_mesh_assets": [],
+    "usd": "/home/user/libero_assets/usd/cookies/cookies.usda",
+    "usd_materials": 2,
+    "warnings": []
   },
   "flat_stove": {
     "bodies": 6,
@@ -67,7 +89,24 @@
     "meshes": 2,
     "msh_converted": 2,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/flat_stove/flat_stove.usda"
+    "source_materials": 1,
+    "source_meshes": 2,
+    "source_textures": [
+      "metal.png"
+    ],
+    "textures": [
+      "button_dark_texture.png",
+      "metal.png"
+    ],
+    "unused_mesh_assets": [
+      "stove_knob_base_vis"
+    ],
+    "usd": "/home/user/libero_assets/usd/flat_stove/flat_stove.usda",
+    "usd_materials": 3,
+    "warnings": [
+      "[Warning] [mujoco_usd_converter._impl.geom.bind_material] Binding a textured Material '/flat_stove/Materials/stove_knob_metal' to a Cube Prim ('/flat_stove/Geometry/Body/object/base/burner/base_vis') will discard textures at render time.",
+      "[Warning] [mujoco_usd_converter._impl.geom.bind_material] Binding a textured Material '/flat_stove/Materials/stove_knob_metal' to a Cube Prim ('/flat_stove/Geometry/Body/object/base/burner/base') will discard textures at render time."
+    ]
   },
   "glazed_rim_porcelain_ramekin": {
     "bodies": 2,
@@ -85,7 +124,18 @@
     "meshes": 1,
     "msh_converted": 1,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/glazed_rim_porcelain_ramekin/glazed_rim_porcelain_ramekin.usda"
+    "source_materials": 1,
+    "source_meshes": 1,
+    "source_textures": [
+      "texture.png"
+    ],
+    "textures": [
+      "texture.png"
+    ],
+    "unused_mesh_assets": [],
+    "usd": "/home/user/libero_assets/usd/glazed_rim_porcelain_ramekin/glazed_rim_porcelain_ramekin.usda",
+    "usd_materials": 2,
+    "warnings": []
   },
   "plate": {
     "bodies": 2,
@@ -103,7 +153,18 @@
     "meshes": 1,
     "msh_converted": 1,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/plate/plate.usda"
+    "source_materials": 1,
+    "source_meshes": 1,
+    "source_textures": [
+      "texture.png"
+    ],
+    "textures": [
+      "texture.png"
+    ],
+    "unused_mesh_assets": [],
+    "usd": "/home/user/libero_assets/usd/plate/plate.usda",
+    "usd_materials": 2,
+    "warnings": []
   },
   "wooden_cabinet": {
     "bodies": 6,
@@ -137,6 +198,19 @@
     "meshes": 7,
     "msh_converted": 7,
     "ok": true,
-    "usd": "/home/user/libero_assets/usd/wooden_cabinet/wooden_cabinet.usda"
+    "source_materials": 7,
+    "source_meshes": 7,
+    "source_textures": [
+      "dark_fine_wood.png",
+      "metal.png"
+    ],
+    "textures": [
+      "dark_fine_wood.png",
+      "metal.png"
+    ],
+    "unused_mesh_assets": [],
+    "usd": "/home/user/libero_assets/usd/wooden_cabinet/wooden_cabinet.usda",
+    "usd_materials": 8,
+    "warnings": []
   }
 }
