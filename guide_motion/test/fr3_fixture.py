@@ -32,3 +32,24 @@ def fd_dynamics(q):
     data = model.createData()
     M = pin.crba(model, data, q)
     return np.triu(M) + np.triu(M, 1).T, pin.computeGeneralizedGravity(model, data, q).copy()
+
+
+def simulator_mass_properties():
+    """franka_description's inertials as PhysX would report them: in the (stand-in) USD frames."""
+    raw = {}
+    for link in ET.fromstring(FD_URDF).iter("link"):
+        inertial = link.find("inertial")
+        if inertial is None:
+            continue
+        i = {k: float(v) for k, v in inertial.find("inertia").attrib.items()}
+        raw[link.get("name")] = (
+            float(inertial.find("mass").get("value")),
+            np.array(inertial.find("origin").get("xyz").split(), float),
+            np.array([[i["ixx"], i["ixy"], i["ixz"]], [i["ixy"], i["iyy"], i["iyz"]], [i["ixz"], i["iyz"], i["izz"]]]),
+        )
+    fd, usd = description.link_poses(FD_URDF, root="fr3_link0"), usd_poses()
+    moved = description.to_urdf_frames(
+        {n: v[0] for n, v in raw.items()}, {n: v[1] for n, v in raw.items()}, {n: v[2] for n, v in raw.items()},
+        {n: np.linalg.inv(usd[n]) @ fd[n] for n in raw},
+    )
+    return ({n: v[0] for n, v in moved.items()}, {n: v[1] for n, v in moved.items()}, {n: v[2] for n, v in moved.items()})
