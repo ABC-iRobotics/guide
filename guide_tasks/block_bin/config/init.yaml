@@ -35,6 +35,18 @@ robots:
       - 0.785398
       - 0.0
       - 0.0
+    # Motion layer (S2b). moveit: move_group + ros2_control over joint_command (the default).
+    # oscbf: guide_motion's OSCBF controller in Isaac's physics step, fed MotionTargets by
+    # ROS2Robot; the block_bin bring-up then starts no move_group. Under oscbf the arm's drives
+    # are effort (torque) or velocity drives, so config/reset.yaml's drive-target homing does
+    # not move it; GUIDE's Reset homes it through the OSCBF host instead (Ruling 2): a JOINTS
+    # target at the robot's home configuration, held until the next MotionTarget arrives.
+    controller: moveit
+    oscbf:
+      robot: fr3       # guide_motion/guide_motion/robots/<robot>
+      mode: torque     # torque (every substep, 120 Hz) | velocity (once per frame, 60 Hz); rate: <Hz> overrides
+      gains: {}        # overrides of guide_motion.control.GAINS[mode]
+      barriers: {}     # overrides of guide_motion.control.BARRIERS
 
 # `rgb`, `depth` and `instance` are independent streams off one render product (no
 # extra RTX pass). They decide the dataset feature names: <key>, <key>_depth and

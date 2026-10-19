@@ -62,6 +62,32 @@ def _cmd_is_success(self, scene_id: int) -> bool:
     return simulator._scene_manager.is_success_postprocess(scene_id, results)
 
 
+def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, robot: dict) -> None:
+    """S2b: guide_motion's OSCBF controller in the physics step drives this robot.
+
+    Compiles at registration (seconds; the persistent JAX cache makes restarts quicker). The
+    GUIDE node subscribes `<namespace>/motion_target` for it after the scene is registered.
+    """
+    from guide_core.control.oscbf_host import OscbfHost
+
+    settings = robot.get("oscbf", {})
+    host = OscbfHost(
+        articulation_root,
+        robot=settings.get("robot", "fr3"),
+        mode=settings.get("mode", "torque"),
+        gains=settings.get("gains"),
+        rate=settings.get("rate"),
+        barriers=settings.get("barriers"),
+        # nullspace posture: the configuration every episode starts from
+        q_rest=list(robot.get("default_joint_states", []))[:7] or None,
+        logger=self._logger,
+    )
+    host.topic = f"{namespace}/motion_target"
+    if not hasattr(self, "_motion_hosts"):
+        self._motion_hosts = {}
+    self._motion_hosts.setdefault(scene_id, []).append(host)  # also keeps it alive: callbacks hold a weakref
+
+
 def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, float, float]]:
     simulator = getattr(self, "_simulator", None)
     if simulator is None:
@@ -91,12 +117,22 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
 
     if robots is not None:
         for robot in robots:
+            oscbf = robot.get("controller", "moveit") == "oscbf"
             self._cmd_create_robot_control(
                 namespace=f'{simulator._sim_path}{scene_path}{robot.get("namespace", "/robot")}',
                 articulation_root=f'{scene_path}{robot.get("articulation_root", "/robot")}',
                 path=f'{scene_path}/Graph{robot.get("path", "/robot")}_control_graph',
                 default_joint_states=np.array(robot.get("default_joint_states", [])),
+                subscribe=not oscbf,
             )
+            if oscbf:
+                _attach_oscbf(
+                    self,
+                    id,
+                    f'{scene_path}{robot.get("articulation_root", "/robot")}',
+                    f'{simulator._sim_path}{scene_path}{robot.get("namespace", "/robot")}',
+                    robot,
+                )
             self._cmd_create_tf_graph(
                 namespace=f'{simulator._sim_path}{scene_path}{robot.get("namespace", "/robot")}',
                 prim=f"{scene_path}",

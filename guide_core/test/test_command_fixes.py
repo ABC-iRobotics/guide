@@ -7,6 +7,7 @@ imported under stubs, and every module imported meanwhile is dropped again after
 """
 
 import importlib
+import math
 import sys
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
@@ -140,3 +141,119 @@ def test_the_end_effector_is_recorded_relative_to_the_robot_base(isaac_import):
 
     assert np.allclose([obs[k] for k in ("x", "y", "z")], [0.4, 0.0, 0.4])
     assert np.allclose([obs[k] for k in ("wx", "wy", "wz")], 0.0, atol=1e-9)
+
+
+def test_robot_graphs_carry_the_motion_layer(isaac_import):
+    orchestrator = isaac_import("guide_core.scene.scene_orchestrator").SceneOrchestrator
+    config = {"robots": {"franka": {"path": "/fr3", "default_joint_states": [0.0] * 9,
+                                    "controller": "oscbf", "oscbf": {"mode": "velocity"}},
+                         "other": {"path": "/ur", "default_joint_states": [0.0] * 6}}}
+
+    franka, other = orchestrator.create_robot_graphs(SimpleNamespace(_config=config))
+
+    assert (franka["controller"], franka["oscbf"]) == ("oscbf", {"mode": "velocity"})
+    assert (other["controller"], other["oscbf"]) == ("moveit", {})
+
+
+def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_module, monkeypatch):
+    module = command_module("_cmd_simulator")
+    made = []
+
+    class FakeHost:
+        def __init__(self, *args, **kwargs):
+            made.append((args, kwargs))
+
+    monkeypatch.setitem(sys.modules, "guide_core.control.oscbf_host", SimpleNamespace(OscbfHost=FakeHost))
+    robots = [{"namespace": "/franka", "articulation_root": "/fr3", "path": "/franka",
+               "default_joint_states": list(range(9)), "controller": "oscbf",
+               "oscbf": {"robot": "fr3", "mode": "velocity", "rate": 60}}]
+    manager = SimpleNamespace(
+        get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: robots,
+        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None)],
+    )
+    controls = []
+    runtime = host(
+        _simulator=SimpleNamespace(_add_scene_to_manager=lambda p: (0, (0, 0, 0), {}), _scene_manager=manager, _sim_path="/Sim_0"),
+        _cmd_add_scene=lambda **kwargs: None,
+        _cmd_set_world_poses=lambda **kwargs: None,
+        _cmd_create_robot_control=lambda **kwargs: controls.append(kwargs),
+        _cmd_create_tf_graph=lambda **kwargs: None,
+    )
+
+    module._cmd_register_scene(runtime, "block_bin")
+
+    assert controls[0]["subscribe"] is False
+    (args, kwargs), = made
+    assert args == ("/Scene_0/fr3",) and (kwargs["robot"], kwargs["mode"], kwargs["rate"]) == ("fr3", "velocity", 60)
+    assert kwargs["q_rest"] == list(range(7))
+    assert runtime._motion_hosts[0][0].topic == "/Sim_0/Scene_0/franka/motion_target"
+
+
+def test_motion_targets_are_subscribed_depth_one_and_converted(isaac_import):
+    from guide_motion.targets import TargetHolder
+    from guide_msgs.msg import MotionTarget
+
+    ros = isaac_import("guide_core.ros.guide_ros")
+    subscriptions = []
+    me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
+                         create_subscription=lambda *args, **kwargs: subscriptions.append(args))
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+                                  model=SimpleNamespace(base_link="fr3_link0"))
+
+    ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
+
+    (msg_type, topic, put, qos), = subscriptions
+    assert msg_type is MotionTarget and topic == target_host.topic and qos.depth == 1
+    msg = MotionTarget(mode=MotionTarget.MODE_POSE, frame_id="fr3_link0", gripper_width=0.08)
+    msg.pose.position.x, msg.pose.orientation.z, msg.pose.orientation.w = 0.4, 1.0, 0.0  # 180 deg about z
+    put(msg)
+    target, stale = target_host.holder.get(0.0)
+    assert not stale and target.position[0] == 0.4 and target.gripper_width == 0.08
+    assert abs(target.rotation[0, 0] + 1.0) < 1e-12
+    put(MotionTarget(frame_id="Scene_0"))  # not the base frame: dropped
+    broken = MotionTarget(frame_id="fr3_link0")
+    broken.pose.position.x, broken.pose.orientation.w = float("nan"), 1.0
+    put(broken)  # a NaN from a buggy publisher: dropped
+    assert target_host.holder.get(0.0)[0] is target
+
+
+def test_a_motion_target_with_a_zero_quaternion_is_dropped_with_a_warning(isaac_import):
+    from guide_motion.targets import TargetHolder
+    from guide_msgs.msg import MotionTarget
+
+    ros = isaac_import("guide_core.ros.guide_ros")
+    subscriptions = []
+    me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
+                         create_subscription=lambda *args, **kwargs: subscriptions.append(args))
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+                                  model=SimpleNamespace(base_link="fr3_link0"))
+    ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
+    (_, _, put, _), = subscriptions
+
+    msg = MotionTarget(mode=MotionTarget.MODE_POSE, frame_id="fr3_link0")
+    msg.pose.orientation.w = 0.0  # (0, 0, 0, 0); ROS 2 defaults w to 1. scipy refuses a zero quaternion
+    put(msg)
+
+    assert target_host.holder.get(0.0) == (None, True)
+    me._logger.warning.assert_called_once()
+
+
+def test_a_nan_gripper_width_passes_through_to_leave_the_gripper(isaac_import):
+    """FIX B1: NaN means "leave the gripper" (Target's convention). rosidl cannot default the
+    field to NaN, so publishers set it; the ROS boundary must hand it to the holder unchanged."""
+    from guide_motion.targets import JOINTS, TargetHolder
+    from guide_msgs.msg import MotionTarget
+
+    ros = isaac_import("guide_core.ros.guide_ros")
+    subscriptions = []
+    me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
+                         create_subscription=lambda *args, **kwargs: subscriptions.append(args))
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+                                  model=SimpleNamespace(base_link="fr3_link0"))
+    ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
+    (_, _, put, _), = subscriptions
+
+    put(MotionTarget(mode=MotionTarget.MODE_JOINTS, frame_id="fr3_link0", joints=[0.1] * 7, gripper_width=float("nan")))
+
+    target, stale = target_host.holder.get(0.0)
+    assert not stale and target.mode == JOINTS and math.isnan(target.gripper_width)

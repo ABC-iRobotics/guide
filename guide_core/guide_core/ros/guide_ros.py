@@ -49,12 +49,17 @@ class _RosLoggerAdapter:
     def __getattr__(self, name):
         # Delegate anything else (e.g. set_level, get_child) to the real logger.
         return getattr(self._logger, name)
+import numpy as np
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile
+from scipy.spatial.transform import Rotation
 
 from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
+from guide_motion.targets import POSE, Target
+from guide_msgs.msg import MotionTarget
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
 from guide_msgs.srv import (
@@ -221,6 +226,8 @@ class GUIDEROS2Interface(Node):
             path = request.path
 
             id, offset = self._backend.register_scene(path)
+            for host in self._backend.motion_hosts(id):
+                self._subscribe_motion_target(host)
 
             self._logger.info(f"Registered scene with id {id} at offset {offset}")
 
@@ -243,6 +250,32 @@ class GUIDEROS2Interface(Node):
             response.success = False
         finally:
             return response
+
+    def _subscribe_motion_target(self, host) -> None:
+        """Depth 1, KEEP_LAST: the newest target wins (the OmniGraph subscriber served the oldest
+        of 10, 110 ms stale at 100 Hz). Each message is one lock-protected slot write."""
+
+        def put(msg: MotionTarget) -> None:
+            if msg.frame_id and msg.frame_id != host.model.base_link:
+                self._logger.warning(
+                    f"{host.topic}: target in '{msg.frame_id}', expected '{host.model.base_link}'; dropped",
+                    throttle_duration_sec=5.0,
+                )
+                return
+            try:
+                target = target_from_msg(msg)
+            except ValueError as error:  # a zero or NaN quaternion: scipy refuses to normalise it
+                self._logger.warning(f"{host.topic}: invalid target dropped: {error}", throttle_duration_sec=5.0)
+                return
+            if not all(np.all(np.isfinite(v)) for v in (target.position, target.rotation, target.twist, target.joints)):
+                self._logger.warning(f"{host.topic}: non-finite target dropped", throttle_duration_sec=5.0)
+                return
+            host.holder.put(target)
+
+        self.create_subscription(
+            MotionTarget, host.topic, put, QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST),
+            callback_group=self._reentrant_group,
+        )
 
     def _pose_request_callback(
         self, request: PoseSrv.Request, response: PoseSrv.Response
@@ -415,6 +448,20 @@ class GUIDEROS2Interface(Node):
             response.success = False
         finally:
             return response
+
+
+def target_from_msg(msg: MotionTarget) -> Target:
+    """guide_msgs/MotionTarget -> guide_motion Target (the pose is read for MODE_POSE only)."""
+    p, o, v, w = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+    rotation = Rotation.from_quat([o.x, o.y, o.z, o.w]).as_matrix() if msg.mode == POSE else np.eye(3)
+    return Target(
+        mode=int(msg.mode),
+        position=np.array([p.x, p.y, p.z]),
+        rotation=rotation,
+        twist=np.array([v.x, v.y, v.z, w.x, w.y, w.z]),
+        joints=np.asarray(msg.joints, float),
+        gripper_width=float(msg.gripper_width),
+    )
 
 
 def launch_ros_interface(node: GUIDEROS2Interface):

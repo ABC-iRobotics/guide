@@ -65,6 +65,10 @@ class GUIDESimulator:
 
         return self._scene_manager.add_scene(package_name)
 
+    def motion_hosts(self, scene_id: int) -> list:
+        """The scene's OSCBF hosts (robots with controller: oscbf), for the ROS side to feed."""
+        return getattr(self._runtime, "_motion_hosts", {}).get(scene_id, [])
+
     def reset_scene(self, scene_id: int) -> bool:
         return self.call("reset_scene", scene_id=scene_id)
 

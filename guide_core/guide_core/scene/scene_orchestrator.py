@@ -255,6 +255,9 @@ class SceneOrchestrator(ABC):
                     "articulation_root": f"{path}",
                     "path": f"/{name}",
                     "default_joint_states": default_joint_states,
+                    # Motion layer (S2b): "moveit" (the joint_command graph) or "oscbf"
+                    "controller": data.get("controller", "moveit"),
+                    "oscbf": data.get("oscbf", {}),
                 }
             )
         return robot_list

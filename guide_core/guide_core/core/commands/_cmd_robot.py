@@ -71,6 +71,7 @@ def _cmd_create_robot_control(
     articulation_root: str = "",
     path: str | None = None,
     default_joint_states: list[float] | None = None,
+    subscribe: bool = True,
 ) -> None:
 
     assert self.state in [READY, PAUSED, STOPPED]
@@ -89,8 +90,9 @@ def _cmd_create_robot_control(
 
     js_graph = Ros2JointStatesGraph()
     js_graph._publisher = True
-    js_graph._subscriber = True
-    js_graph._sub_move_robot = True
+    # controller: oscbf drives the arm from the physics step; no joint_command into the drives
+    js_graph._subscriber = subscribe
+    js_graph._sub_move_robot = subscribe
     js_graph._node_namespace = namespace
     js_graph._art_root_path = articulation_root
     js_graph._pub_topic = "joint_states"
