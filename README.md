@@ -186,6 +186,7 @@ that can register new scenes as needed.
 ros2 launch guide_core bringup.launch.py
 ```
 > The first launch spends ~2 minutes compiling RTX shaders before the viewport appears.
+> `GUIDE_HEADLESS=1` forces headless without editing init.yaml.
 
 Register a task's scene with the simulator, then launch the task from `guide_tasks`. For
 example, the `block_bin` pick-and-place demonstration task (its launch file starts MoveIt and
