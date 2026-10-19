@@ -5,11 +5,11 @@
   "check": "hold",
   "frames": 300,
   "nan": false,
-  "u_over_limit": 0.25599054073688354,
+  "u_over_limit": 0.25599016433160715,
   "infeasible": 0,
   "refused": null,
-  "hold_mm_mean": 0.03930055975973428,
-  "hold_mm_max": 0.039300577681236154,
+  "hold_mm_mean": 0.039300560932887835,
+  "hold_mm_max": 0.039300580374054414,
   "stale": true,
   "pass": true
  },
@@ -19,17 +19,17 @@
   "check": "home",
   "frames": 300,
   "nan": false,
-  "u_over_limit": 0.7556429084535599,
+  "u_over_limit": 0.7261483337955414,
   "infeasible": 0,
   "refused": null,
   "qd_peak": [
+   2.332,
    2.62,
-   2.571,
-   2.62,
-   2.387,
-   1.17,
-   0.198,
-   1.208
+   2.559,
+   2.421,
+   1.251,
+   0.245,
+   1.321
   ],
   "qd_limit": [
    2.62,
@@ -40,8 +40,8 @@
    4.18,
    5.26
   ],
-  "qd_over_limit": 0.999999953107058,
-  "final_error_rad": 5.151863098129539e-05,
+  "qd_over_limit": 0.9999912171583546,
+  "final_error_rad": 6.463165283188133e-05,
   "stale": false,
   "pass": true
  },
@@ -51,11 +51,11 @@
   "check": "square",
   "frames": 600,
   "nan": false,
-  "u_over_limit": 0.26388083120598976,
+  "u_over_limit": 0.2638166786553657,
   "infeasible": 0,
   "refused": null,
-  "path_mm_mean": 1.6864848193807167,
-  "path_mm_peak": 4.6147001096056295,
+  "path_mm_mean": 1.6827169415066194,
+  "path_mm_peak": 4.411959930449787,
   "pass": true
  },
  "fr3_torque_square_rerun": {
@@ -64,11 +64,11 @@
   "check": "square",
   "frames": 600,
   "nan": false,
-  "u_over_limit": 0.26388083120598976,
+  "u_over_limit": 0.2638166786553657,
   "infeasible": 0,
   "refused": null,
-  "path_mm_mean": 1.6864848193807167,
-  "path_mm_peak": 4.6147001096056295,
+  "path_mm_mean": 1.6827169415066194,
+  "path_mm_peak": 4.411959930449787,
   "pass": true
  },
  "fr3_velocity_hold": {
@@ -136,11 +136,11 @@
   "check": "hold",
   "frames": 300,
   "nan": false,
-  "u_over_limit": 0.21539211983879908,
+  "u_over_limit": 0.21539461410588281,
   "infeasible": 0,
   "refused": null,
-  "hold_mm_mean": 0.024951130889550217,
-  "hold_mm_max": 0.02495214667033312,
+  "hold_mm_mean": 0.024430026674476257,
+  "hold_mm_max": 0.024432702748324726,
   "stale": true,
   "pass": true
  },
@@ -150,11 +150,11 @@
   "check": "square",
   "frames": 600,
   "nan": false,
-  "u_over_limit": 0.22254967338305268,
+  "u_over_limit": 0.22248297176946955,
   "infeasible": 0,
   "refused": null,
-  "path_mm_mean": 1.6866457194902078,
-  "path_mm_peak": 4.615398252104457,
+  "path_mm_mean": 1.686723977546813,
+  "path_mm_peak": 4.431108776533343,
   "pass": true
  },
  "panda_velocity_hold": {
@@ -199,7 +199,7 @@
   "check": "restart",
   "frames": 540,
   "nan": false,
-  "u_over_limit": 0.29061134556750584,
+  "u_over_limit": 0.2906949963766856,
   "infeasible": 0,
   "refused": null,
   "restart_q": [
@@ -211,11 +211,11 @@
    1.5708,
    0.7854
   ],
-  "hold_mm_mean": 0.00010139125677846644,
-  "hold_mm_max": 0.00010638795926240816,
-  "moved_error_rad": 0.0001698017120361217,
-  "home_error_rad": 0.0038079239893704653,
-  "moved2_error_rad": 0.0024414241313934215,
+  "hold_mm_mean": 0.00010239347109229634,
+  "hold_mm_max": 0.00010718960365951439,
+  "moved_error_rad": 0.00011803507804869495,
+  "home_error_rad": 0.0033598002046346664,
+  "moved2_error_rad": 0.0020777761936187633,
   "finger_error_m": 0.00015033870935440147,
   "stale": false,
   "pass": true
@@ -247,46 +247,13 @@
   "stale": false,
   "pass": true
  },
- "fr3_baseline_rtf2": {
-  "robot": "fr3",
-  "mode": "baseline",
-  "check": "rtf",
-  "frames": 600,
-  "frame_ms_mean": 9.788005977276374,
-  "spikes_over_40ms": 20,
-  "pass": true
- },
- "fr3_torque_rtf2": {
-  "robot": "fr3",
-  "mode": "torque",
-  "check": "rtf",
-  "frames": 600,
-  "frame_ms_mean": 13.253200209013597,
-  "spikes_over_40ms": 12,
-  "infeasible": 0,
-  "refused": null,
-  "added_ms": 3.4651942317372235,
-  "pass": false
- },
- "fr3_velocity_rtf2": {
-  "robot": "fr3",
-  "mode": "velocity",
-  "check": "rtf",
-  "frames": 600,
-  "frame_ms_mean": 11.848670117708028,
-  "spikes_over_40ms": 21,
-  "infeasible": 0,
-  "refused": null,
-  "added_ms": 2.060664140431655,
-  "pass": false
- },
  "fr3_torque_blockbin": {
   "robot": "fr3",
   "mode": "torque",
   "check": "blockbin",
   "frames": 540,
   "nan": false,
-  "u_over_limit": 0.3051518839866323,
+  "u_over_limit": 0.30524212066277084,
   "infeasible": 0,
   "refused": null,
   "restart_q": [
@@ -298,12 +265,12 @@
    1.5708,
    0.7854
   ],
-  "hold_mm_mean": 3.814849127437509e-05,
-  "hold_mm_max": 4.409283471232626e-05,
-  "moved_error_rad": 0.00016998052597044788,
-  "home_error_rad": 0.0038071742746979,
-  "moved2_error_rad": 0.0024419009685516246,
-  "finger_error_m": 5.275845527649009e-05,
+  "hold_mm_mean": 3.692076111655058e-05,
+  "hold_mm_max": 4.383297375530655e-05,
+  "moved_error_rad": 0.00011660456657408558,
+  "home_error_rad": 0.0033429202158004045,
+  "moved2_error_rad": 0.00206734538078307,
+  "finger_error_m": 5.2765905857087014e-05,
   "stale": false,
   "pass": true
  },
@@ -333,5 +300,38 @@
   "finger_error_m": 1.2069940567849269e-08,
   "stale": false,
   "pass": true
+ },
+ "fr3_baseline_rtf": {
+  "robot": "fr3",
+  "mode": "baseline",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 9.49640930505536,
+  "spikes_over_40ms": 10,
+  "pass": true
+ },
+ "fr3_torque_rtf": {
+  "robot": "fr3",
+  "mode": "torque",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 11.964876126762855,
+  "spikes_over_40ms": 25,
+  "infeasible": 0,
+  "refused": null,
+  "added_ms": 2.4684668217074943,
+  "pass": true
+ },
+ "fr3_velocity_rtf": {
+  "robot": "fr3",
+  "mode": "velocity",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 11.75092514764903,
+  "spikes_over_40ms": 19,
+  "infeasible": 0,
+  "refused": null,
+  "added_ms": 2.254515842593669,
+  "pass": false
  }
 }

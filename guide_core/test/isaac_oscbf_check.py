@@ -97,8 +97,8 @@ arm.set_sleep_thresholds(0.0)  # awake in every run: a sleeping arm's physics is
 def register():
     """GUIDE's RegisterScene: the host compiles (the persistent cache makes reruns quicker)."""
     say = lambda message: print(message, flush=True)  # noqa: E731  the [oscbf] lines Step 2 greps
-    return OscbfHost(ROOT, robot=args.robot, mode=args.mode, rate=PHYSICS_HZ if args.mode == "torque" else FRAME_HZ,
-                     q_rest=model.home, logger=SimpleNamespace(info=say, warning=say, error=say))
+    return OscbfHost(ROOT, robot=args.robot, mode=args.mode, q_rest=model.home,  # the host's default rate, as GUIDE runs it
+                     logger=SimpleNamespace(info=say, warning=say, error=say))
 
 
 host = register() if BLOCKBIN else None  # before play, as in GUIDE: the arm starts at block_bin's authored joint state

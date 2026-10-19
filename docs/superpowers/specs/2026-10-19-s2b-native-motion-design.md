@@ -18,6 +18,7 @@
 6. **Strict version compatibility:** `uv pip check` must report **zero** lines; no `--override`. If lerobot's caps conflict with Isaac's exact pins, find a lerobot release that resolves cleanly with Isaac 6.0.1's pins (or report BLOCKED with the exact conflict). Never weaken a pin.
 7. **OSCBF is a git submodule, not vendored** (user, 2026-10-19): `guide_motion/external/oscbf` at 6082329 (github.com/StanfordASL/oscbf, MIT), reached through the symlink `guide_motion/oscbf` -> `external/oscbf/oscbf`. Its code never enters the guide repo's history (the unpushed branch was rewritten). Not a pip dependency: OSCBF's own metadata pins `cbfpy==0.0.1` (numpy<2), pybullet and matplotlib.
 11. **Stale target in velocity mode holds the pose** (controller, 2026-10-20, from Plan B Task 4): in both modes a stale target makes the host step the controller on the latched current pose. Section 8's "zero velocity" cannot hold the arm: after the switch to velocity mode the drives have stiffness 0, so a zero velocity target is an open-loop damper and the FR3 sagged 9.5 mm (spec 7 requires ≤ 0.1 mm). The intent, "hold the current pose" (section 2's error table), stands.
+12. **Ruling 12 (user, 2026-10-20): torque controller at 60 Hz by default; physics 120 Hz.** The controller runs every second substep (once per rendered frame) and the efforts are held in between; `oscbf.rate: 120` restores every substep. Measured (FR3, Plan B RTF round 1): +3.08 ms per frame at 120 Hz against the 2.5 ms budget, +1.99 ms at 60 Hz with the same hold (0.039 mm) and square (1.683 / 4.412 mm). Velocity mode stays at 60 Hz, measured at +1.8 ms against its 1.2 ms budget, accepted with this choice.
 
 ## 1. Goal
 
@@ -147,7 +148,7 @@ No Isaac imports, no ROS imports. It is a plain pyproject package installed into
   - call `step`;
   - write efforts or velocity targets.
 - **Rates:**
-  - torque mode runs every substep (120 Hz);
+  - torque mode runs every second substep by default (60 Hz, Ruling 12), the efforts held in between; `rate: 120` runs it every substep;
   - velocity mode runs every second substep (once per rendered frame), measured to track just as well (0.7 mm path deviation) at half the cost.
 - **I/O goes through the articulation's tensor view.** It saves 0.2 ms per call against the experimental API's getters. If the private attribute is missing in a future Isaac, it falls back to the API automatically.
 - **Targets arrive on GUIDE's existing ROS thread:**
@@ -193,7 +194,7 @@ The topic is `/Sim_0/Scene_<i>/<robot>/motion_target`, published at 20 Hz.
 
 | Mode | Where used | Rate | Gains | Measured, model matched (Panda, light scene) |
 |---|---|---|---|---|
-| Torque (default where the model matches) | FR3, and the Panda with the inertial override | every substep, 120 Hz | LIBERO-like (the law of robosuite `OSC_POSE` as LIBERO configures it): task kp 150 and kd 2√150 ≈ 24.5 on all six axes (ζ = 1); nullspace kp 10, kd 2√10 ≈ 6.32 towards the joint configuration at the episode start. Known differences: 120 Hz vs 500 Hz recomputation, coupled vs uncoupled Λ, PhysX vs MuJoCo. Details: tracker report "What LIBERO-like gains means". | hold 0.03 mm; 20 Hz square path deviation 1.7 mm mean, 4.6 mm peak; lag 15 mm behind the held target |
+| Torque (default where the model matches) | FR3, and the Panda with the inertial override | every substep, 120 Hz, as measured here (default now 60 Hz, Ruling 12) | LIBERO-like (the law of robosuite `OSC_POSE` as LIBERO configures it): task kp 150 and kd 2√150 ≈ 24.5 on all six axes (ζ = 1); nullspace kp 10, kd 2√10 ≈ 6.32 towards the joint configuration at the episode start. Known differences: 120 Hz vs 500 Hz recomputation, coupled vs uncoupled Λ, PhysX vs MuJoCo. Details: tracker report "What LIBERO-like gains means". | hold 0.03 mm; 20 Hz square path deviation 1.7 mm mean, 4.6 mm peak; lag 15 mm behind the held target |
 | Velocity (fallback) | a robot whose mass properties are not trusted; UR5e later | once per frame, 60 Hz | OSCBF velocity gains | hold 0.09 mm; path deviation 0.7 mm mean, 2.0 mm peak |
 
 240 Hz physics was **not** needed for stability once the model matched (0.07 → 0.01 mm hold), and it costs ≈ 2× the callback time plus 1 ms of physics per frame. Physics stays at 120 Hz.

@@ -44,7 +44,7 @@ robots:
     controller: moveit
     oscbf:
       robot: fr3       # guide_motion/guide_motion/robots/<robot>
-      mode: torque     # torque (every substep, 120 Hz) | velocity (once per frame, 60 Hz); rate: <Hz> overrides
+      mode: torque     # torque | velocity; both run once per rendered frame (60 Hz, physics 120 Hz); rate: <Hz> overrides
       gains: {}        # overrides of guide_motion.control.GAINS[mode]
       barriers: {}     # overrides of guide_motion.control.BARRIERS
 

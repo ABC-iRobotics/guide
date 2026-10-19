@@ -178,7 +178,7 @@ def run(host, n):
 def test_no_target_holds_the_pose_with_the_arm_in_effort_mode(host_module, monkeypatch):
     host, arm = make_host(host_module, monkeypatch)
     run(host, 3)
-    assert arm.modes == [("effort", list(range(7)))]
+    assert arm.modes == [("effort", list(range(7)))] and host.every == 2  # Ruling 12: torque at 60 Hz by default
     assert host.diagnostics["stale"] and len(arm.efforts) == 3
     held = host._controller.targets
     assert held[0].mode == POSE and all(t is held[0] for t in held)
@@ -186,7 +186,7 @@ def test_no_target_holds_the_pose_with_the_arm_in_effort_mode(host_module, monke
 
 
 def test_a_fresh_target_is_used_until_it_goes_stale(host_module, monkeypatch):
-    host, arm = make_host(host_module, monkeypatch)
+    host, arm = make_host(host_module, monkeypatch, rate=120.0)  # counts controller steps per substep
     target = Target(position=np.array([0.4, 0.0, 0.4]))
     host.holder.put(target)
     run(host, 30)  # 0.25 s
@@ -312,7 +312,7 @@ def test_home_holds_the_home_configuration_until_the_next_fresh_target(host_modu
     JOINTS target at home, never stale, until the solver's next target replaces it."""
     from guide_motion.targets import JOINTS
 
-    host, arm = make_host(host_module, monkeypatch)
+    host, arm = make_host(host_module, monkeypatch, rate=120.0)  # counts controller steps per substep
     host.home()
     run(host, 60)  # 0.5 s: twice the staleness timeout
     home = host._controller.targets[-1]
@@ -432,7 +432,7 @@ def test_home_streams_planned_joint_targets_on_the_physics_clock(host_module, mo
     model = Model.load(ROBOT)
     far = model.home + np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0])
     expected = plan(model, Target(mode=JOINTS, joints=model.home), far, speed=1.0)
-    host, arm = make_host(host_module, monkeypatch)
+    host, arm = make_host(host_module, monkeypatch, rate=120.0)  # counts controller steps per substep
     arm.q[:7] = far
     host.home()
     run(host, 6 * len(expected) + 30)  # the plan, then 0.25 s more at the goal
@@ -654,7 +654,7 @@ def test_infeasible_steps_are_logged_at_powers_of_two(host_module, monkeypatch):
     """FINAL-B I3: the infeasible count lived only in diagnostics. It is logged at 1, 2, 4, 8, ... since
     attach, so a stuck QP cannot flood the log at 120 Hz."""
     log = Log()
-    host, arm = make_host(host_module, monkeypatch, logger=log)
+    host, arm = make_host(host_module, monkeypatch, logger=log, rate=120.0)  # counts controller steps per substep
     run(host, 1)
     step = host._controller.step
 

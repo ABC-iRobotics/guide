@@ -23,7 +23,7 @@ from guide_motion.targets import JOINTS, Target, TargetHolder
 
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
 HOME_SPEED = 1.0  # Reset's homing at GUIDE-EX speed 1.0: the planner caps each joint below its URDF velocity limit
-RATE = {"torque": 120.0, "velocity": 60.0}  # Hz without an oscbf.rate: every substep / once per frame (spec Q4)
+RATE = {"torque": 60.0, "velocity": 60.0}  # Hz without an oscbf.rate: once per rendered frame, physics 120 Hz (Ruling 12, spec Q4)
 
 
 def apply_mass_overrides(stage, articulation_root: str, robot: str) -> list:
