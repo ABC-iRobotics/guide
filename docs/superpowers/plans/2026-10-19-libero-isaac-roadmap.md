@@ -68,7 +68,7 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 | Step | State | Branch / artifact | Updated |
 |---|---|---|---|
 | S0 Workspace & tracking | in progress | `feat/libero` (guide), this file | 2026-10-19 |
-| S1 Asset route (spike) | in progress | `spike/libero-assets` | 2026-10-19 |
+| S1 Asset route (spike) | spike done — adopt with fixes | `spike/libero-assets`, [findings](../../design/libero-asset-spike.md) | 2026-10-19 |
 | S2 Embodiments | not started | — | — |
 | S2b Native motion planning + OSC | later | `feat/libero-native-motion` | 2026-10-19 |
 | S3 BDDL → GUIDE compiler | not started | — | — |
@@ -115,9 +115,19 @@ semantics" constrains geometry and poses, not appearance.
 User decision (2026-10-19): probe option **a** (`mujoco_usd_converter`) on branch
 `spike/libero-assets`, placing the objects from the BDDL regions with **Replicator**.
 
-- [ ] Probe a on the Spatial object set: load in Isaac 6.0.1, Replicator placement, drop test, drawer open/close, render
+- [x] Probe a on the Spatial object set: load in Isaac 6.0.1, Replicator placement, drop test, drawer open/close, render
 - [ ] Check licences of LIBERO's asset families (scanned, HOPE, TurboSquid, articulated)
-- [ ] Recommendation recorded here
+- [x] Recommendation recorded here
+
+**Result (2026-10-19): adopt with fixes.** All 6 Spatial asset types convert once LIBERO's `.msh`
+meshes are turned into `.obj`; they load in Isaac 6.0.1, rest on the table, the cabinet drawers and
+the stove knob reach their limits, textures are byte-identical, and a Replicator YAML generated
+from the BDDL regions places movables (in region 50/50 with the bowl offset compensated). Fixes
+needed in the patch step: merge the colliderless outer body, drop the world weld for movables,
+hide group-0 geoms. Open: fixture placement during play (works only with the timeline stopped),
+overlap rejection, 12 of 71 init facts in the Spatial BDDLs use predicate shapes the generator
+does not express, and asset licences were not checked (hence the box above stays open). Details:
+[`docs/design/libero-asset-spike.md`](../../design/libero-asset-spike.md).
 
 ## S2 — Embodiments
 
