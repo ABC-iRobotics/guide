@@ -139,3 +139,8 @@ def test_a_float32_pose_target_does_not_recompile(controller):
     compiled = controller._fn._cache_size()
     controller.step(Target(position=p.astype(np.float32), rotation=R.astype(np.float32)), HOME, np.zeros(7))
     assert controller._fn._cache_size() == compiled
+
+
+def test_gravity_is_public_and_the_models_own(controller):
+    """Plan B's velocity feedforward calls it (controller, B4 M1): the compiled gravity the attach check matches to PhysX."""
+    np.testing.assert_allclose(controller.gravity(HOME), controller.model.manipulator.gravity_vector(HOME), atol=1e-9)

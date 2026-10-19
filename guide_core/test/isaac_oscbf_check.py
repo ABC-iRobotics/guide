@@ -7,7 +7,7 @@ hold:   no targets for 5 s, so the host's stale hold: mean tool error over the l
 square: 2 s hold, then a 10 cm square at 10 cm/s as a 20 Hz zero-order hold: mean path deviation
         on lap 2 <= 3 mm (torque) / 2 mm (velocity); no NaN; |command| <= the URDF limits. Saves q.
 home:   start 1 rad off home on joints 1, 2 and 4, then host.home() (Reset under oscbf, Ruling 2):
-        peak |qd| per joint against the URDF velocity limits (controller, B3b), and the final error.
+        peak |qd| per joint against the URDF velocity limits (controller, B3b); final error <= 0.01 rad.
 rtf:    frame time over the square; --mode baseline records an awake arm without a controller,
         a controller run given --baseline must add <= 2.5 ms (torque) / 1.2 ms (velocity).
 Writes --out JSON, exits 1 when a threshold fails. Not collected by pytest (no test_ prefix).
@@ -15,7 +15,6 @@ Writes --out JSON, exits 1 when a threshold fails. Not collected by pytest (no t
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -150,7 +149,7 @@ else:
         result.update(qd_peak=peak.round(3).tolist(), qd_limit=model.max_velocity.round(3).tolist(),
                       qd_over_limit=float((peak / model.max_velocity).max()),
                       final_error_rad=float(np.abs(q[-1] - model.home).max()), stale=host.diagnostics["stale"])
-        ok = ok and result["qd_over_limit"] <= 1.0 + 1e-6 and not result["stale"]  # 1e-6: float32 PhysX cap (2.62f vs 2.61999977), as u_over_limit
+        ok = ok and result["qd_over_limit"] <= 1.0 + 1e-6 and result["final_error_rad"] <= 1e-2 and not result["stale"]  # 1e-6: float32 PhysX cap (2.62f vs 2.61999977), as u_over_limit
     else:
         path = np.array([p0 + square_offset(HOLD_S + x) for x in np.linspace(0, LAP_S, 4000, endpoint=False)])
         lap2 = t >= HOLD_S + LAP_S
@@ -161,5 +160,4 @@ else:
 result["pass"] = bool(ok)
 Path(args.out).write_text(json.dumps(result, indent=1))
 print("RESULT", json.dumps(result), flush=True)
-app.close()
-sys.exit(0 if ok else 1)
+app.close(exit_code=0 if ok else 1)  # Kit's fast shutdown ends the process here: sys.exit would never run

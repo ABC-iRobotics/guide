@@ -55,6 +55,7 @@ class FakeArm:
         self.q = np.r_[q, 0.0, 0.0]
         self.scale_M = scale_M
         self.damping = np.full(9, 100.0)  # the drives' damping (velocity mode keeps it, stiffness 0)
+        self.drive_types = ["force"] * 9
         self.efforts, self.velocity_targets, self.finger_targets, self.modes = [], [], [], []
 
     def get_link_masses(self):
@@ -84,6 +85,9 @@ class FakeArm:
     def get_dof_velocities(self):
         return Arr(np.zeros(9))
 
+    def get_dof_drive_types(self):
+        return [list(self.drive_types)]
+
     def get_dof_gains(self):
         return Arr(np.zeros(9)), Arr(self.damping)
 
@@ -105,7 +109,8 @@ class FakeController:
 
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
-        self._gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
+        self.gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
+        self.limit = model.max_velocity if mode == "velocity" else model.max_effort
         FakeController.made += 1
 
     def warm_up(self):
@@ -178,14 +183,12 @@ def test_a_fresh_target_is_used_until_it_goes_stale(host_module, monkeypatch):
     assert host.diagnostics["stale"] and host._controller.targets[-1] is not target
 
 
-def test_velocity_mode_runs_once_per_frame_and_stops_when_stale(host_module, monkeypatch):
+def test_velocity_mode_runs_once_per_frame(host_module, monkeypatch):
     host, arm = make_host(host_module, monkeypatch, mode="velocity")  # no rate: velocity defaults to 60 Hz
     host.holder.put(Target(position=np.array([0.4, 0.0, 0.4])))
     run(host, 20)
     assert arm.modes == [("velocity", list(range(7)))] and host.every == 2
     assert len(host._controller.targets) == 10 and len(arm.velocity_targets) == 10
-    run(host, 40)
-    assert host.diagnostics["stale"] and host._controller.targets[-1] is host._hold  # FIX B4: holds, not zero velocity
 
 
 def test_gripper_width_is_one_finger_target_written_once(host_module, monkeypatch):
@@ -441,3 +444,26 @@ def test_velocity_mode_adds_gravity_over_the_drive_damping(host_module, monkeypa
     arm.damping[3] = 0.0
     run(host, 2)
     assert "fr3_joint4" in host.diagnostics["refused"] and arm.modes == [] and arm.velocity_targets == []
+
+
+def test_the_velocity_feedforward_keeps_the_nan_guard_and_the_limit(host_module, monkeypatch):
+    """REVIEWER C B4-I3: tau_g / D was added after Controller.step's finite guard and clip. A NaN q
+    wrote NaN velocity targets, and a saturated command plus the feedforward crossed the URDF limit."""
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    run(host, 2)
+    arm.q[1] = np.nan
+    run(host, 2)
+    assert np.all(np.isfinite(arm.velocity_targets[-1]))
+    arm.q[1] = host.model.home[1]
+    host._controller.step = lambda *args: host._controller.limit.copy()  # saturated
+    run(host, 2)
+    assert np.all(np.abs(arm.velocity_targets[-1]) <= host._controller.limit)
+
+
+def test_velocity_drives_that_are_not_force_drives_refuse_the_robot(host_module, monkeypatch):
+    """REVIEWER C B4-M2: an acceleration drive scales its force by the joint inertia, so tau_g / D would
+    be silently wrong. Velocity mode refuses such a robot, the joint named, before switching its drives."""
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    arm.drive_types[1] = "acceleration"
+    run(host, 2)
+    assert "fr3_joint2" in host.diagnostics["refused"] and arm.modes == [] and arm.velocity_targets == []

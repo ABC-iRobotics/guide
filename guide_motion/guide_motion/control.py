@@ -49,14 +49,14 @@ class Controller:
         self.q_rest = np.asarray(model.home if q_rest is None else q_rest, float)
         self.limit = model.max_effort if mode == "torque" else model.max_velocity
         self.events = {"infeasible": 0}
-        self._fn, self._h, self._gravity = _build(model, mode, self.gains, self.barriers)
+        self._fn, self._h, self.gravity = _build(model, mode, self.gains, self.barriers)
 
     def warm_up(self) -> float:
         """Compile the step (seconds taken). Without it the first physics step stalls."""
         start = time.perf_counter()
         position, rotation = self.model.ee_pose(self.q_rest)
         self.step(Target(position=position, rotation=rotation), self.q_rest, np.zeros_like(self.q_rest))
-        self._gravity(self.q_rest)  # the fallback's, so an infeasible step never compiles mid-episode
+        self.gravity(self.q_rest)  # the fallback's, so an infeasible step never compiles mid-episode
         self.events["infeasible"] = 0
         return time.perf_counter() - start
 
@@ -78,7 +78,7 @@ class Controller:
             self.events["infeasible"] += 1
             # Ruling 1 (2026-10-19): torque mode holds the arm up (gravity) and damps it, never damping alone.
             if self.mode == "torque":
-                u = np.asarray(self._gravity(q)) - self.gains["kd_null"] * qd
+                u = np.asarray(self.gravity(q)) - self.gains["kd_null"] * qd
             else:
                 u = np.zeros_like(q)
         # a non-finite state (a NaN measurement) leaves even the fallback non-finite: command nothing there

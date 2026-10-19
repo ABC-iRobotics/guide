@@ -58,6 +58,8 @@ def test_guide_headless_overrides_startup_headless(monkeypatch):
         assert rt._parse_config({"startup": {"headless": not expected}})[0]["headless"] is expected
     monkeypatch.delenv("GUIDE_HEADLESS")
     assert rt._parse_config({"startup": {"headless": False}})[0]["headless"] is False
+    monkeypatch.setenv("GUIDE_HEADLESS", "")  # REVIEWER C B4-M6: set but empty (a launch file passing an unset one) = unset
+    assert rt._parse_config({"startup": {"headless": False}})[0]["headless"] is False
     monkeypatch.setenv("GUIDE_HEADLESS", "maybe")
     with pytest.raises(ValueError, match="GUIDE_HEADLESS"):
         rt._parse_config({"startup": {}})

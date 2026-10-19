@@ -154,7 +154,8 @@ class OscbfHost:
         # on velocity drives (stiffness 0) it is only a damper, and the arm sags (FIX B4)
         u = self._controller.step(self._hold or target, q, qd)
         if self.mode == "velocity":  # the drive pushes D (v_target - v): gravity needs v_target += tau_g / D (FIX B4-2)
-            u = u + np.asarray(self._controller._gravity(q)) / self._damping  # Controller's compiled gravity
+            limit = self._controller.limit  # step's NaN guard and URDF clip, kept for the sum
+            u = np.clip(np.nan_to_num(u + np.asarray(self._controller.gravity(q)) / self._damping), -limit, limit)
         self.diagnostics["infeasible"] = self._controller.events["infeasible"]
         self._u = u
         self._write(u)
@@ -195,10 +196,12 @@ class OscbfHost:
         if max(error_M, error_g) > DYNAMICS_TOL:
             return self._refuse(f"dynamics check failed: M {error_M:.1e}, g {error_g:.1e} relative > {DYNAMICS_TOL}; PhysX links {names}")
         if self.mode == "velocity":  # read before the switch: velocity mode keeps the drives' damping
+            # tau_g / D needs force drives: an acceleration drive scales its force by the joint inertia
+            types = [arm.get_dof_drive_types()[0][i] for i in self._arm_dofs]
             self._damping = arm.get_dof_gains()[1].numpy()[0][self._arm_dofs].astype(np.float64)
-            bad = [j for j, d in zip(self.model.arm_joints, self._damping) if not (np.isfinite(d) and d > 0)]
+            bad = [j for j, t, d in zip(self.model.arm_joints, types, self._damping) if t != "force" or not (np.isfinite(d) and d > 0)]
             if bad:
-                return self._refuse(f"velocity drives without damping on {bad}: {self._damping.tolist()}")
+                return self._refuse(f"velocity drives must be force drives with damping, not on {bad}: types {types}, damping {self._damping.tolist()}")
         arm.switch_dof_control_mode("effort" if self.mode == "torque" else "velocity", dof_indices=self._arm_dofs)
         self._switched = True
         if self._view is not None:

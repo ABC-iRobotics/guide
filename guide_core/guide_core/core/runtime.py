@@ -301,7 +301,7 @@ class IsaacSimRuntime:
 
         startup_config: dict = config.get("startup", {})
         headless = os.environ.get("GUIDE_HEADLESS")
-        if headless is not None:  # forces headless (or not) without editing init.yaml
+        if headless:  # forces headless (or not) without editing init.yaml; set but empty = unset
             value = {"1": True, "true": True, "yes": True, "0": False, "false": False, "no": False}.get(headless.strip().lower())
             if value is None:
                 raise ValueError(f"GUIDE_HEADLESS={headless!r}: expected 1/true/yes or 0/false/no")
