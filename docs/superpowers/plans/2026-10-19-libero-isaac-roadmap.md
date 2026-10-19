@@ -89,8 +89,8 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 - [x] This roadmap
 - [x] Memory (2026-10-19):
   - file memory `guide-libero-isaac`;
-  - claude-mem corpus `libero-isaac` (322 decisions/discoveries for the project; rebuild with a LIBERO query once claude-mem's search backend works);
-  - graphify graph of the guide repo in `graphify-out/` (git-ignored): 1,459 nodes, 94 labelled communities, code AST + 33 docs. Refresh after each step with `/graphify . --update` from `~/ros2_ws/src/guide`.
+  - claude-mem was tried and removed the same day (its search backend was broken);
+  - graphify graph of the guide repo in `graphify-out/` (git-ignored): 1,452 nodes, 2,993 edges, 100 labelled communities, 0 dangling edges; the live tracker is a node in it. Refresh after each step: AST extraction with an explicit `root=` (the repo), new docs through an agent that is given the real code ids, then `graphify-out/resolve_ids.py` on the merged extraction before the build.
 - [x] `guide_dataset_tools` and `vla_training` stay outside git (user decision 2026-10-19), although S7/S8 change them.
 
 ## S1 — Asset route (spike, LIBERO-Spatial)
