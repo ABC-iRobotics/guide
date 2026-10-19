@@ -1,10 +1,11 @@
+import math
 import time
 
 import numpy as np
 import pytest
 
 from fr3_fixture import HOME
-from guide_motion.control import Controller
+from guide_motion.control import GAINS, Controller
 from guide_motion.targets import JOINTS, TWIST, Target
 
 
@@ -103,3 +104,21 @@ def test_float32_states_give_the_float64_command(controller):
     target = hold(controller.model)
     np.testing.assert_array_equal(controller.step(target, q32, np.zeros(7, np.float32)),
                                   controller.step(target, q32.astype(np.float64), np.zeros(7)))
+
+
+def test_the_gains_are_the_specs(controller):
+    """S2b spec 5: LIBERO-like torque gains (zeta = 1), OSCBF's velocity gains."""
+    assert GAINS["torque"] == {"kp": 150.0, "kd": 2 * math.sqrt(150.0), "kp_null": 10.0, "kd_null": 2 * math.sqrt(10.0)}
+    assert GAINS["velocity"] == {"kp_pos": 50.0, "kp_rot": 20.0, "kp_null": 10.0}
+    assert controller.gains == GAINS[controller.mode]
+
+
+def test_the_barrier_rows_catch_self_collision_and_the_workspace(controller):
+    """FR3: 21 self-collision group pairs, 14 joint limits, 6 workspace faces, 1 singularity."""
+    assert controller.barrier_values(HOME).shape == (42,)
+    folded = controller.barrier_values(np.array([0, 0.5, 0, -2.9, 0, 0.8, 0.785]))  # hand folded onto the upper arm
+    assert folded[:21].min() < 0 and folded[21:].min() > 0
+    low = HOME.copy()
+    low[1], low[3] = 1.7, -0.3  # the tool 10 cm below the base plane
+    h = controller.barrier_values(low)
+    assert h[37] < 0 and np.delete(h, 37).min() > 0  # row 37: tool z above the box's floor

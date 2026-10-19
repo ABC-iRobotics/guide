@@ -57,6 +57,7 @@ def fix_urdf(text: str, robot: str) -> str:
     Joint limits stay the USD's. Visual and collision geometry are dropped: collision is
     the XRDF's spheres, and OSCBF's URDF parser would load every mesh. A missing
     <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the hand's z.
+    Input must be the raw exporter/editor output; running it on its own output corrupts the finger velocity.
     """
     root = _parse(text)
     joints = {j.get("name"): j for j in root.iter("joint")}
@@ -93,7 +94,10 @@ def fix_urdf(text: str, robot: str) -> str:
 
 
 def fix_xrdf(xrdf: dict, robot: str) -> dict:
-    """The editor's XRDF with tool frame, link7 ignore line, real limits, link0 self-only."""
+    """The editor's XRDF with tool frame, link7 ignore line, real limits, link0 self-only.
+
+    Input must be the raw editor output; running it on its own output fails (link0 is already moved).
+    """
     x = copy.deepcopy(xrdf)
     x["tool_frames"] = [f"{robot}_hand_tcp"]
     ignore = x["self_collision"].setdefault("ignore", {})
