@@ -302,3 +302,26 @@ def test_home_holds_the_home_configuration_until_the_next_fresh_target(host_modu
     assert host._controller.targets[-1] is target
     run(host, 31)
     assert host.diagnostics["stale"] and host._controller.targets[-1].mode == POSE  # the ordinary stale hold
+
+
+def test_the_first_substep_after_attach_runs_the_controller(host_module, monkeypatch):
+    """TESTER B2-1: below the physics rate, the attach substep rewrote the last efforts, which did
+    not exist yet: Isaac got None. Every play now starts with a controller step."""
+    host, arm = make_host(host_module, monkeypatch, rate=60.0)
+    host.holder.put(Target(position=np.array([0.4, 0.0, 0.4])))
+    run(host, 3)
+    assert host.every == 2 and len(host._controller.targets) == 2
+    assert len(arm.efforts) == 3 and all(np.isfinite(np.asarray(u, float)).all() for u in arm.efforts)
+
+
+def test_a_stop_does_not_revive_the_last_target_on_the_next_play(host_module, monkeypatch):
+    """TESTER B2-2: the host's physics clock restarts on play. A target put before the stop must stay
+    old once the new clock passes the time it was put at."""
+    host, arm = make_host(host_module, monkeypatch)
+    run(host, 40)
+    old = Target(position=np.array([0.4, 0.0, 0.4]))
+    host.holder.put(old)
+    run(host, 20)
+    host._on_stop(None)
+    run(host, 80)  # the new clock passes 0.34 s, where the old target was put
+    assert all(t is not old for t in host._controller.targets[60:]) and host.diagnostics["stale"]

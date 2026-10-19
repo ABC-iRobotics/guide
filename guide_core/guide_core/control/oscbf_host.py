@@ -87,13 +87,18 @@ class OscbfHost:
 
     def _on_stop(self, event) -> None:
         self._attached = False  # PhysX rebuilds the articulation (gains, modes) on the next play
+        # The physics clock restarts on play: a target from before the stop would turn fresh again
+        # once the new clock passed the time it was put at. Targets put from now on go to the new slot.
+        # ponytail: a put racing this swap lands in the old slot and is lost; the next 20 Hz target replaces it
+        self.holder = TargetHolder(stale_after=0.25)
 
     def _on_step(self, dt, context) -> None:
         if self.diagnostics["refused"] or not (self._attached or self._attach(dt)):
             return
         self._t += dt
         self._k += 1
-        if self._k % self.every:  # velocity targets persist between controller steps; efforts do not
+        # the first substep after attach steps the controller: there are no efforts to repeat yet
+        if (self._k - 1) % self.every:  # velocity targets persist between controller steps; efforts do not
             if self.mode == "torque":
                 self._write(self._u)
             return
