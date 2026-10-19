@@ -118,13 +118,15 @@ class FakeController:
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
         self.q_rest = np.asarray(args[2] if len(args) > 2 and args[2] is not None else model.home, float)
-        self.barrier_values = lambda q: np.r_[q - model.lower, model.upper - q]  # the joint-limit barriers
         self.gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
         self.limit = model.max_velocity if mode == "velocity" else model.max_effort
         FakeController.made += 1
 
     def warm_up(self):
         return 0.0
+
+    def barrier_values(self, q):  # the joint-limit barriers
+        return np.r_[q - self.model.lower, self.model.upper - q]
 
     def step(self, target, q, qd):
         self.targets.append(target)
@@ -158,13 +160,13 @@ def robot_stage(drop=()):
     return stage
 
 
-def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, q_rest=None, **arm):
+def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, q_rest=None, logger=None, **arm):
     model = Model.load(ROBOT)
     fake = FakeArm(Model.load(ROBOT), model.home, **arm)
     stage = robot_stage() if stage is None else stage
     monkeypatch.setattr(module, "Articulation", lambda path: fake)
     monkeypatch.setattr(module, "get_current_stage", lambda: stage)
-    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate, q_rest=q_rest)
+    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate, q_rest=q_rest, logger=logger)
     return host, fake
 
 
@@ -613,3 +615,92 @@ def test_tensor_view_writes_fill_one_preallocated_array(host_module, monkeypatch
     run(host, 10)
     assert len(allocations) == at_attach and all(data is sent[0][0] for data, _ in sent)
     np.testing.assert_allclose(sent[-1][1][0, :7], 0.5)
+
+
+class Log:
+    """A logger that keeps (level, message)."""
+
+    def __init__(self):
+        self.lines = []
+
+    def __getattr__(self, level):
+        return lambda message: self.lines.append((level, message))
+
+
+def test_home_clears_the_cached_gripper_width(host_module, monkeypatch):
+    """FINAL-B I1: Reset's reset.yaml closes the fingers behind the host's back; the solver keeps sending
+    width 0.08, which equalled the cached width, so the hand stayed closed. home() forgets the width."""
+    host, arm = make_host(host_module, monkeypatch)
+    host.holder.put(Target(position=np.array([0.4, 0.0, 0.4]), gripper_width=0.08))
+    run(host, 2)
+    host.home()
+    run(host, 2)
+    host.holder.put(Target(position=np.array([0.4, 0.0, 0.4]), gripper_width=0.08))
+    run(host, 2)
+    assert arm.finger_targets == [(pytest.approx(0.04), [7])] * 2
+
+
+def test_home_drives_to_q_rest(host_module, monkeypatch):
+    """FINAL-B M1: Reset homes to the scene's default_joint_states (q_rest), the pose the attach teleport
+    and the nullspace use, not the description's home (they differ in a LIBERO scene)."""
+    rest = Model.load(ROBOT).home + np.array([0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    host, arm = make_host(host_module, monkeypatch, q_rest=list(rest))
+    host.home()
+    run(host, 2)
+    np.testing.assert_allclose(host._home.joints, rest)
+
+
+def test_infeasible_steps_are_logged_at_powers_of_two(host_module, monkeypatch):
+    """FINAL-B I3: the infeasible count lived only in diagnostics. It is logged at 1, 2, 4, 8, ... since
+    attach, so a stuck QP cannot flood the log at 120 Hz."""
+    log = Log()
+    host, arm = make_host(host_module, monkeypatch, logger=log)
+    run(host, 1)
+    step = host._controller.step
+
+    def infeasible(*args):
+        host._controller.events["infeasible"] += 1
+        return step(*args)
+
+    host._controller.step = infeasible
+    run(host, 10)
+    counts = [m for level, m in log.lines if level == "warning" and "infeasible" in m]
+    assert len(counts) == 4 and all(f"({n} since attach)" in m for n, m in zip((1, 2, 4, 8), counts))
+
+
+def test_a_refusal_log_line_says_refused(host_module, monkeypatch):
+    """FINAL-B I3: Plan C greps the log for "refused"."""
+    log = Log()
+    host, arm = make_host(host_module, monkeypatch, scale_M=1.05, logger=log)
+    run(host, 2)
+    assert any(level == "error" and "refused" in m for level, m in log.lines)
+
+
+def test_the_error_path_restores_the_drives_first(host_module, monkeypatch):
+    """FINAL-B M5: the drives go back before anything that can raise (a raising logger, a dead view's read),
+    and a velocity arm gets zero velocity targets."""
+    def boom(message):
+        raise RuntimeError("logger down")
+
+    log = SimpleNamespace(info=lambda m: None, warning=lambda m: None, error=boom)
+    host, arm = make_host(host_module, monkeypatch, logger=log)
+    run(host, 2)
+    host._controller.step = lambda *args: (_ for _ in ()).throw(RuntimeError("XLA"))
+    arm.get_dof_positions = lambda: (_ for _ in ()).throw(RuntimeError("view gone"))
+    with pytest.raises(RuntimeError):
+        run(host, 1)
+    assert arm.modes[-1] == ("position", list(range(7))) and host.diagnostics["refused"]
+
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    run(host, 2)
+    host._controller.step = lambda *args: (_ for _ in ()).throw(RuntimeError("XLA"))
+    run(host, 1)
+    assert arm.modes[-1] == ("position", list(range(7))) and np.all(arm.velocity_targets[-1] == 0.0)
+
+
+def test_a_barrier_refusal_names_the_barrier(host_module, monkeypatch):
+    """FINAL-B M6: a q_rest inside its joint limits that breaks another barrier (self-collision, say)
+    named "joints outside their limits: []"."""
+    monkeypatch.setattr(FakeController, "barrier_values", lambda self, q: np.array([0.3, -0.02, 0.5]))
+    host, arm = make_host(host_module, monkeypatch)
+    assert "barrier #1" in host.diagnostics["refused"] and "[]" not in host.diagnostics["refused"]

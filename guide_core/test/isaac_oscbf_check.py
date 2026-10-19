@@ -11,8 +11,10 @@ home:   start 1 rad off home on joints 1, 2 and 4, then host.home() (Reset under
 blockbin: block_bin.usd's FR3 (its wrist camera included), registered before play as GUIDE does;
         then the restart check's 2 s stale hold and joint target, with the same gates.
 restart: 1 s, then World.stop() and play() as GUIDE's second RegisterScene does (the joints revert
-        to the asset's authored state), then a 2 s stale hold (mean <= 0.1 mm over its last second) and
-        3 s of a JOINTS target with joint 1 at home + 0.3 rad (final error <= 0.01 rad).
+        to the asset's authored state), then a 2 s stale hold (mean <= 0.1 mm over its last second),
+        3 s of a JOINTS target with joint 1 at home + 0.3 rad and the hand open, then GUIDE's Reset
+        (reset.yaml closes the fingers, the host homes: 2 s) and 2 s of a JOINTS target with joint 1 at
+        home - 0.3 rad and the hand open. Each joint error <= 0.01 rad, the finger within 2 mm.
 rtf:    frame time over the square; --mode baseline records an awake arm without a controller,
         a controller run given --baseline must add <= 2.5 ms (torque) / 1.2 ms (velocity).
 Writes --out JSON, exits 1 when a threshold fails. Not collected by pytest (no test_ prefix).
@@ -59,6 +61,7 @@ SQUARE = np.array([[0, 0, 0], [0, 0.1, 0], [0.1, 0.1, 0], [0.1, 0, 0], [0, 0, 0]
 LIMIT = {"hold": 0.1, "square": {"torque": 3.0, "velocity": 2.0}, "rtf": {"torque": 2.5, "velocity": 1.2}}
 FAR = np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0])  # home check: start offset from home, rad
 MOVED = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # restart check: the joint target's offset from home, rad
+RESET_S, MOVE2_S = 5.0, 7.0  # restart check: Reset, then the second joint target
 
 
 def square_offset(t):
@@ -102,6 +105,7 @@ host = register() if BLOCKBIN else None  # before play, as in GUIDE: the arm sta
 world.reset()
 dofs = list(arm.dof_names)
 ARM = [dofs.index(j) for j in model.arm_joints]
+FINGER, FINGERS = dofs.index(model.gripper_joint), [i for i, name in enumerate(dofs) if "finger" in name]
 if not BLOCKBIN:
     home = np.zeros(arm.num_dofs)
     home[ARM] = model.home + (FAR if args.check == "home" else 0.0)
@@ -132,7 +136,7 @@ if args.check == "restart":  # GUIDE's second RegisterScene: stop and play with 
     world.stop()
     world.play()
     log.clear()
-frames = int(5.0 * FRAME_HZ) if args.check in ("hold", "home", "restart", "blockbin") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
+frames = int(9.0 * FRAME_HZ) if args.check in ("restart", "blockbin") else int(5.0 * FRAME_HZ) if args.check in ("hold", "home") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
 frame_ms, last_k = [], -1
 for i in range(frames):
     t = i / FRAME_HZ
@@ -140,13 +144,19 @@ for i in range(frames):
     if host is not None and args.check in ("square", "rtf") and k != last_k:
         host.holder.put(Target(position=p0 + square_offset(t), rotation=R0))  # GUIDE's ROS thread does this
         last_k = k
-    if args.check in ("restart", "blockbin") and t >= HOLD_S and k != last_k:
-        host.holder.put(Target(mode=JOINTS, joints=model.home + MOVED))
-        last_k = k
+    if args.check in ("restart", "blockbin"):
+        if t >= RESET_S and t - 1.0 / FRAME_HZ < RESET_S:  # GUIDE's Reset: reset.yaml closes the fingers, then home()
+            arm.set_dof_position_targets(np.zeros((1, len(FINGERS))), dof_indices=FINGERS)
+            host.home()
+        goal = model.home + MOVED if HOLD_S <= t < RESET_S else model.home - MOVED if t >= MOVE2_S else None
+        if goal is not None and k != last_k:
+            host.holder.put(Target(mode=JOINTS, joints=goal, gripper_width=0.08))
+            last_k = k
     start = time.perf_counter()
     world.step(render=True)
     annotator.get_data()
     frame_ms.append(1e3 * (time.perf_counter() - start))
+finger = float(arm.get_dof_positions().numpy()[0][FINGER])
 
 result = {"robot": args.robot, "mode": args.mode, "check": args.check, "frames": frames}
 ok = True
@@ -179,9 +189,14 @@ else:
         ok = ok and result["qd_over_limit"] <= 1.0 + 1e-6 and result["final_error_rad"] <= 1e-2 and not result["stale"]  # 1e-6: float32 PhysX cap (2.62f vs 2.61999977), as u_over_limit
     elif args.check in ("restart", "blockbin"):
         error = 1e3 * np.linalg.norm(p - p[0], axis=1)[(t >= 1.0) & (t < HOLD_S)]  # p[0]: the pose held after the restart
+        before = lambda s: q[t < s][-1]  # noqa: E731  the last sample of a phase
         result.update(restart_q=q[0].round(4).tolist(), hold_mm_mean=float(error.mean()), hold_mm_max=float(error.max()),
-                      moved_error_rad=float(np.abs(q[-1] - (model.home + MOVED)).max()), stale=host.diagnostics["stale"])
-        ok = ok and result["hold_mm_mean"] <= LIMIT["hold"] and result["moved_error_rad"] <= 1e-2 and not result["stale"]
+                      moved_error_rad=float(np.abs(before(RESET_S) - (model.home + MOVED)).max()),
+                      home_error_rad=float(np.abs(before(MOVE2_S) - model.home).max()),
+                      moved2_error_rad=float(np.abs(q[-1] - (model.home - MOVED)).max()),
+                      finger_error_m=abs(finger - 0.04), stale=host.diagnostics["stale"])
+        ok = (ok and result["hold_mm_mean"] <= LIMIT["hold"] and not result["stale"] and result["finger_error_m"] <= 2e-3
+              and max(result["moved_error_rad"], result["home_error_rad"], result["moved2_error_rad"]) <= 1e-2)
     else:
         path = np.array([p0 + square_offset(HOLD_S + x) for x in np.linspace(0, LAP_S, 4000, endpoint=False)])
         lap2 = t >= HOLD_S + LAP_S

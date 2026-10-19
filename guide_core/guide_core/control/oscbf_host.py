@@ -121,26 +121,30 @@ class OscbfHost:
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
         if np.min(self._controller.barrier_values(self._controller.q_rest)) <= 0.0:  # attach sends the arm there
             self._refuse(f"q_rest {np.round(self._controller.q_rest, 4).tolist()} breaks the controller's barriers "
-                         f"(joints outside their limits: {self._outside(self._controller.q_rest)})")
+                         f"({self._breach(self._controller.q_rest)})")
         self._arm = Articulation(articulation_root)
         self._attached, self._switched, self._t, self._k = False, False, 0.0, 0
         self._u, self._hold, self._width, self._home, self._homing = None, None, None, None, None
-        self._ids = [
-            SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP),
-            SimulationManager.register_callback(self._on_stop, SimulationEvent.SIMULATION_STOPPED),
-        ]
+        SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP)
+        SimulationManager.register_callback(self._on_stop, SimulationEvent.SIMULATION_STOPPED)
 
     def home(self) -> None:
         """Ruling 2: GUIDE's Reset under controller: oscbf. An effort- or velocity-driven arm ignores
         drive targets, so drive it home: Plan A's joint plan from the q at the next controller step,
         one target per 50 ms of the physics clock, then the home configuration held. Exempt from
         staleness until the next fresh target arrives (it replaces this one in the holder). A step
-        target instead ran joints past their URDF velocity limits (controller, B3b)."""
-        self._home = Target(mode=JOINTS, joints=self.model.home.copy())
+        target instead ran joints past their URDF velocity limits (controller, B3b). Home is q_rest, the
+        scene's default_joint_states, as for the attach teleport and the nullspace (FINAL-B M1). Reset's
+        reset.yaml drives the fingers behind the host's back, so the next width is written whatever it is."""
+        self._home = Target(mode=JOINTS, joints=np.asarray(self._controller.q_rest, float).copy())
+        self._width = None
         self.holder.put(self._home)
 
-    def _outside(self, q) -> list:
-        return [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
+    def _breach(self, q) -> str:
+        """What puts q outside the controller's barriers: joints outside their limits, and the lowest barrier."""
+        h = np.asarray(self._controller.barrier_values(q))
+        outside = [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
+        return (f"joints outside their limits: {outside}; " if outside else "") + f"lowest barrier #{int(np.argmin(h))} = {h.min():.4g}"
 
     def _log(self, level, message):
         if self._logger is not None:
@@ -149,7 +153,7 @@ class OscbfHost:
     def _refuse(self, reason: str) -> bool:
         """Spec 8: not registered for OSCBF control, with the failing check named; the robot stays position-driven."""
         self.diagnostics["refused"] = reason
-        self._log("error", f"robot not registered for OSCBF control, it stays position-driven: {reason}")
+        self._log("error", f"robot not registered for OSCBF control, refused: {reason}; it stays position-driven")
         return False
 
     def _on_stop(self, event) -> None:
@@ -169,16 +173,21 @@ class OscbfHost:
             if self._attached or self._attach(dt):
                 self._control(dt)
         except Exception as error:  # in the physics callback: never leave an effort-driven arm limp, nor retry
-            self._refuse(f"{type(error).__name__}: {error}")
-            self._release()
+            reason = f"{type(error).__name__}: {error}"
+            self.diagnostics["refused"] = reason  # first: whatever raises below, no retry
+            self._release()  # then the drives, before the log (a logger can raise too)
+            self._refuse(reason)
 
     def _release(self) -> None:
-        """After an error: the arm back on its position drives at its current pose, if they were switched."""
+        """After an error: the arm back on its position drives at its current pose, if they were switched.
+        The switch comes first: the read after it fails when a dead view caused the error."""
         if not self._switched:
             return
         try:
-            q = self._arm.get_dof_positions().numpy()[0][self._arm_dofs]
             self._arm.switch_dof_control_mode("position", dof_indices=self._arm_dofs)
+            if self.mode == "velocity":  # the last velocity targets would stay on the drives
+                self._arm.set_dof_velocity_targets(np.zeros((1, len(self._arm_dofs))), dof_indices=self._arm_dofs)
+            q = self._arm.get_dof_positions().numpy()[0][self._arm_dofs]
             self._arm.set_dof_position_targets(np.asarray(q)[None], dof_indices=self._arm_dofs)
         except Exception as error:
             self._log("error", f"could not put the arm back on its position drives: {type(error).__name__}: {error}")
@@ -213,7 +222,10 @@ class OscbfHost:
         if self.mode == "velocity":  # the drive pushes D (v_target - v): gravity needs v_target += tau_g / D (FIX B4-2)
             limit = self._controller.limit  # step's NaN guard and URDF clip, kept for the sum
             u = np.clip(np.nan_to_num(u + np.asarray(self._controller.gravity(q)) / self._damping), -limit, limit)
-        self.diagnostics["infeasible"] = self._controller.events["infeasible"]
+        n = self._controller.events["infeasible"]
+        if n > self.diagnostics["infeasible"] and n & (n - 1) == 0:  # 1, 2, 4, 8, ...: no flood at 120 Hz
+            self._log("warning", f"QP infeasible or non-finite output ({n} since attach): damping + gravity")
+        self.diagnostics["infeasible"] = n
         self._u = u
         self._write(u)
         width = (self._hold or target).gripper_width
@@ -261,8 +273,7 @@ class OscbfHost:
             rest = np.asarray(self._controller.q_rest, float)  # inside the barriers: checked at registration
             arm.set_dof_positions(rest[None], dof_indices=self._arm_dofs)
             arm.set_dof_velocities(np.zeros((1, len(rest))), dof_indices=self._arm_dofs)
-            self._log("warning", f"q {np.round(q, 4).tolist()} is outside the controller's barriers "
-                                 f"(joints outside their limits: {self._outside(q)}): set to q_rest")
+            self._log("warning", f"q {np.round(q, 4).tolist()} is outside the controller's barriers ({self._breach(q)}): set to q_rest")
         if self.mode == "velocity":  # read before the switch: velocity mode keeps the drives' damping
             # tau_g / D needs force drives: an acceleration drive scales its force by the joint inertia
             types = [arm.get_dof_drive_types()[0][i] for i in self._arm_dofs]
@@ -281,6 +292,7 @@ class OscbfHost:
             self._data = self._host if on_cpu else wp.zeros(sample.shape, dtype=wp.float32, device=sample.device)
             self._index = wp.array([0], dtype=wp.int32, device=sample.device)
         self._t, self._k, self._hold, self._width, self._homing = 0.0, 0, None, None, None  # the clock restarts
+        self._controller.events["infeasible"] = self.diagnostics["infeasible"] = 0  # counted per attach
         self._attached = True
         damping = f", drive damping {np.round(self._damping, 3).tolist()}" if self.mode == "velocity" else ""
         self._log("info", f"attached: {self.mode}, controller every {self.every} substep(s), {'tensor view' if self._view else 'API'} I/O{damping}")
@@ -326,8 +338,3 @@ class OscbfHost:
             wp.copy(self._data, self._host)
         setter = self._view.set_dof_actuation_forces if self.mode == "torque" else self._view.set_dof_velocity_targets
         setter(self._data, self._index)
-
-    def close(self) -> None:
-        for uid in self._ids:
-            SimulationManager.deregister_callback(uid)
-        self._ids = []

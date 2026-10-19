@@ -318,12 +318,13 @@ def test_a_motion_target_of_an_unknown_mode_is_dropped_with_a_warning(isaac_impo
 
 
 def test_reset_runs_reset_yaml_before_homing(command_module):
-    """Ruling 2 pin (controller, B3b): reset.yaml places the objects and drives the fingers first;
-    the oscbf hosts are homed after it."""
+    """Ruling 2 pin (controller, B3b; FINAL-B I1/M2): reset.yaml places the objects and drives the fingers
+    first, in either dialect (instructions, or the Replicator file reset_fire runs); the oscbf hosts are
+    homed after both."""
     module = command_module("_cmd_simulator")
     calls = []
     manager = SimpleNamespace(reset_preprocess=lambda i: ["reset.yaml"], reset_postprocess=lambda i, results: True,
-                              _scenes=[SimpleNamespace(reset_fire=lambda: None)])
+                              _scenes=[SimpleNamespace(reset_fire=lambda: calls.append("reset_fire"))])
     runtime = host(
         _simulator=SimpleNamespace(_scene_manager=manager),
         _execute_instructions_directly=lambda instructions: calls.extend(instructions) or [],
@@ -332,4 +333,22 @@ def test_reset_runs_reset_yaml_before_homing(command_module):
 
     module._cmd_reset_scene(runtime, 0)
 
-    assert calls == ["reset.yaml", "home"]
+    assert calls == ["reset.yaml", "reset_fire", "home"]
+
+
+def test_register_scene_reports_refused_robots_in_its_message(isaac_import):
+    """FINAL-B M7: a robot refused at registration (missing overrides, unsafe q_rest) answered success=True
+    with an empty message; the solver then timed out. The message names it; success keeps its meaning."""
+    from guide_msgs.srv import RegisterScene
+
+    ros = isaac_import("guide_core.ros.guide_ros")
+    refused = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", diagnostics={"refused": "q_rest breaks a barrier"})
+    fine = SimpleNamespace(topic="/Sim_0/Scene_0/ur/motion_target", diagnostics={"refused": None})
+    backend = SimpleNamespace(stop=lambda: None, play=lambda: None, call=lambda name: None,
+                              register_scene=lambda path: (0, (0.0, 0.0, 0.0)), motion_hosts=lambda i: [refused, fine])
+    me = SimpleNamespace(_backend=backend, _logger=MagicMock(), _has_clock=True, _subscribe_motion_target=lambda host: None)
+
+    response = ros.GUIDEROS2Interface._register_callback(me, RegisterScene.Request(path="block_bin"), RegisterScene.Response())
+
+    assert response.success and "/Sim_0/Scene_0/franka" in response.message and "q_rest breaks a barrier" in response.message
+    assert "/ur" not in response.message

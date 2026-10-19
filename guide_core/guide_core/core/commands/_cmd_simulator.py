@@ -49,10 +49,10 @@ def _cmd_reset_scene(self, scene_id: int) -> bool:
         raise RuntimeError("Simulator reference not set on IsaacSimRuntime!")
     instructions = simulator._scene_manager.reset_preprocess(scene_id)
     results = self._execute_instructions_directly(instructions)
-    # Ruling 2: reset.yaml's drive targets do not move an oscbf arm; its host homes it
+    simulator._scene_manager._scenes[scene_id].reset_fire()  # Replicator reset file, if any
+    # Ruling 2: reset.yaml's drive targets (either dialect, now landed) do not move an oscbf arm; its host homes it
     for host in getattr(self, "_motion_hosts", {}).get(scene_id, []):
         host.home()
-    simulator._scene_manager._scenes[scene_id].reset_fire()  # Replicator reset file, if any
     return simulator._scene_manager.reset_postprocess(scene_id, results)
 
 

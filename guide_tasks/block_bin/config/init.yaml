@@ -40,7 +40,7 @@ robots:
     # ROS2Robot; the block_bin bring-up then starts no move_group. Under oscbf the arm's drives
     # are effort (torque) or velocity drives, so config/reset.yaml's drive-target homing does
     # not move it; GUIDE's Reset homes it through the OSCBF host instead (Ruling 2): a JOINTS
-    # target at the robot's home configuration, held until the next MotionTarget arrives.
+    # target at default_joint_states, held until the next MotionTarget arrives.
     controller: moveit
     oscbf:
       robot: fr3       # guide_motion/guide_motion/robots/<robot>

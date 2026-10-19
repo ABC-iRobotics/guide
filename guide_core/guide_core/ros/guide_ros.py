@@ -226,8 +226,11 @@ class GUIDEROS2Interface(Node):
             path = request.path
 
             id, offset = self._backend.register_scene(path)
-            for host in self._backend.motion_hosts(id):
+            hosts = self._backend.motion_hosts(id)
+            for host in hosts:
                 self._subscribe_motion_target(host)
+            # a robot refused at registration stays position-driven; success keeps its meaning (the scene loaded)
+            refused = [f"{host.topic.rsplit('/', 1)[0]}: {host.diagnostics['refused']}" for host in hosts if host.diagnostics["refused"]]
 
             self._logger.info(f"Registered scene with id {id} at offset {offset}")
 
@@ -238,7 +241,7 @@ class GUIDEROS2Interface(Node):
             self._backend.play()
             response.id = id
             response.offset = list(offset)
-            response.message = ""
+            response.message = f"OSCBF control refused for {'; '.join(refused)}" if refused else ""
             response.success = True
 
         except Exception as e:
