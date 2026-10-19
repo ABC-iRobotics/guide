@@ -128,6 +128,10 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" -c $
 # lerobot 0.6.1, rebuilt from the submodule modules/lerobot (7e241bd) with exactly its numpy and
 # packaging caps raised to Isaac's pins; the submodule itself is never edited:
 git -C src/guide submodule update --init modules/lerobot
+# colcon would try to identify the checkout as a package and print an ERROR on every build; hide it
+# without touching the submodule (untracked, excluded in the submodule's own info/exclude):
+touch src/guide/modules/lerobot/COLCON_IGNORE
+echo COLCON_IGNORE >> "$(git -C src/guide/modules/lerobot rev-parse --git-path info/exclude)"
 LEROBOT=$(mktemp -d)
 git -C src/guide/modules/lerobot archive HEAD | tar -x -C $LEROBOT
 python3 - $LEROBOT/pyproject.toml <<'EOF'
