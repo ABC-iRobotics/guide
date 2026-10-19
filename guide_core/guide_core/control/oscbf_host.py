@@ -17,7 +17,7 @@ from scipy.spatial.transform import Rotation
 from guide_motion import description
 from guide_motion.control import Controller, enable_compilation_cache
 from guide_motion.model import Model
-from guide_motion.targets import Target, TargetHolder
+from guide_motion.targets import JOINTS, Target, TargetHolder
 
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
 RATE = {"torque": 120.0, "velocity": 60.0}  # Hz without an oscbf.rate: every substep / once per frame (spec Q4)
@@ -62,11 +62,18 @@ class OscbfHost:
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
         self._arm = Articulation(articulation_root)
         self._attached, self._t, self._k = False, 0.0, 0
-        self._u, self._hold, self._width = None, None, None
+        self._u, self._hold, self._width, self._home = None, None, None, None
         self._ids = [
             SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP),
             SimulationManager.register_callback(self._on_stop, SimulationEvent.SIMULATION_STOPPED),
         ]
+
+    def home(self) -> None:
+        """Ruling 2: GUIDE's Reset under controller: oscbf. An effort- or velocity-driven arm ignores
+        drive targets, so hold a JOINTS target at the robot's home configuration, exempt from
+        staleness, until the next fresh target arrives (it replaces this one in the holder)."""
+        self._home = Target(mode=JOINTS, joints=self.model.home.copy())
+        self.holder.put(self._home)
 
     def _log(self, level, message):
         if self._logger is not None:
@@ -92,6 +99,8 @@ class OscbfHost:
             return
         q, qd = self._read()
         target, stale = self.holder.get(self._t)
+        if target is not None and target is self._home:
+            stale = False  # Ruling 2: Reset's home target never goes stale
         if stale != self.diagnostics["stale"]:
             self._log("warning" if stale else "info", "no target for 0.25 s: holding the pose" if stale else "targets resumed")
         self.diagnostics["stale"] = stale

@@ -283,3 +283,22 @@ def test_the_committed_mass_overrides_reach_the_scenes_robot_before_play(host_mo
     host, arm = make_host(host_module, monkeypatch, stage=robot_stage(drop={"fr3_link8"}))
     run(host, 2)
     assert "fr3_link8" in host.diagnostics["refused"] and arm.modes == [] and arm.efforts == []
+
+
+def test_home_holds_the_home_configuration_until_the_next_fresh_target(host_module, monkeypatch):
+    """Ruling 2: GUIDE's Reset. Drive targets do not move an effort-driven arm, so the host holds a
+    JOINTS target at home, never stale, until the solver's next target replaces it."""
+    from guide_motion.targets import JOINTS
+
+    host, arm = make_host(host_module, monkeypatch)
+    host.home()
+    run(host, 60)  # 0.5 s: twice the staleness timeout
+    home = host._controller.targets[-1]
+    assert home.mode == JOINTS and np.array_equal(home.joints, host.model.home)
+    assert not host.diagnostics["stale"] and all(t is home for t in host._controller.targets)
+    target = Target(position=np.array([0.4, 0.0, 0.4]))
+    host.holder.put(target)
+    run(host, 1)
+    assert host._controller.targets[-1] is target
+    run(host, 31)
+    assert host.diagnostics["stale"] and host._controller.targets[-1].mode == POSE  # the ordinary stale hold

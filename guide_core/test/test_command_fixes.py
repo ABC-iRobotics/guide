@@ -257,3 +257,19 @@ def test_a_nan_gripper_width_passes_through_to_leave_the_gripper(isaac_import):
 
     target, stale = target_host.holder.get(0.0)
     assert not stale and target.mode == JOINTS and math.isnan(target.gripper_width)
+
+
+def test_reset_homes_the_oscbf_robots_of_that_scene(command_module):
+    module = command_module("_cmd_simulator")
+    homed = []
+    scene = SimpleNamespace(reset_fire=lambda: None)
+    manager = SimpleNamespace(reset_preprocess=lambda i: [], reset_postprocess=lambda i, results: True,
+                              _scenes=[scene, scene])
+    runtime = host(
+        _simulator=SimpleNamespace(_scene_manager=manager),
+        _execute_instructions_directly=lambda instructions: [],
+        _motion_hosts={0: [SimpleNamespace(home=lambda: homed.append(0))], 1: [SimpleNamespace(home=lambda: homed.append(1))]},
+    )
+
+    assert module._cmd_reset_scene(runtime, 1) is True
+    assert homed == [1]
