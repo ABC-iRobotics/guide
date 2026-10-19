@@ -7,6 +7,7 @@ uint8 MODE_JOINTS=2
 uint8 mode
 string frame_id                        # the robot base link
 geometry_msgs/Pose pose
-geometry_msgs/Twist twist
-float64[] joints
+geometry_msgs/Twist twist              # linear m/s, angular rad/s
+float64[] joints                       # rad, the arm joints
+# NaN = leave the gripper; publishers must set it (the default 0.0 closes the hand)
 float64 gripper_width                  # metres, absolute
