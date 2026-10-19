@@ -1,0 +1,142 @@
+{
+  "akita_black_bowl": {
+    "bodies": 2,
+    "error": null,
+    "joints": [
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 1,
+    "msh_converted": 1,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/akita_black_bowl/akita_black_bowl.usda"
+  },
+  "cookies": {
+    "bodies": 2,
+    "error": null,
+    "joints": [
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 1,
+    "msh_converted": 1,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/cookies/cookies.usda"
+  },
+  "flat_stove": {
+    "bodies": 6,
+    "error": null,
+    "joints": [
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "button",
+        "type": "PhysicsRevoluteJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 2,
+    "msh_converted": 2,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/flat_stove/flat_stove.usda"
+  },
+  "glazed_rim_porcelain_ramekin": {
+    "bodies": 2,
+    "error": null,
+    "joints": [
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 1,
+    "msh_converted": 1,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/glazed_rim_porcelain_ramekin/glazed_rim_porcelain_ramekin.usda"
+  },
+  "plate": {
+    "bodies": 2,
+    "error": null,
+    "joints": [
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 1,
+    "msh_converted": 1,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/plate/plate.usda"
+  },
+  "wooden_cabinet": {
+    "bodies": 6,
+    "error": null,
+    "joints": [
+      {
+        "name": "top_level",
+        "type": "PhysicsPrismaticJoint"
+      },
+      {
+        "name": "middle_level",
+        "type": "PhysicsPrismaticJoint"
+      },
+      {
+        "name": "bottom_level",
+        "type": "PhysicsPrismaticJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      },
+      {
+        "name": "PhysicsFixedJoint",
+        "type": "PhysicsFixedJoint"
+      }
+    ],
+    "meshes": 7,
+    "msh_converted": 7,
+    "ok": true,
+    "usd": "/home/user/libero_assets/usd/wooden_cabinet/wooden_cabinet.usda"
+  }
+}
