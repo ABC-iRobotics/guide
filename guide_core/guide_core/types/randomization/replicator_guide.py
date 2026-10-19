@@ -209,6 +209,15 @@ def _get(node, attr: str):
     return og.AttributeValueHelper(node.get_attribute(attr)).get()
 
 
+def _reseed(rng, seed: int, current: int) -> None:
+    """Restart every sampler from ``seed``. Replicator's set_global_seed() ignores a seed equal to
+    the current setting (an unset one reads 0), so seed 0 on a fresh app or a repeated seed would
+    leave the samplers mid-stream: step through another value so the change subscription fires."""
+    if seed == current:
+        rng.set_global_seed(seed ^ 1)
+    rng.set_global_seed(seed)
+
+
 def fire(
     state: dict[str, Any],
     seed: int | None = None,
@@ -219,6 +228,7 @@ def fire(
     the named samples. Used for randomize (seeded, zoned) and reset (neither)."""
     import time
 
+    import carb.settings
     import omni.kit.app
     import omni.replicator.core as rep
     from omni.replicator.core.utils import rng
@@ -227,7 +237,8 @@ def fire(
     if seed is not None:
         # A global-seed *change* resets every sampler from (seed, node id) -- through a
         # settings subscription that runs on the next app update, so pump one before firing.
-        rng.set_global_seed(int(seed) % (2**31 - 1))  # the graph's seed slot is 32-bit
+        current = carb.settings.get_settings().get_as_int("/omni/replicator/globalSeed")
+        _reseed(rng, int(seed) % (2**31 - 1), current)  # the graph's seed slot is 32-bit
         omni.kit.app.get_app().update()
     t1 = time.perf_counter()
 
