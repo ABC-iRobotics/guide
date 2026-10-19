@@ -57,6 +57,7 @@ class FakeArm:
         self.damping = np.full(9, 100.0)  # the drives' damping (velocity mode keeps it, stiffness 0)
         self.drive_types = ["force"] * 9
         self.efforts, self.velocity_targets, self.finger_targets, self.modes = [], [], [], []
+        self.teleports = []
 
     def get_link_masses(self):
         return Arr([self.props[n][0] for n in self.link_names])
@@ -85,6 +86,13 @@ class FakeArm:
     def get_dof_velocities(self):
         return Arr(np.zeros(9))
 
+    def set_dof_positions(self, x, dof_indices):
+        self.q[list(dof_indices)] = np.asarray(x)[0]
+        self.teleports.append(np.array(x[0]))
+
+    def set_dof_velocities(self, x, dof_indices):
+        pass
+
     def get_dof_drive_types(self):
         return [list(self.drive_types)]
 
@@ -109,6 +117,8 @@ class FakeController:
 
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
+        self.q_rest = np.asarray(args[2] if len(args) > 2 and args[2] is not None else model.home, float)
+        self.barrier_values = lambda q: np.r_[q - model.lower, model.upper - q]  # the joint-limit barriers
         self.gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
         self.limit = model.max_velocity if mode == "velocity" else model.max_effort
         FakeController.made += 1
@@ -148,13 +158,13 @@ def robot_stage(drop=()):
     return stage
 
 
-def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, **arm):
+def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, q_rest=None, **arm):
     model = Model.load(ROBOT)
     fake = FakeArm(Model.load(ROBOT), model.home, **arm)
     stage = robot_stage() if stage is None else stage
     monkeypatch.setattr(module, "Articulation", lambda path: fake)
     monkeypatch.setattr(module, "get_current_stage", lambda: stage)
-    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate)
+    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate, q_rest=q_rest)
     return host, fake
 
 
@@ -467,3 +477,25 @@ def test_velocity_drives_that_are_not_force_drives_refuse_the_robot(host_module,
     arm.drive_types[1] = "acceleration"
     run(host, 2)
     assert "fr3_joint2" in host.diagnostics["refused"] and arm.modes == [] and arm.velocity_targets == []
+
+
+def test_an_arm_restarted_outside_its_safe_set_is_put_at_q_rest(host_module, monkeypatch):
+    """Smoke test, second RegisterScene: GUIDE's stop/play reverts the joints to the asset's authored
+    zeros, outside the FR3's j4 and j6 limits. Started outside its barrier set the controller
+    deadlocked against PhysX's joint limit: a limp-looking arm that no target moved. At attach the
+    host now puts such an arm at q_rest (GUIDE's default_joint_states), as position drives would."""
+    host, arm = make_host(host_module, monkeypatch)
+    arm.q[:7] = 0.0  # j4 0 > -0.1518, j6 0 < 0.5445
+    run(host, 2)
+    assert host.diagnostics["refused"] is None and arm.modes == [("effort", list(range(7)))]
+    np.testing.assert_allclose(arm.q[:7], host._controller.q_rest)
+    held = host._controller.targets[-1]
+    np.testing.assert_allclose(held.position, host.model.ee_pose(host._controller.q_rest)[0], atol=1e-6)
+
+
+def test_a_restart_outside_the_safe_set_with_an_unsafe_q_rest_refuses_the_robot(host_module, monkeypatch):
+    host, arm = make_host(host_module, monkeypatch, q_rest=[0.0] * 7)
+    arm.q[:7] = 0.0
+    run(host, 2)
+    assert "fr3_joint4" in host.diagnostics["refused"] and "q_rest" in host.diagnostics["refused"]
+    assert arm.modes == [] and arm.efforts == [] and arm.teleports == []

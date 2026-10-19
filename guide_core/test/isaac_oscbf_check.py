@@ -8,6 +8,9 @@ square: 2 s hold, then a 10 cm square at 10 cm/s as a 20 Hz zero-order hold: mea
         on lap 2 <= 3 mm (torque) / 2 mm (velocity); no NaN; |command| <= the URDF limits. Saves q.
 home:   start 1 rad off home on joints 1, 2 and 4, then host.home() (Reset under oscbf, Ruling 2):
         peak |qd| per joint against the URDF velocity limits (controller, B3b); final error <= 0.01 rad.
+restart: 1 s, then World.stop() and play() as GUIDE's second RegisterScene does (the joints revert
+        to the asset's authored state), then a 2 s stale hold (mean <= 0.1 mm over its last second) and
+        3 s of a JOINTS target with joint 1 at home + 0.3 rad (final error <= 0.01 rad).
 rtf:    frame time over the square; --mode baseline records an awake arm without a controller,
         a controller run given --baseline must add <= 2.5 ms (torque) / 1.2 ms (velocity).
 Writes --out JSON, exits 1 when a threshold fails. Not collected by pytest (no test_ prefix).
@@ -22,7 +25,7 @@ from types import SimpleNamespace
 parser = argparse.ArgumentParser()
 parser.add_argument("--robot", choices=["fr3", "panda"], required=True)
 parser.add_argument("--mode", choices=["torque", "velocity", "baseline"], required=True)
-parser.add_argument("--check", choices=["hold", "square", "rtf", "home"], required=True)
+parser.add_argument("--check", choices=["hold", "square", "rtf", "home", "restart"], required=True)
 parser.add_argument("--baseline", help="rtf: the baseline run's JSON")
 parser.add_argument("--out", required=True)
 args = parser.parse_args()
@@ -45,13 +48,14 @@ from pxr import UsdLux  # noqa: E402
 from guide_core.control.oscbf_host import OscbfHost  # noqa: E402
 from guide_motion import description  # noqa: E402
 from guide_motion.model import Model  # noqa: E402
-from guide_motion.targets import Target  # noqa: E402
+from guide_motion.targets import JOINTS, Target  # noqa: E402
 
 PHYSICS_HZ, FRAME_HZ, TARGET_HZ = 120, 60, 20.0
 HOLD_S, LAP_S, SETTLE_FRAMES = 2.0, 4.0, 30
 SQUARE = np.array([[0, 0, 0], [0, 0.1, 0], [0.1, 0.1, 0], [0.1, 0, 0], [0, 0, 0]], float)  # +y, +x, -y, -x
 LIMIT = {"hold": 0.1, "square": {"torque": 3.0, "velocity": 2.0}, "rtf": {"torque": 2.5, "velocity": 1.2}}
 FAR = np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0])  # home check: start offset from home, rad
+MOVED = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # restart check: the joint target's offset from home, rad
 
 
 def square_offset(t):
@@ -108,13 +112,22 @@ if args.check != "rtf":  # a per-substep read would bill the RTF run
 
     SimulationManager.register_callback(on_post_step, SimulationEvent.PHYSICS_POST_STEP)
 
-frames = int(5.0 * FRAME_HZ) if args.check in ("hold", "home") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
+if args.check == "restart":  # GUIDE's second RegisterScene: stop and play with the host registered
+    for _ in range(FRAME_HZ):
+        world.step(render=True)
+    world.stop()
+    world.play()
+    log.clear()
+frames = int(5.0 * FRAME_HZ) if args.check in ("hold", "home", "restart") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
 frame_ms, last_k = [], -1
 for i in range(frames):
     t = i / FRAME_HZ
     k = int(t * TARGET_HZ)
     if host is not None and args.check in ("square", "rtf") and k != last_k:
         host.holder.put(Target(position=p0 + square_offset(t), rotation=R0))  # GUIDE's ROS thread does this
+        last_k = k
+    if args.check == "restart" and t >= HOLD_S and k != last_k:
+        host.holder.put(Target(mode=JOINTS, joints=model.home + MOVED))
         last_k = k
     start = time.perf_counter()
     world.step(render=True)
@@ -150,6 +163,11 @@ else:
                       qd_over_limit=float((peak / model.max_velocity).max()),
                       final_error_rad=float(np.abs(q[-1] - model.home).max()), stale=host.diagnostics["stale"])
         ok = ok and result["qd_over_limit"] <= 1.0 + 1e-6 and result["final_error_rad"] <= 1e-2 and not result["stale"]  # 1e-6: float32 PhysX cap (2.62f vs 2.61999977), as u_over_limit
+    elif args.check == "restart":
+        error = 1e3 * np.linalg.norm(p - p[0], axis=1)[(t >= 1.0) & (t < HOLD_S)]  # p[0]: the pose held after the restart
+        result.update(restart_q=q[0].round(4).tolist(), hold_mm_mean=float(error.mean()), hold_mm_max=float(error.max()),
+                      moved_error_rad=float(np.abs(q[-1] - (model.home + MOVED)).max()), stale=host.diagnostics["stale"])
+        ok = ok and result["hold_mm_mean"] <= LIMIT["hold"] and result["moved_error_rad"] <= 1e-2 and not result["stale"]
     else:
         path = np.array([p0 + square_offset(HOLD_S + x) for x in np.linspace(0, LAP_S, 4000, endpoint=False)])
         lap2 = t >= HOLD_S + LAP_S

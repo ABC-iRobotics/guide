@@ -195,6 +195,18 @@ class OscbfHost:
         error_g = np.linalg.norm(np.asarray(man.gravity_vector(q)) - g) / np.linalg.norm(g)
         if max(error_M, error_g) > DYNAMICS_TOL:
             return self._refuse(f"dynamics check failed: M {error_M:.1e}, g {error_g:.1e} relative > {DYNAMICS_TOL}; PhysX links {names}")
+        if np.min(self._controller.barrier_values(q)) <= 0.0:
+            # A stop reverts the joints to the asset's authored state (the FR3's zeros break its j4 and j6
+            # limits). Started outside its barriers the controller deadlocks against PhysX's joint limits,
+            # so the arm goes where position drives would take it: q_rest (GUIDE's default_joint_states).
+            rest = np.asarray(self._controller.q_rest, float)
+            outside = [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
+            where = f"q {np.round(q, 4).tolist()} is outside the controller's barriers (joints outside their limits: {outside})"
+            if np.min(self._controller.barrier_values(rest)) <= 0.0:
+                return self._refuse(f"{where}, and so is q_rest {rest.tolist()}")
+            arm.set_dof_positions(rest[None], dof_indices=self._arm_dofs)
+            arm.set_dof_velocities(np.zeros((1, len(rest))), dof_indices=self._arm_dofs)
+            self._log("warning", f"{where}: set to q_rest")
         if self.mode == "velocity":  # read before the switch: velocity mode keeps the drives' damping
             # tau_g / D needs force drives: an acceleration drive scales its force by the joint inertia
             types = [arm.get_dof_drive_types()[0][i] for i in self._arm_dofs]
