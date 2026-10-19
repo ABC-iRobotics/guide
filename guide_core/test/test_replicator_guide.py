@@ -32,6 +32,26 @@ def test_principal_axis():
         rg.principal_axis([1, 1, 0])
 
 
+class FakeRng:
+    """omni.replicator.core rng.set_global_seed: an unchanged value is a no-op, so no sampler restarts."""
+
+    def __init__(self, current):
+        self.current, self.restarts = current, []
+
+    def set_global_seed(self, seed):
+        if seed == self.current:
+            return
+        self.current = seed
+        self.restarts.append(seed)
+
+
+@pytest.mark.parametrize("current, seed", [(0, 0), (5, 5), (3, 5)])
+def test_reseed_restarts_the_samplers_even_for_an_unchanged_seed(current, seed):
+    rng = FakeRng(current)
+    rg._reseed(rng, seed, current)
+    assert rng.current == seed and rng.restarts[-1] == seed
+
+
 def test_event_name_and_scene_suffix():
     doc = {"a": {"trigger.on_custom_event": {"event_name": "guide_reset"}},
            "b": {"trigger.on_custom_event": {"event_name": "guide_reset"}}}
