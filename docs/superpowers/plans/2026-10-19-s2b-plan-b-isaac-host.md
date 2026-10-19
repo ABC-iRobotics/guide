@@ -14,6 +14,19 @@
 
 **Sources:** the measurement that already ran OSCBF in this callback: `/home/user/libero_assets/s2b_inputs/oscbf_isaac/run.py` (callback registration, `switch_dof_control_mode`, `arm._physics_articulation_view` raw I/O with `wp.from_numpy(..., device=...)` and a `wp.int32` index array, mass-property getters, warm-up) and its `report.md`; GUIDE's command/ROS layout in `/home/user/libero_assets/s2b_inputs/s2b-facts.md`.
 
+## Rulings (user, 2026-10-19 16:03 — these override any earlier text in this document)
+
+1. **Infeasible QP / non-finite output:** apply joint damping **plus gravity compensation** (torque mode), never damping alone.
+2. **Reset under `controller: oscbf`:** the host serves GUIDE's Reset by sending a joint-mode target to the robot's home configuration (drive `targetPosition`s are ignored by an effort- or velocity-driven arm).
+3. **Speed and velocity profile:** GUIDE-EX's `speed` maps to the planner's cruise speed `v_max = speed × 0.5 m/s`. The streamed targets follow an exponential speed profile:
+   - **Approach:** `v(d) = v_max · (1 − e^(−d/λ))` with `d` the remaining distance and `λ = v_max / ω`, where ω = √kp_task (12.2 rad/s for kp 150). The commanded deceleration then matches the controller's critically damped decay.
+   - **Start:** a mirrored exponential ramp-up from rest, capped by the robot's acceleration limit.
+   - **Arrival:** a 5 mm/s floor, and the exact goal is sent once `d` is below one 50 ms step.
+   - **Timeout:** `2 s + 2 × planned duration`.
+4. **Coordinates:** every interface a solver, policy or dataset sees is in the **robot's base frame** (`robots.<name>.base_name`, e.g. `fr3_link0`): GUIDE-EX poses, `MotionTarget`, `ROS2Robot`, the PoseRequest results and the recorded states and actions. GUIDE alone converts between that frame and the actual scene/world coordinates, per scene and per robot, so several scenes work at once and datasets are alike whichever scene recorded them. No `/tf` lookup in the solver.
+5. **Recording the controller inputs:** a record field in the task's `init.yaml` `dataset` section selects it (e.g. `action: controller_input`). The recorder then stores the `MotionTarget` handed to the controller at 20 Hz (delta action, gripper width, absolute target) instead of the joint command.
+6. **Strict version compatibility:** `uv pip check` must report **zero** lines; no `--override`. If lerobot's caps conflict with Isaac's exact pins, find a lerobot release that resolves cleanly with Isaac 6.0.1's pins (or report BLOCKED with the exact conflict). Never weaken a pin.
+
 ## Spec questions (recorded; the plan follows the reading shown)
 
 1. **"At registration: … read the mass properties … call `Controller.warm_up()`."** PhysX's mass properties exist only after play, and the compiled step bakes the masses in. Reading: the host compiles at registration with the committed description, whose inertials are PhysX's own for the bare asset (Plan A). At the first substep after play it reads PhysX and recompiles only when the scene differs (for example block_bin's wrist camera). That one-off stall comes right after registration, never mid-episode, and is logged.
