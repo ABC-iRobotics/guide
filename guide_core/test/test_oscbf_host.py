@@ -180,7 +180,7 @@ def test_velocity_mode_runs_once_per_frame_and_stops_when_stale(host_module, mon
     assert arm.modes == [("velocity", list(range(7)))] and host.every == 2
     assert len(host._controller.targets) == 10 and len(arm.velocity_targets) == 10
     run(host, 40)
-    assert host.diagnostics["stale"] and np.all(arm.velocity_targets[-1] == 0)
+    assert host.diagnostics["stale"] and host._controller.targets[-1] is host._hold  # FIX B4: holds, not zero velocity
 
 
 def test_gripper_width_is_one_finger_target_written_once(host_module, monkeypatch):
@@ -385,3 +385,15 @@ def test_a_missing_override_layer_refuses_the_robot_unless_it_has_no_override(ho
     host, arm = make_host(host_module, monkeypatch)
     run(host, 2)
     assert host.diagnostics["refused"] is None and arm.modes == [("effort", list(range(7)))]
+
+
+def test_velocity_mode_holds_the_latched_pose_when_stale(host_module, monkeypatch):
+    """FIX B4 (controller ruling): on PhysX velocity drives (stiffness 0) a zero velocity target is only
+    a damper, and the FR3 sagged 9.5 mm in 5 s. Stale, velocity mode steps the controller on the latched
+    pose, as torque mode does."""
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    run(host, 6)
+    held = host._controller.targets
+    assert host.diagnostics["stale"] and len(held) == 3 and held[0].mode == POSE and all(t is held[0] for t in held)
+    np.testing.assert_allclose(held[0].position, host.model.ee_pose(host.model.home)[0], atol=1e-6)
+    assert len(arm.velocity_targets) == 3 and np.all(arm.velocity_targets[-1] == 0.5)

@@ -141,10 +141,9 @@ class OscbfHost:
         elif self._hold is None:
             position, rotation = self.model.ee_pose(q)
             self._hold = Target(position=position, rotation=rotation)
-        if stale and self.mode == "velocity":
-            u = np.zeros(len(q))
-        else:
-            u = self._controller.step(self._hold or target, q, qd)
+        # stale: the controller holds the latched pose in both modes. A zero velocity target cannot:
+        # on velocity drives (stiffness 0) it is only a damper, and the arm sags (FIX B4)
+        u = self._controller.step(self._hold or target, q, qd)
         self.diagnostics["infeasible"] = self._controller.events["infeasible"]
         self._u = u
         self._write(u)
