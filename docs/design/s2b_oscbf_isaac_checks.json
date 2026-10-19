@@ -240,5 +240,38 @@
   "moved_error_rad": 0.001028710174560521,
   "stale": false,
   "pass": true
+ },
+ "fr3_baseline_rtf2": {
+  "robot": "fr3",
+  "mode": "baseline",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 9.788005977276374,
+  "spikes_over_40ms": 20,
+  "pass": true
+ },
+ "fr3_torque_rtf2": {
+  "robot": "fr3",
+  "mode": "torque",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 13.253200209013597,
+  "spikes_over_40ms": 12,
+  "infeasible": 0,
+  "refused": null,
+  "added_ms": 3.4651942317372235,
+  "pass": false
+ },
+ "fr3_velocity_rtf2": {
+  "robot": "fr3",
+  "mode": "velocity",
+  "check": "rtf",
+  "frames": 600,
+  "frame_ms_mean": 11.848670117708028,
+  "spikes_over_40ms": 21,
+  "infeasible": 0,
+  "refused": null,
+  "added_ms": 2.060664140431655,
+  "pass": false
  }
 }
