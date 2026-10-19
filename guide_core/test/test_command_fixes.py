@@ -197,7 +197,7 @@ def test_motion_targets_are_subscribed_depth_one_and_converted(isaac_import):
     subscriptions = []
     me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
                          create_subscription=lambda *args, **kwargs: subscriptions.append(args))
-    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(), reset_time=None,
                                   model=SimpleNamespace(base_link="fr3_link0"))
 
     ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
@@ -225,7 +225,7 @@ def test_a_motion_target_with_a_zero_quaternion_is_dropped_with_a_warning(isaac_
     subscriptions = []
     me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
                          create_subscription=lambda *args, **kwargs: subscriptions.append(args))
-    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(), reset_time=None,
                                   model=SimpleNamespace(base_link="fr3_link0"))
     ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
     (_, _, put, _), = subscriptions
@@ -251,7 +251,7 @@ def test_a_nan_gripper_width_passes_through_to_leave_the_gripper(isaac_import):
     subscriptions = []
     me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
                          create_subscription=lambda *args, **kwargs: subscriptions.append(args))
-    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(), reset_time=None,
                                   model=SimpleNamespace(base_link="fr3_link0", arm_joints=ARM_JOINTS))
     ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
     (_, _, put, _), = subscriptions
@@ -286,11 +286,33 @@ def motion_subscription(isaac_import):
     subscriptions = []
     me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
                          create_subscription=lambda *args, **kwargs: subscriptions.append(args))
-    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(), reset_time=None,
                                   model=SimpleNamespace(base_link="fr3_link0", arm_joints=ARM_JOINTS))
     ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
     (_, _, put, _), = subscriptions
     return me, target_host, put
+
+
+def test_a_motion_target_stamped_at_or_before_the_last_reset_is_dropped(isaac_import):
+    """FIX C2-2: a target already in flight when GUIDE's Reset homed the arm must not undo the
+    homing. The Reset at 12.5 s of sim time, the /clock the solver stamps its targets from."""
+    from builtin_interfaces.msg import Time
+    from guide_msgs.msg import MotionTarget
+
+    me, target_host, put = motion_subscription(isaac_import)
+    target_host.reset_time = 12.5
+
+    def stamped(sec, nanosec):
+        return MotionTarget(mode=MotionTarget.MODE_JOINTS, frame_id="fr3_link0", joints=[0.1] * 7,
+                            gripper_width=float("nan"), stamp=Time(sec=sec, nanosec=nanosec))
+
+    put(stamped(12, 400_000_000))  # before the Reset
+    put(stamped(12, 500_000_000))  # at it
+    assert target_host.holder.get(0.0) == (None, True)
+    me._logger.warning.assert_called_with(
+        f"{target_host.topic}: target stamped before the last Reset: dropped", throttle_duration_sec=5.0)
+    put(stamped(12, 500_000_001))  # after it
+    assert target_host.holder.get(0.0)[0] is not None
 
 
 def test_a_joints_target_of_the_wrong_length_is_dropped_with_a_warning(isaac_import):

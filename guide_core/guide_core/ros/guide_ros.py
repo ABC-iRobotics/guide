@@ -259,6 +259,10 @@ class GUIDEROS2Interface(Node):
         of 10, 110 ms stale at 100 Hz). Each message is one lock-protected slot write."""
 
         def put(msg: MotionTarget) -> None:
+            # ponytail: check-then-put is not atomic with home(); a target racing it by microseconds can still win
+            if host.reset_time is not None and msg.stamp.sec * 10**9 + msg.stamp.nanosec <= round(host.reset_time * 1e9):
+                self._logger.warning(f"{host.topic}: target stamped before the last Reset: dropped", throttle_duration_sec=5.0)
+                return
             if msg.frame_id and msg.frame_id != host.model.base_link:
                 self._logger.warning(
                     f"{host.topic}: target in '{msg.frame_id}', expected '{host.model.base_link}'; dropped",

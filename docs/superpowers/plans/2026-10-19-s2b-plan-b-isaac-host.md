@@ -39,6 +39,7 @@
 - **Standalone check script (Task 4)** loads `description.ROBOTS_DIR / robot / f"{robot}.usda"` for both robots, never the bare asset, so the FR3 is validated on Ruling 10's masses.
 - **Non-finite state:** `Controller.step` maps non-finite output to 0 and counts it as infeasible (Plan A); the host writes step's output as is.
 - **Ruling 5 (recording the controller inputs)** belongs to S6/S7, which own the dataset schema (spec 4.1), not Plan B.
+- **Targets in flight across a Reset (Plan C FIX C2-2, 2026-10-20):** `OscbfHost.home()` records the sim time of the Reset (`SimulationManager.get_simulation_time()`, the time `/clock` publishes) in `reset_time`, cleared on stop; GUIDE's `motion_target` put drops a `MotionTarget` whose `stamp` is at or before it ("stamped before the last Reset: dropped", throttled). No solver-side lock can order a target already published against the later Reset service call.
 - **Deferred from Plan A:** FR3 link7's small inertia (2.8e-4) and the Panda's fixed base (no root FixedJoint in franka.usd; PhysX runs it fixed, drift 0.0) are exercised by Task 4's hold and square checks.
 
 ## Spec questions (recorded; the plan follows the reading shown)

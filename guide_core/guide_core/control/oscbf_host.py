@@ -101,6 +101,7 @@ class OscbfHost:
     def __init__(self, articulation_root: str, robot: str = "fr3", mode: str = "torque", gains=None,
                  rate=None, barriers=None, q_rest=None, logger=None):
         self.holder = TargetHolder(stale_after=0.25)
+        self.reset_time = None  # sim time (/clock's) of the last Reset; guide_ros drops targets stamped at or before it
         self.mode, self.rate, self._logger = mode, rate or RATE[mode], logger
         self.diagnostics = {"stale": True, "infeasible": 0, "refused": None}
         self.model = Model.load(robot)
@@ -138,6 +139,9 @@ class OscbfHost:
         reset.yaml drives the fingers behind the host's back, so the next width is written whatever it is."""
         self._home = Target(mode=JOINTS, joints=np.asarray(self._controller.q_rest, float).copy())
         self._width = None
+        # before the put: a target the solver published before this Reset, still in flight, carries a stamp
+        # at or before it and is dropped (FIX C2-2); every later one comes after the solver's wait for home
+        self.reset_time = SimulationManager.get_simulation_time()
         self.holder.put(self._home)
 
     def _breach(self, q) -> str:
@@ -158,6 +162,7 @@ class OscbfHost:
 
     def _on_stop(self, event) -> None:
         self._attached = self._switched = False  # PhysX rebuilds the articulation (gains, modes) on the next play
+        self.reset_time = None  # /clock restarts at 0 on play: an old Reset time would drop every new target
         # The physics clock restarts on play: a target from before the stop would turn fresh again
         # once the new clock passed the time it was put at. Targets put from now on go to the new slot.
         # ponytail: a put racing this swap lands in the old slot and is lost; the next 20 Hz target replaces it

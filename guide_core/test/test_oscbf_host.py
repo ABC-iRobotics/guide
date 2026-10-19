@@ -326,6 +326,17 @@ def test_home_holds_the_home_configuration_until_the_next_fresh_target(host_modu
     assert host.diagnostics["stale"] and host._controller.targets[-1].mode == POSE  # the ordinary stale hold
 
 
+def test_home_records_the_sim_time_of_the_reset_and_a_stop_forgets_it(host_module, monkeypatch):
+    """FIX C2-2: guide_ros drops targets stamped at or before the Reset; /clock restarts at 0 on play."""
+    host, _ = make_host(host_module, monkeypatch)
+    assert host.reset_time is None
+    monkeypatch.setattr(host_module.SimulationManager, "get_simulation_time", lambda: 12.5)
+    host.home()
+    assert host.reset_time == 12.5
+    host._on_stop(None)
+    assert host.reset_time is None
+
+
 def test_the_first_substep_after_attach_runs_the_controller(host_module, monkeypatch):
     """TESTER B2-1: below the physics rate, the attach substep rewrote the last efforts, which did
     not exist yet: Isaac got None. Every play now starts with a controller step."""
