@@ -1,6 +1,6 @@
 {
  "robot": "panda",
- "pipeline_version": 1,
+ "pipeline_version": 2,
  "usd_to_urdf": {
   "panda_hand": [
    [
@@ -352,7 +352,53 @@
   "cumotion_load": "ok",
   "home_self_collision": "free",
   "random_self_collision": 0.064,
-  "mass_matrix_rel": 3.280432193797009e-06,
-  "gravity_rel": 4.465812488466911e-06
+  "mass_matrix_rel": 3.4891799889238265e-06,
+  "gravity_rel": 6.262063061347805e-06
+ },
+ "mass_override_kg": {
+  "panda_link0": {
+   "asset": 2.8142027854919434,
+   "override": 2.3966
+  },
+  "panda_link1": {
+   "asset": 2.359999656677246,
+   "override": 2.7907
+  },
+  "panda_link2": {
+   "asset": 2.379518747329712,
+   "override": 2.542
+  },
+  "panda_link3": {
+   "asset": 2.6498823165893555,
+   "override": 2.2513
+  },
+  "panda_link4": {
+   "asset": 2.6948018074035645,
+   "override": 2.2037
+  },
+  "panda_link5": {
+   "asset": 2.9812819957733154,
+   "override": 2.2855
+  },
+  "panda_link6": {
+   "asset": 1.1285806894302368,
+   "override": 1.353
+  },
+  "panda_link7": {
+   "asset": 0.40529125928878784,
+   "override": 0.35973
+  },
+  "panda_hand": {
+   "asset": 0.5583304762840271,
+   "override": 0.6544
+  },
+  "panda_leftfinger": {
+   "asset": 0.0140552232041955,
+   "override": 0.0291
+  },
+  "panda_rightfinger": {
+   "asset": 0.0140552232041955,
+   "override": 0.0291
+  }
  }
 }

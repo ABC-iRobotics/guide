@@ -1,6 +1,6 @@
 {
  "robot": "fr3",
- "pipeline_version": 1,
+ "pipeline_version": 2,
  "usd_to_urdf": {
   "fr3_link0": [
    [
@@ -385,23 +385,23 @@
    0.6271432862
   ],
   "fr3_link8": [
-   1.0,
+   0.0010000000474974513,
    null
   ],
   "fr3_hand": [
-   0.7300000190734863,
+   0.6543999910354614,
    0.6544
   ],
   "fr3_leftfinger": [
-   0.015135428868234158,
+   0.029099998995661736,
    0.0291
   ],
   "fr3_rightfinger": [
-   0.015135428868234158,
+   0.029099998995661736,
    0.0291
   ],
   "fr3_hand_tcp": [
-   1.0,
+   0.0010000000474974513,
    null
   ]
  },
@@ -412,7 +412,29 @@
   "cumotion_load": "ok",
   "home_self_collision": "free",
   "random_self_collision": 0.045,
-  "mass_matrix_rel": 1.1296404017022842e-06,
-  "gravity_rel": 1.2545456091839992e-06
+  "mass_matrix_rel": 1.0466935462921505e-06,
+  "gravity_rel": 2.977031481094945e-06
+ },
+ "mass_override_kg": {
+  "fr3_hand": {
+   "asset": 0.7300000190734863,
+   "override": 0.6544
+  },
+  "fr3_leftfinger": {
+   "asset": 0.015135428868234158,
+   "override": 0.0291
+  },
+  "fr3_rightfinger": {
+   "asset": 0.015135428868234158,
+   "override": 0.0291
+  },
+  "fr3_link8": {
+   "asset": 1.0,
+   "override": 0.001
+  },
+  "fr3_hand_tcp": {
+   "asset": 1.0,
+   "override": 0.001
+  }
  }
 }

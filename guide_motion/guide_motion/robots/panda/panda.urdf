@@ -20,7 +20,7 @@
   <link name="panda_leftfinger">
     <inertial><origin xyz="-0.0152849084 -2.00741152e-08 -0.02196756019" rpy="0 0 0" /><mass value="0.029099999" /><inertia ixx="8.530000897e-06" ixy="-4.066580126e-13" ixz="-1.059999323e-06" iyy="8.490000255e-06" iyz="9.878657365e-13" izz="1.769999885e-06" /></inertial></link>
   <link name="panda_rightfinger">
-    <inertial><origin xyz="0.01528494543 1.663098687e-08 -0.02196756023" rpy="0 0 0" /><mass value="0.029099999" /><inertia ixx="8.530000902e-06" ixy="-3.765917975e-13" ixz="1.059999305e-06" iyy="8.490000255e-06" iyz="-1.027661966e-13" izz="1.769999879e-06" /></inertial></link>
+    <inertial><origin xyz="-0.01528505498 -1.407052248e-10 -0.02196755791" rpy="0 0 0" /><mass value="0.029099999" /><inertia ixx="8.530000581e-06" ixy="-5.916041664e-13" ixz="-1.060001353e-06" iyy="8.490000255e-06" iyz="-1.265867159e-12" izz="1.770000542e-06" /></inertial></link>
   <joint name="panda_joint1" type="revolute">
     <origin xyz="-0 0 0.333" rpy="0 1.57079627 0" />
     <parent link="panda_link0" />
@@ -103,7 +103,7 @@
     <parent link="panda_hand" />
     <child link="panda_rightfinger" />
     <axis xyz="-1 0 0" />
-    <limit lower="0" upper="0.04" velocity="10.00000028" effort="7.199999809" />
+    <limit lower="0" upper="0.04" velocity="0.2000000857" effort="7.199999809" />
     <dynamics friction="0" />
     <mimic joint="panda_finger_joint1" multiplier="1" offset="0" />
     <!-- isaac:source_drive {"armature": 0.0, "instance": "linear", "source": "physx"} -->

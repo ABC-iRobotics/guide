@@ -24,3 +24,14 @@ def test_committed_descriptions_are_safe_at_home(robot):
 def test_the_panda_override_references_isaacs_asset():
     text = (description.ROBOTS_DIR / "panda" / "panda.usda").read_text()
     assert "FrankaPanda/franka.usd" in text and "physics:diagonalInertia" in text
+
+
+def test_the_fr3_masses_are_corrected():
+    """Ruling 10, as PhysX ran the committed fr3.usda: 1 g frames, franka_description's hand and fingers."""
+    meta = json.loads((description.ROBOTS_DIR / "fr3" / "description.json").read_text())
+    physx = {name: kg for name, (kg, _) in meta["mass_check_kg"].items()}
+    assert physx["fr3_link8"] == pytest.approx(0.001) and physx["fr3_hand_tcp"] == pytest.approx(0.001)
+    assert physx["fr3_hand"] == pytest.approx(0.6544) and physx["fr3_leftfinger"] == physx["fr3_rightfinger"] == pytest.approx(0.0291)
+    assert meta["mass_override_kg"]["fr3_link8"] == pytest.approx({"asset": 1.0, "override": 0.001})
+    assert "fr3_link0" not in meta["mass_override_kg"]
+    assert "FrankaFR3/fr3.usd" in (description.ROBOTS_DIR / "fr3" / "fr3.usda").read_text()

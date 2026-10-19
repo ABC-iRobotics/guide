@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "fr3"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "fr3" (
+    prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/Isaac/Robots/FrankaRobotics/FrankaFR3/fr3.usd@
+)
+{
+    over "fr3_hand" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (-0.0000376, 0.0119128, 0.020726)
+        float3 physics:diagonalInertia = (0.00029972228, 0.0017402777, 0.00186)
+        float physics:mass = 0.6544
+        quatf physics:principalAxes = (0.49651664, 0.5034593, 0.49651664, 0.5034593)
+    }
+
+    over "fr3_leftfinger" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0.015285, 0.0219675)
+        float3 physics:diagonalInertia = (0.0000016076843, 0.00000849, 0.0000086923155)
+        float physics:mass = 0.0291
+        quatf physics:principalAxes = (-0.5365081, -0.46060732, -0.46060732, 0.5365081)
+    }
+
+    over "fr3_rightfinger" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, -0.015285, 0.0219675)
+        float3 physics:diagonalInertia = (0.0000016076843, 0.00000849, 0.0000086923155)
+        float physics:mass = 0.0291
+        quatf physics:principalAxes = (0.46060732, 0.5365081, 0.5365081, -0.46060732)
+    }
+
+    over "fr3_link8" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0, 0)
+        float3 physics:diagonalInertia = (1e-7, 1e-7, 1e-7)
+        float physics:mass = 0.001
+        quatf physics:principalAxes = (1, 0, 0, 0)
+    }
+
+    over "fr3_hand_tcp" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0, 0)
+        float3 physics:diagonalInertia = (1e-7, 1e-7, 1e-7)
+        float physics:mass = 0.001
+        quatf physics:principalAxes = (1, 0, 0, 0)
+    }
+}
+

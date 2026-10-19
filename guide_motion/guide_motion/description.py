@@ -18,11 +18,12 @@ import numpy as np
 import yaml
 from scipy.spatial.transform import Rotation
 
-PIPELINE_VERSION = 1
+PIPELINE_VERSION = 2  # 2: the Panda's export fixes, base facts, mass override (ruling 10)
 ROBOTS_DIR = Path(__file__).parent / "robots"
 FRANKA_DESCRIPTION = Path.home() / "ros2_ws" / "src" / "franka_description"
 HOME = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.5708, 0.785398]  # block_bin init.yaml
 TCP_Z = 0.1034  # franka_description franka_hand.xacro tcp_xyz
+FRAME_MASS = (0.001, np.zeros(3), 1e-7 * np.eye(3))  # a frame the asset made a body: 1 g (PhysX needs > 0)
 ROBOTS = {
     # acceleration / jerk: franka_description for the FR3, Isaac's shipped Panda XRDF for the Panda
     "fr3": {
@@ -30,17 +31,25 @@ ROBOTS = {
         "accel": [10.0] * 7,
         "jerk": [5000.0] * 7,
         "datasheet": "fr3",
+        # Mass override, {USD link: franka_description link to copy | (mass, com, inertia) in the USD body
+        # frame}. Ruling 10: the hand and fingers take franka_description's; fr3_link8 and fr3_hand_tcp,
+        # frames on the real robot, are 1.0 kg bodies in Isaac 6.0's asset. link0..7 keep the asset's.
+        "mass_override": {"fr3_hand": "fr3_hand", "fr3_leftfinger": "fr3_leftfinger", "fr3_rightfinger": "fr3_rightfinger",
+                          "fr3_link8": FRAME_MASS, "fr3_hand_tcp": FRAME_MASS},
     },
     "panda": {
         "usd": "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
         "accel": [15.0, 7.5, 10.0, 12.5, 15.0, 20.0, 20.0],
         "jerk": [7500.0, 3750.0, 5000.0, 6250.0, 7500.0, 10000.0, 10000.0],
         "datasheet": "fer",
-        # franka_description's inertials written over the asset's (spec 4.2.3): the shipped inertias are
-        # ~1e-7 kg m^2, and torque control chattered. Any robot's per-link masses can be overridden so.
+        # "fer": every franka_description link, copied (spec 4.2.3: the shipped inertias are ~1e-7 kg m^2,
+        # and torque control chattered).
         "mass_override": "fer",
     },
 }
+# franka_description's right finger frame is the USD's turned pi about z (both assets keep it in the left
+# finger's orientation; measured for the FR3 by the XRDF test, for the Panda against fer.urdf.xacro).
+_FD_TO_USD = {"rightfinger": np.diag([-1.0, -1.0, 1.0, 1.0])}
 _DRIVE = re.compile(r"\s*isaac:source_drive\s+(\{.*\})\s*$", re.S)
 
 
@@ -57,6 +66,7 @@ def fix_urdf(text: str, robot: str) -> str:
 
     A: mimic multiplier -1 -> +1. B: prismatic velocity had the degree conversion -> undone.
     C: no effort -> the USD drive's max force (a mimic joint, or one without a drive, takes its leader's).
+    E: a floating joint from a parentless world link -> dropped. F: a mimic joint takes its leader's velocity.
     Joint limits stay the USD's. Visual and collision geometry are dropped: collision is
     the XRDF's spheres, and OSCBF's URDF parser would load every mesh. A missing
     <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the hand's z.
@@ -89,6 +99,10 @@ def fix_urdf(text: str, robot: str) -> str:
             limit.set("velocity", _num(float(limit.get("velocity")) * 180.0 / math.pi))
         leader = mimic.get("joint") if mimic is not None else name
         limit.set("effort", _num(effort[name] if name in effort else effort[leader]))
+    for joint in joints.values():  # F (the Panda): a mimic joint's own velocity is meaningless; its leader's
+        mimic, limit = joint.find("mimic"), joint.find("limit")
+        if mimic is not None and limit is not None:
+            limit.set("velocity", joints[mimic.get("joint")].find("limit").get("velocity"))
     for link in root.iter("link"):
         for tag in ("visual", "collision"):
             for element in link.findall(tag):
@@ -208,6 +222,22 @@ def franka_inertials(arm: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
     return out
 
 
+def mass_override(robot: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
+    """{link: (mass, com, inertia)} in the USD's body frames for the robot's mass override layer ({}: none)."""
+    spec = ROBOTS[robot].get("mass_override") or {}
+    sheet = franka_inertials(ROBOTS[robot]["datasheet"], fd) if spec else {}
+    if isinstance(spec, str):  # shorthand: every link of that franka_description arm
+        spec = {name: name for name in sheet}
+    out = {}
+    for link, value in spec.items():
+        if isinstance(value, str):  # a franka_description link, moved into the USD's body frame
+            X = next((T for suffix, T in _FD_TO_USD.items() if value.endswith(suffix)), np.eye(4))
+            (mass, com, inertia), = to_urdf_frames({link: sheet[value][0]}, {link: sheet[value][1]}, {link: sheet[value][2]}, {link: X}).values()
+            value = (mass, com, inertia)
+        out[link] = value
+    return out
+
+
 def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str):
     """Kit-free half of the pipeline: (urdf text, xrdf dict, description dict)."""
     urdf = fix_urdf(raw_urdf, robot)
@@ -242,10 +272,10 @@ def _write_mass_override(path: str, source: str, inertials: dict) -> None:
     root = stage.DefinePrim("/" + Path(path).stem, "Xform")
     root.GetReferences().AddReference(source)
     stage.SetDefaultPrim(root)
-    links = {prim.GetName(): prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.MassAPI)}
+    links = {prim.GetName(): prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.RigidBodyAPI)}
     for name, (mass, com, inertia) in inertials.items():
         diagonal, (w, x, y, z) = principal_inertia(inertia)
-        api = UsdPhysics.MassAPI(links[name])
+        api = UsdPhysics.MassAPI.Apply(links[name])
         api.CreateMassAttr().Set(float(mass))
         api.CreateCenterOfMassAttr().Set(Gf.Vec3f(*(float(v) for v in com)))
         api.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(*(float(v) for v in diagonal)))
@@ -298,14 +328,28 @@ def main(argv=None) -> None:
     tmp = Path(tempfile.mkdtemp(prefix=f"guide_motion_{robot}_"))
     source = get_assets_root_path() + ROBOTS[robot]["usd"]
     stage_path = source
-    if ROBOTS[robot].get("mass_override"):
-        stage_path = str(tmp / f"{robot}.usda")
-        _write_mass_override(stage_path, source, franka_inertials(ROBOTS[robot]["mass_override"], args.franka_description))
     context = omni.usd.get_context()
-    context.open_stage(stage_path)
-    while context.get_stage_loading_status()[2] > 0:
+    timeline = omni.timeline.get_timeline_interface()
+
+    def open_stage(path):
+        context.open_stage(path)
+        while context.get_stage_loading_status()[2] > 0:
+            app.update()
+        return context.get_stage()
+
+    override = mass_override(robot, args.franka_description)
+    if override:
+        stage = open_stage(source)  # the asset's masses as PhysX simulates them, recorded next to the override's
+        timeline.play()
         app.update()
-    stage = context.get_stage()
+        arm = Articulation(articulation_discovery.find_all_articulation_base_paths(stage)[0])
+        app.update()
+        asset_kg = dict(zip(arm.link_names, arm.get_link_masses().numpy()[0].tolist()))
+        timeline.stop()
+        app.update()
+        stage_path = str(tmp / f"{robot}.usda")
+        _write_mass_override(stage_path, source, override)
+    stage = open_stage(stage_path)
     while any(prim.IsInstanceable() for prim in stage.Traverse()):  # instanced meshes cannot feed the sphere generator
         for prim in stage.Traverse():
             if prim.IsInstanceable():
@@ -323,7 +367,6 @@ def main(argv=None) -> None:
     raw.mkdir()
     UsdToUrdfConverter(stage=stage, root_prim_path=base, mesh_dir_name="meshes", mesh_path_prefix="./").convert(str(raw / f"{robot}.urdf"))
 
-    timeline = omni.timeline.get_timeline_interface()
     timeline.play()
     for _ in range(10):
         app.update()
@@ -423,6 +466,8 @@ def main(argv=None) -> None:
         sheet = "none" if sheet is None else f"{sheet:.3f} kg"
         print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
     meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
+    if override:
+        meta["mass_override_kg"] = {n: {"asset": asset_kg.get(n), "override": float(v[0])} for n, v in override.items()}
     (out / "description.json").write_text(json.dumps(meta, indent=1))
     if stage_path != source:
         shutil.copy(stage_path, out / f"{robot}.usda")

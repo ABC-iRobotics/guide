@@ -50,6 +50,15 @@ def test_a_mimic_joint_without_a_drive_takes_its_leaders_effort():
     assert float(joints(description.fix_urdf(text, "fr3"))["fr3_finger_joint2"].find("limit").get("effort")) == 100.0
 
 
+def test_a_mimic_joint_takes_its_leaders_velocity():
+    """The Panda's export gives panda_finger_joint2 (the mimic) 0.17453293, its leader 0.00349066."""
+    a = '<limit lower="0" upper="0.04" velocity="0.00349066"/>\n    <dynamics friction="0"/>\n    <mimic'
+    assert RAW_URDF.count(a) == 1
+    text = RAW_URDF.replace(a, a.replace("0.00349066", "0.17453293"))
+    fixed = joints(description.fix_urdf(text, "fr3"))
+    assert fixed["fr3_finger_joint2"].find("limit").get("velocity") == fixed["fr3_finger_joint1"].find("limit").get("velocity")
+
+
 def links(text):
     return {link.get("name") for link in ET.fromstring(text).iter("link")}
 
@@ -155,10 +164,42 @@ def test_the_mass_override_keeps_its_sources_up_axis_and_units(tmp_path):
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
     stage.SetDefaultPrim(stage.DefinePrim("/robot", "Xform"))
-    UsdPhysics.MassAPI.Apply(stage.DefinePrim("/robot/link", "Xform"))
+    UsdPhysics.RigidBodyAPI.Apply(stage.DefinePrim("/robot/link", "Xform"))  # no MassAPI, as fr3_link8
     stage.GetRootLayer().Save()
     out = tmp_path / "override.usda"
     description._write_mass_override(str(out), str(source), {"link": (2.0, np.zeros(3), np.eye(3))})
     result = Usd.Stage.Open(str(out))
     assert UsdGeom.GetStageUpAxis(result) == UsdGeom.Tokens.z and UsdGeom.GetStageMetersPerUnit(result) == 1.0
     assert UsdPhysics.MassAPI(result.GetPrimAtPath("/override/link")).GetMassAttr().Get() == 2.0
+
+
+needs_fd = pytest.mark.skipif(not description.FRANKA_DESCRIPTION.exists(), reason="no ~/ros2_ws/src/franka_description")
+
+
+@needs_fd
+def test_the_fr3_override_corrects_the_hand_and_the_phantom_frames():
+    """Ruling 10: fr3_link8 and fr3_hand_tcp (1.0 kg bodies in Isaac 6.0's asset) become 1 g; the hand and
+    fingers take franka_description's; link0..7 keep the asset's."""
+    o = description.mass_override("fr3")
+    assert set(o) == {"fr3_hand", "fr3_leftfinger", "fr3_rightfinger", "fr3_link8", "fr3_hand_tcp"}
+    assert o["fr3_hand"][0] == 0.6544 and o["fr3_leftfinger"][0] == o["fr3_rightfinger"][0] == 0.0291
+    for frame in ("fr3_link8", "fr3_hand_tcp"):
+        mass, _, inertia = o[frame]
+        assert mass == 0.001 and 0 < np.linalg.eigvalsh(inertia).min() and inertia.max() <= 1e-7
+
+
+@needs_fd
+@pytest.mark.parametrize("robot, prefix", [("fr3", "fr3"), ("panda", "panda")])
+def test_the_right_finger_is_turned_into_the_usd_frame(robot, prefix):
+    """Both assets keep the right finger in the left finger's orientation; franka_description turns it pi about z."""
+    o = description.mass_override(robot)
+    left, right = o[f"{prefix}_leftfinger"], o[f"{prefix}_rightfinger"]
+    np.testing.assert_allclose(right[1], left[1] * [-1, -1, 1], atol=1e-12)
+    np.testing.assert_allclose(right[2], np.diag([-1, -1, 1]) @ left[2] @ np.diag([-1, -1, 1]), atol=1e-15)
+
+
+@needs_fd
+def test_the_panda_override_is_franka_description_on_every_link():
+    o = description.mass_override("panda")
+    assert set(o) == {f"panda_link{i}" for i in range(8)} | {"panda_hand", "panda_leftfinger", "panda_rightfinger"}
+    assert o["panda_hand"][0] == 0.6544
