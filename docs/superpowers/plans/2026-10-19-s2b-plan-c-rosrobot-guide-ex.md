@@ -12,7 +12,7 @@
 
 **Depends on:** Plan A (`guide_motion` installed; `robots/fr3` committed) and Plan B (`guide_msgs/MotionTarget` built; the host wired to `init.yaml`) complete.
 
-**Sources:** `ROS2Robot` and its config (`modules/irob_lerobot_ros/irob_lerobot_ros/{ros2robot.py,config.py}`); the steps (`guide_ex/guide_ex/steps/manipulation/{cartesian_move.py,joint_move.py}`, `steps/end_effector/gripper_control.py`, `utility/wait.py`); block_bin (`guide_tasks/block_bin/block_bin/solve_task.py`, `launch/bringup.launch.py`); block_bin_eval's `sleep_sim` (`~/ros2_ws/src/block_bin_eval/block_bin_eval/eval_policy.py:622-642`), the `/clock` sleep spec 4.6 names; the fact sheet `/home/user/.claude/jobs/d2413306/tmp/s2b-facts.md` §2 and §6.
+**Sources:** `ROS2Robot` and its config (`modules/irob_lerobot_ros/irob_lerobot_ros/{ros2robot.py,config.py}`); the steps (`guide_ex/guide_ex/steps/manipulation/{cartesian_move.py,joint_move.py}`, `steps/end_effector/gripper_control.py`, `utility/wait.py`); block_bin (`guide_tasks/block_bin/block_bin/solve_task.py`, `launch/bringup.launch.py`); block_bin_eval's `sleep_sim` (`~/ros2_ws/src/block_bin_eval/block_bin_eval/eval_policy.py:622-642`), the `/clock` sleep spec 4.6 names; the fact sheet `/home/user/libero_assets/s2b_inputs/s2b-facts.md` §2 and §6.
 
 ## Spec questions (recorded; the plan follows the reading shown)
 

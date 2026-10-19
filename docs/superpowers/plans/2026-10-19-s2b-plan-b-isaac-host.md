@@ -12,7 +12,7 @@
 
 **Depends on:** Plan A (`2026-10-19-s2b-plan-a-guide-motion.md`) complete: `guide_motion` installed in `.venv`; `guide_motion/guide_motion/robots/{fr3,panda}` committed. Plan C depends on this plan.
 
-**Sources:** the measurement that already ran OSCBF in this callback: `/home/user/.claude/jobs/d2413306/tmp/oscbf_isaac/run.py` (callback registration, `switch_dof_control_mode`, `arm._physics_articulation_view` raw I/O with `wp.from_numpy(..., device=...)` and a `wp.int32` index array, mass-property getters, warm-up) and its `report.md`; GUIDE's command/ROS layout in `/home/user/.claude/jobs/d2413306/tmp/s2b-facts.md`.
+**Sources:** the measurement that already ran OSCBF in this callback: `/home/user/libero_assets/s2b_inputs/oscbf_isaac/run.py` (callback registration, `switch_dof_control_mode`, `arm._physics_articulation_view` raw I/O with `wp.from_numpy(..., device=...)` and a `wp.int32` index array, mass-property getters, warm-up) and its `report.md`; GUIDE's command/ROS layout in `/home/user/libero_assets/s2b_inputs/s2b-facts.md`.
 
 ## Spec questions (recorded; the plan follows the reading shown)
 

@@ -11,9 +11,9 @@
 **Spec:** `docs/superpowers/specs/2026-10-19-s2b-native-motion-design.md`, sections 4.1, 4.2, 5, 7 (unit tests) and 8 (rows 2–4). Plans B (`2026-10-19-s2b-plan-b-isaac-host.md`) and C (`2026-10-19-s2b-plan-c-rosrobot-guide-ex.md`) depend on this plan.
 
 **Sources the code is built from** (read them when a task says so):
-- OSCBF at commit `6082329f8e1d61ee8e875a63a5cd80a14d513e12` (`github.com/StanfordASL/oscbf`, MIT; a local clone is at `/home/user/.claude/jobs/d2413306/tmp/oscbf/repo`). Its evaluation: `/home/user/.claude/jobs/d2413306/tmp/oscbf-report.md`.
-- The XRDF/URDF pipeline test: `/home/user/.claude/jobs/d2413306/tmp/xrdf_test/report.md`, `make_fr3_xrdf.py`, `check_frames.py` and the raw outputs Task 2 copies as test fixtures. That directory is a job scratch directory: **run Task 2 before it is cleaned up.**
-- The Isaac measurement: `/home/user/.claude/jobs/d2413306/tmp/oscbf_isaac/{run.py,oscbf_ctrl.py,report.md}`.
+- OSCBF at commit `6082329f8e1d61ee8e875a63a5cd80a14d513e12` (`github.com/StanfordASL/oscbf`, MIT; a local clone is at `/home/user/libero_assets/s2b_inputs/oscbf_repo`). Its evaluation: `/home/user/libero_assets/s2b_inputs/oscbf-report.md`.
+- The XRDF/URDF pipeline test: `/home/user/libero_assets/s2b_inputs/xrdf_test/report.md`, `make_fr3_xrdf.py`, `check_frames.py` and the raw outputs Task 2 copies as test fixtures. That directory is a job scratch directory: **run Task 2 before it is cleaned up.**
+- The Isaac measurement: `/home/user/libero_assets/s2b_inputs/oscbf_isaac/{run.py,oscbf_ctrl.py,report.md}`.
 - LIBERO-Spatial demos: `~/Downloads/libero_spatial/*.hdf5` (robomimic layout: `data/demo_<i>/actions` (T, 7), `obs/ee_pos` (T, 3), `obs/ee_ori` (T, 3, axis-angle); `env_args` says `OSC_POSE`, `output_max` [0.05 ×3, 0.5 ×3], `control_freq` 20).
 
 ## Spec questions (recorded; the plan follows the reading shown)
@@ -239,7 +239,7 @@ git status --porcelain   # guide_core/config/init.yaml still ' M', unstaged
 
 ```bash
 cd ~/ros2_ws/src/guide && mkdir -p guide_motion/test/data
-X=/home/user/.claude/jobs/d2413306/tmp/xrdf_test
+X=/home/user/libero_assets/s2b_inputs/xrdf_test
 cp $X/urdf/fr3.urdf guide_motion/test/data/fr3_exporter_raw.urdf
 cp $X/fr3.xrdf guide_motion/test/data/fr3_editor_raw.xrdf
 cp $X/fr3_franka_description.urdf guide_motion/test/data/fr3_franka_description.urdf
@@ -253,7 +253,7 @@ Expected sizes: 11398, 5776, 20144, 7240 bytes. (`fr3_exporter_raw.urdf` is the 
 ```bash
 cd ~/ros2_ws/src/guide/guide_motion
 git clone --quiet https://github.com/StanfordASL/oscbf /tmp/oscbf-upstream \
-  || git clone --quiet /home/user/.claude/jobs/d2413306/tmp/oscbf/repo /tmp/oscbf-upstream
+  || git clone --quiet /home/user/libero_assets/s2b_inputs/oscbf_repo /tmp/oscbf-upstream
 git -C /tmp/oscbf-upstream switch --quiet --detach 6082329f8e1d61ee8e875a63a5cd80a14d513e12
 U=/tmp/oscbf-upstream
 mkdir -p oscbf/core oscbf/utils/urdfpy oscbf/assets
@@ -1471,7 +1471,7 @@ Expected: collection error `ModuleNotFoundError: No module named 'guide_motion.c
 
 - [ ] **Step 3: Implement**
 
-The step is the measurement's `oscbf_ctrl.make_control` (`/home/user/.claude/jobs/d2413306/tmp/oscbf_isaac/oscbf_ctrl.py`) with this spec's gains, barriers and fallbacks. `guide_motion/guide_motion/control.py`:
+The step is the measurement's `oscbf_ctrl.make_control` (`/home/user/libero_assets/s2b_inputs/oscbf_isaac/oscbf_ctrl.py`) with this spec's gains, barriers and fallbacks. `guide_motion/guide_motion/control.py`:
 ```python
 """OSCBF control (S2b spec 4.1, 5): one small QP per step, torque or joint velocity."""
 
