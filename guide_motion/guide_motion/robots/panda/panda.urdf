@@ -1,0 +1,111 @@
+<robot name="panda">
+  <link name="panda_link0">
+    <inertial><origin xyz="-0.01720000058 0.0003999999899 0.07450000197" rpy="0 0 0" /><mass value="2.396600008" /><inertia ixx="0.009000001475" ixy="4.81051754e-10" ixz="0.002000000095" iyy="0.01150000002" iyz="1.110117331e-09" izz="0.008500001393" /></inertial></link>
+  <link name="panda_link1">
+    <inertial><origin xyz="0.0476196902 -0.02203987412 0.0003300006581" rpy="0 0 0" /><mass value="2.790699959" /><inertia ixx="0.005004440904" ixy="0.002484808211" ixz="3.67662948e-05" iyy="0.01439883374" iyz="5.312093737e-06" izz="0.01564783044" /></inertial></link>
+  <link name="panda_link2">
+    <inertial><origin xyz="-0.01907981256 -0.09210966946 0.0003800008644" rpy="0 0 0" /><mass value="2.542000055" /><inertia ixx="0.01545124262" ixy="-0.003559004917" ixz="-8.359993182e-06" iyy="0.004625017339" iyz="3.086000649e-05" izz="0.01662427747" /></inertial></link>
+  <link name="panda_link3">
+    <inertial><origin xyz="0.02971008259 0.01695989766 0.05151990833" rpy="0 0 0" /><mass value="2.251300097" /><inertia ixx="0.006578046155" ixy="-0.0009346954428" ixz="-0.002925261767" iyy="0.008662860249" iyz="0.0009730970611" izz="0.006317422128" /></inertial></link>
+  <link name="panda_link4">
+    <inertial><origin xyz="-0.0169800026 0.05824985088 -0.05112972814" rpy="0 0 0" /><mass value="2.203700066" /><inertia ixx="0.01003079518" ixy="0.001814787145" ixz="-0.001587032866" iyy="0.006495438738" iyz="-0.003395922318" izz="0.007845854336" /></inertial></link>
+  <link name="panda_link5">
+    <inertial><origin xyz="0.09279971252 0.03730021415 -5.014712633e-05" rpy="0 0 0" /><mass value="2.28550005" /><inertia ixx="0.004306051314" ixy="-0.003823426355" ixz="2.062828053e-05" iyy="0.02095062621" iyz="-9.493709848e-06" izz="0.02297015303" /></inertial></link>
+  <link name="panda_link6">
+    <inertial><origin xyz="-0.001529740606 -0.00371064613 0.06571985781" rpy="0 0 0" /><mass value="1.353000045" /><inertia ixx="0.002867019777" ixy="-1.274286052e-05" ixz="0.0001191177644" iyy="0.002777969551" iyz="-0.0002148780686" izz="0.0008796453366" /></inertial></link>
+  <link name="panda_link7">
+    <inertial><origin xyz="-0.05491009164 -0.0004398101758 0.0008901390569" rpy="0 0 0" /><mass value="0.3597300053" /><inertia ixx="0.0001793626232" ixy="1.311353026e-06" ixz="-1.48831821e-06" iyy="0.0001921037256" iyz="1.652302893e-06" izz="0.0001954106685" /></inertial></link>
+  <link name="panda_hand">
+    <inertial><origin xyz="-0.02072623406 0.008450091822 0.008397008403" rpy="0 0 0" /><mass value="0.654399991" /><inertia ixx="0.001739999976" ixy="1.41422762e-05" ixz="1.414243491e-05" iyy="0.001080000423" iyz="-0.0007800000302" izz="0.00107999967" /></inertial></link>
+  <link name="panda_leftfinger">
+    <inertial><origin xyz="-0.0152849084 -2.00741152e-08 -0.02196756019" rpy="0 0 0" /><mass value="0.029099999" /><inertia ixx="8.530000897e-06" ixy="-4.066580126e-13" ixz="-1.059999323e-06" iyy="8.490000255e-06" iyz="9.878657365e-13" izz="1.769999885e-06" /></inertial></link>
+  <link name="panda_rightfinger">
+    <inertial><origin xyz="0.01528494543 1.663098687e-08 -0.02196756023" rpy="0 0 0" /><mass value="0.029099999" /><inertia ixx="8.530000902e-06" ixy="-3.765917975e-13" ixz="1.059999305e-06" iyy="8.490000255e-06" iyz="-1.027661966e-13" izz="1.769999879e-06" /></inertial></link>
+  <joint name="panda_joint1" type="revolute">
+    <origin xyz="-0 0 0.333" rpy="0 1.57079627 0" />
+    <parent link="panda_link0" />
+    <child link="panda_link1" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.89730009" upper="2.89730009" velocity="2.17499993" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 87.0, "stiffness": 400.0, "target_position": 0.687549352645874}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint2" type="revolute">
+    <origin xyz="-0.00000033 0.00000013 0" rpy="0 0.00000006 -1.57079627" />
+    <parent link="panda_link1" />
+    <child link="panda_link2" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.76279999" upper="1.76279999" velocity="2.17499993" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 87.0, "stiffness": 400.0, "target_position": -32.65859603881836}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint3" type="revolute">
+    <origin xyz="0.00000003 -0.31599972 -0.00000005" rpy="0.00000027 -0.00000011 1.57079561" />
+    <parent link="panda_link2" />
+    <child link="panda_link3" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.89730009" upper="2.89730009" velocity="2.17499993" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 87.0, "stiffness": 400.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint4" type="revolute">
+    <origin xyz="0.00000004 -0.00000008 0.08249987" rpy="0.00000023 0.00000051 1.57079681" />
+    <parent link="panda_link3" />
+    <child link="panda_link4" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-3.07179999" upper="-0.0698" velocity="2.17499993" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 87.0, "stiffness": 400.0, "target_position": -161.0011444091797}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint5" type="revolute">
+    <origin xyz="-0.00000066 0.38399994 -0.08249966" rpy="0.00000032 0.00000011 -1.57079425" />
+    <parent link="panda_link4" />
+    <child link="panda_link5" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.89730009" upper="2.89730009" velocity="2.6100004" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 12.0, "stiffness": 400.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint6" type="revolute">
+    <origin xyz="-0.00000053 0.00000033 -0.00000017" rpy="-0.00000005 0.00000038 1.57079419" />
+    <parent link="panda_link5" />
+    <child link="panda_link6" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-0.0175" upper="3.75249997" velocity="2.6100004" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 12.0, "stiffness": 400.0, "target_position": 174.0072784423828}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_joint7" type="revolute">
+    <origin xyz="0.0000002 -0.00000043 0.08799982" rpy="-0.00000002 0.00000043 1.57079962" />
+    <parent link="panda_link6" />
+    <child link="panda_link7" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.89730009" upper="2.89730009" velocity="2.6100004" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 12.0, "stiffness": 400.0, "target_position": 42.456172943115234}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="panda_hand_joint" type="fixed">
+    <origin xyz="-0.10699991 0.00000041 0.00000015" rpy="-0.00000022 -0.00000025 -0.00000306" />
+    <parent link="panda_link7" />
+    <child link="panda_hand" />
+  </joint>
+  <joint name="panda_finger_joint1" type="prismatic">
+    <origin xyz="-0.05840003 -0.00000005 0" rpy="-1.57079641 0.78539893 -1.57079637" />
+    <parent link="panda_hand" />
+    <child link="panda_leftfinger" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.04" velocity="0.2000000857" effort="7.199999809" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 80.0, "max_force": 7.199999809265137, "stiffness": 400.0, "target_position": 0.0}, "instance": "linear", "source": "physx"} -->
+  </joint>
+  <joint name="panda_finger_joint2" type="prismatic">
+    <origin xyz="-0.05840003 -0.00000005 0" rpy="1.57079641 -0.78539768 1.57079628" />
+    <parent link="panda_hand" />
+    <child link="panda_rightfinger" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.04" velocity="10.00000028" effort="7.199999809" />
+    <dynamics friction="0" />
+    <mimic joint="panda_finger_joint1" multiplier="1" offset="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "instance": "linear", "source": "physx"} -->
+  </joint>
+<link name="panda_hand_tcp" /><joint name="panda_hand_tcp_joint" type="fixed"><origin xyz="0 0 0.1034" rpy="0 0 0" /><parent link="panda_hand" /><child link="panda_hand_tcp" /></joint></robot>

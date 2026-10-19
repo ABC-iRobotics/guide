@@ -341,6 +341,16 @@
    ]
   ]
  },
+ "base": {
+  "usd_root_fixed_joint": true,
+  "exporter_floating_joint": false,
+  "physx_mass_matrix_shape": [
+   1,
+   9,
+   9
+  ],
+  "physx_base_drift_m": 0.0
+ },
  "mass_check_kg": {
   "fr3_link0": [
    2.9281084537506104,

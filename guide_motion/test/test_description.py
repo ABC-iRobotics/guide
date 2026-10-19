@@ -42,6 +42,42 @@ def test_a_mimic_multiplier_written_as_a_float_is_fixed_too():
     assert joints(description.fix_urdf(text, "fr3"))["fr3_finger_joint2"].find("mimic").get("multiplier") == "1"
 
 
+def test_a_mimic_joint_without_a_drive_takes_its_leaders_effort():
+    """The Panda's export: panda_finger_joint2's source_drive comment has no "drive" at all."""
+    fr3 = '{"armature": 0.0, "drive": {"damping": 0.0, "max_force": Infinity, "stiffness": 0.0, "target_position": 0.0}, "instance": "linear", "source": "physx"}'
+    assert RAW_URDF.count(fr3) == 1
+    text = RAW_URDF.replace(fr3, '{"armature": 0.0, "instance": "linear", "source": "physx"}')
+    assert float(joints(description.fix_urdf(text, "fr3"))["fr3_finger_joint2"].find("limit").get("effort")) == 100.0
+
+
+def links(text):
+    return {link.get("name") for link in ET.fromstring(text).iter("link")}
+
+
+def with_world(joint_type):
+    return RAW_URDF.replace('<robot name="fr3">', f'''<robot name="fr3">
+  <link name="world"/>
+  <joint name="floating_base" type="{joint_type}">
+    <parent link="world"/>
+    <child link="fr3_link0"/>
+  </joint>''', 1)
+
+
+def test_a_floating_joint_from_world_is_dropped():
+    """The Panda's export: franka.usd has no root FixedJoint, so the exporter adds a world link and a
+    floating joint to it, though PhysX runs the arm fixed-base. The root must be link0, as for the FR3."""
+    fixed = description.fix_urdf(with_world("floating"), "fr3")
+    assert links(fixed) == links(description.fix_urdf(RAW_URDF, "fr3")) and "floating_base" not in joints(fixed)
+    assert pin.buildModelFromXML(fixed).nq == 9
+
+
+def test_a_fixed_root_is_left_alone():
+    assert "world" in links(description.fix_urdf(with_world("fixed"), "fr3"))  # only a floating joint is dropped
+    fixed = description.fix_urdf(RAW_URDF, "fr3")  # the FR3's own root path: fr3_link0, nothing removed
+    assert links(fixed) == links(RAW_URDF) and set(joints(fixed)) == set(joints(RAW_URDF))
+    assert description.link_poses(fixed)["fr3_link0"].tolist() == np.eye(4).tolist()
+
+
 def test_geometry_is_dropped():
     text = description.fix_urdf(RAW_URDF, "fr3")
     assert "<visual" not in text and "<collision" not in text and "<mesh" not in text
@@ -106,3 +142,23 @@ def test_principal_inertia_rebuilds_the_tensor():
     diagonal, (w, x, y, z) = description.principal_inertia(I)
     R = Rotation.from_quat([x, y, z, w]).as_matrix()
     np.testing.assert_allclose(R @ np.diag(diagonal) @ R.T, I, atol=1e-12)
+
+
+def test_the_mass_override_keeps_its_sources_up_axis_and_units(tmp_path):
+    """A new USD layer defaults to Y-up centimetres, and a reference does not carry its source's: the
+    Panda's override, opened alone, gave PhysX gravity torques 100x off (M matched)."""
+    pytest.importorskip("pxr")
+    from pxr import Usd, UsdGeom, UsdPhysics
+
+    source = tmp_path / "robot.usda"
+    stage = Usd.Stage.CreateNew(str(source))
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    UsdGeom.SetStageMetersPerUnit(stage, 1.0)
+    stage.SetDefaultPrim(stage.DefinePrim("/robot", "Xform"))
+    UsdPhysics.MassAPI.Apply(stage.DefinePrim("/robot/link", "Xform"))
+    stage.GetRootLayer().Save()
+    out = tmp_path / "override.usda"
+    description._write_mass_override(str(out), str(source), {"link": (2.0, np.zeros(3), np.eye(3))})
+    result = Usd.Stage.Open(str(out))
+    assert UsdGeom.GetStageUpAxis(result) == UsdGeom.Tokens.z and UsdGeom.GetStageMetersPerUnit(result) == 1.0
+    assert UsdPhysics.MassAPI(result.GetPrimAtPath("/override/link")).GetMassAttr().Get() == 2.0

@@ -36,6 +36,9 @@ ROBOTS = {
         "accel": [15.0, 7.5, 10.0, 12.5, 15.0, 20.0, 20.0],
         "jerk": [7500.0, 3750.0, 5000.0, 6250.0, 7500.0, 10000.0, 10000.0],
         "datasheet": "fer",
+        # franka_description's inertials written over the asset's (spec 4.2.3): the shipped inertias are
+        # ~1e-7 kg m^2, and torque control chattered. Any robot's per-link masses can be overridden so.
+        "mass_override": "fer",
     },
 }
 _DRIVE = re.compile(r"\s*isaac:source_drive\s+(\{.*\})\s*$", re.S)
@@ -53,20 +56,27 @@ def fix_urdf(text: str, robot: str) -> str:
     """The USD exporter's URDF with the XRDF test's defects fixed.
 
     A: mimic multiplier -1 -> +1. B: prismatic velocity had the degree conversion -> undone.
-    C: no effort -> the USD drive's max force (a mimic joint takes its leader's).
+    C: no effort -> the USD drive's max force (a mimic joint, or one without a drive, takes its leader's).
     Joint limits stay the USD's. Visual and collision geometry are dropped: collision is
     the XRDF's spheres, and OSCBF's URDF parser would load every mesh. A missing
     <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the hand's z.
     Input must be the raw exporter/editor output; running it on its own output corrupts the finger velocity.
     """
     root = _parse(text)
+    # E (the Panda): franka.usd has no root FixedJoint, so the exporter adds a parentless "world" link and a
+    # floating joint to it, though PhysX runs the arm fixed-base. Dropped: the root is link0, as for the FR3.
+    children = {j.find("child").get("link") for j in root.iter("joint")}
+    for joint in root.findall("joint"):
+        if joint.get("type") == "floating" and joint.find("parent").get("link") == "world" and "world" not in children:
+            root.remove(joint)
+            root.remove(root.find("link[@name='world']"))
     joints = {j.get("name"): j for j in root.iter("joint")}
     effort = {}
     for name, joint in joints.items():
         for child in joint:
             match = child.tag is ET.Comment and _DRIVE.match(child.text or "")
             if match:
-                force = json.loads(match.group(1))["drive"]["max_force"]
+                force = json.loads(match.group(1)).get("drive", {}).get("max_force", math.inf)  # none: the Panda's mimic
                 if math.isfinite(force) and force > 0:
                     effort[name] = force
     for name, joint in joints.items():
@@ -222,9 +232,13 @@ def principal_inertia(inertia):
 
 def _write_mass_override(path: str, source: str, inertials: dict) -> None:
     """A wrapper USD that references `source` and overrides its links' mass properties (Kit's pxr)."""
-    from pxr import Gf, Usd, UsdPhysics
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
     stage = Usd.Stage.CreateNew(path)
+    # A new layer is Y-up centimetres by default, and a reference does not carry its source's metadata.
+    original = Usd.Stage.Open(source, load=Usd.Stage.LoadNone)
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.GetStageUpAxis(original))
+    UsdGeom.SetStageMetersPerUnit(stage, UsdGeom.GetStageMetersPerUnit(original))
     root = stage.DefinePrim("/" + Path(path).stem, "Xform")
     root.GetReferences().AddReference(source)
     stage.SetDefaultPrim(root)
@@ -284,9 +298,9 @@ def main(argv=None) -> None:
     tmp = Path(tempfile.mkdtemp(prefix=f"guide_motion_{robot}_"))
     source = get_assets_root_path() + ROBOTS[robot]["usd"]
     stage_path = source
-    if robot == "panda":  # the shipped inertias are ~1e-7 kg m^2: torque control chattered (spec 4.2.3)
-        stage_path = str(tmp / "panda.usda")
-        _write_mass_override(stage_path, source, franka_inertials("fer", args.franka_description))
+    if ROBOTS[robot].get("mass_override"):
+        stage_path = str(tmp / f"{robot}.usda")
+        _write_mass_override(stage_path, source, franka_inertials(ROBOTS[robot]["mass_override"], args.franka_description))
     context = omni.usd.get_context()
     context.open_stage(stage_path)
     while context.get_stage_loading_status()[2] > 0:
@@ -300,6 +314,8 @@ def main(argv=None) -> None:
     base = articulation_discovery.find_all_articulation_base_paths(stage)[0]
     bodies = {p.GetName(): p for p in Usd.PrimRange(stage.GetPrimAtPath(base)) if p.HasAPI(UsdPhysics.RigidBodyAPI)}
     link0 = str(bodies[f"{robot}_link0"].GetPath())
+    fixed_root = any(p.IsA(UsdPhysics.FixedJoint) and not UsdPhysics.Joint(p).GetBody0Rel().GetTargets()
+                     for p in Usd.PrimRange(stage.GetPrimAtPath(base)))
 
     # Timeline stopped: authored link poses, and an export that does not bake the current pose (defect D).
     usd_poses = {name: np.asarray(xform_utils.get_relative_transform(prim, link0)) for name, prim in bodies.items()}
@@ -343,6 +359,12 @@ def main(argv=None) -> None:
     unknown = sorted(set(names) - set(meta["usd_to_urdf"]))
     if unknown:
         fail("links", f"PhysX links the URDF lacks: {unknown}")
+    # The M/g check indexes DOFs as for a fixed base. The Panda's franka.usd has no root FixedJoint (its
+    # export got a floating joint, which fix_urdf drops), yet PhysX runs it fixed-base: recorded below.
+    mass_matrix_shape = list(arm.get_mass_matrices().shape)
+    if mass_matrix_shape[-1] != arm.num_dofs:
+        fail("fixed_base", f"PhysX mass matrix {mass_matrix_shape} for {arm.num_dofs} DOFs: a floating base")
+    base_start = arm.get_world_poses()[0].numpy()[0].copy()
     masses = arm.get_link_masses().numpy()[0]
     coms = arm.get_link_coms()[0].numpy()[0]
     inertias = arm.get_link_inertias().numpy()[0].reshape(-1, 3, 3)
@@ -385,6 +407,12 @@ def main(argv=None) -> None:
     if max(worst_M, worst_g) > 1e-3:
         fail("dynamics", f"M {worst_M:.2e}, g {worst_g:.2e} relative > 1e-3")
     checks["mass_matrix_rel"], checks["gravity_rel"] = worst_M, worst_g
+    meta["base"] = {
+        "usd_root_fixed_joint": fixed_root,
+        "exporter_floating_joint": 'type="floating"' in (raw / f"{robot}.urdf").read_text(),
+        "physx_mass_matrix_shape": mass_matrix_shape,
+        "physx_base_drift_m": float(np.linalg.norm(arm.get_world_poses()[0].numpy()[0] - base_start)),
+    }
 
     # Spec 9, informational (no tolerance): the FR3's masses come from PhysX's colliders; compare once
     # with franka_description's. Every PhysX link is listed, None where franka_description has no such
@@ -396,8 +424,8 @@ def main(argv=None) -> None:
         print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
     meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
     (out / "description.json").write_text(json.dumps(meta, indent=1))
-    if robot == "panda":
-        shutil.copy(stage_path, out / "panda.usda")
+    if stage_path != source:
+        shutil.copy(stage_path, out / f"{robot}.usda")
     timeline.stop()
     app.update()
     destination = ROBOTS_DIR / robot
