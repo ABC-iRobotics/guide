@@ -1,9 +1,10 @@
 # guide_motion: GUIDE's motion layer (S2b). Plain Python: no Isaac and no ROS imports.
 # Install: uv pip install --python ~/ros2_ws/.venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"
 #
-# oscbf/ is OSCBF (github.com/StanfordASL/oscbf, MIT, oscbf/LICENSE), vendored unmodified at commit
-# 6082329f8e1d61ee8e875a63a5cd80a14d513e12. As a pip dependency it would pull cbfpy==0.0.1
-# (numpy<2), pybullet and matplotlib; its core runs on cbfpy 0.1.0 and numpy 2.3.1.
+# OSCBF (github.com/StanfordASL/oscbf, MIT) is the git submodule external/oscbf at commit
+# 6082329f8e1d61ee8e875a63a5cd80a14d513e12; the symlink oscbf -> external/oscbf/oscbf puts its package
+# on this directory's .pth. Not a pip dependency: its own metadata pins cbfpy==0.0.1 (numpy<2) and pulls
+# pybullet and matplotlib; its core runs on cbfpy 0.1.0 and numpy 2.3.1.
 [build-system]
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
@@ -27,7 +28,7 @@ dependencies = [
     "pin",
     "pin-pink",
     "quadprog",
-    # the vendored OSCBF's URDF parser (oscbf/utils/urdfpy)
+    # OSCBF's URDF parser (oscbf/utils/urdfpy)
     "lxml",
     "networkx",
     "pillow",
@@ -49,4 +50,3 @@ include = ["guide_motion*", "oscbf*"]
 
 [tool.setuptools.package-data]
 guide_motion = ["robots/*/*"]
-oscbf = ["LICENSE"]

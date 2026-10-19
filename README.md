@@ -115,6 +115,7 @@ uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
 
 # GUIDE runtime deps (-c protects Isaac's torch/numpy pins from being upgraded):
 uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
+git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT), pinned
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
 uv pip check --python .venv/bin/python     # must report no incompatibilities
 ```

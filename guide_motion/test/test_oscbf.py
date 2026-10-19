@@ -1,4 +1,4 @@
-"""The vendored OSCBF runs on this venv (numpy 2.3.1, jax 0.4.30, cbfpy 0.1.0) and agrees with Pinocchio."""
+"""The OSCBF submodule (external/oscbf) runs on this venv (numpy 2.3.1, jax 0.4.30, cbfpy 0.1.0) and agrees with Pinocchio."""
 
 import tempfile
 import xml.etree.ElementTree as ET
