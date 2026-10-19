@@ -2851,8 +2851,8 @@
   {
    "finding": "movables: a Replicator modify.pose write (write_to_usd) during play teleports both welded rigid bodies",
    "numbers": "every movable, every seed: err_to_sample_m 0.0 and two_body_follow.followed (offset after fire = rest offset: bowls 0.1 m, others 0); summary two_body_followed 10/10",
-   "caveat": "modify.pose keeps the bodies' velocities (cube_stack's YAML zeroes them with modify.attribute); attempt offset, seed 1: bowl_2 teleported back from 7.7 km away came in with its weld stretched to 0.1044 m (followed false), back to 0.1 m after 1 s",
-   "evidence": "summary, seeds.*.*.two_body_follow; /home/user/libero_assets/spike/spike_libero_place_offset.json"
+   "caveat": "whether modify.pose keeps the bodies' velocities was not measured (velocities were never read; cube_stack's YAML zeroes them with modify.attribute); the one case seen: attempt offset, seed 1: bowl_2 teleported back from 7.7 km away came in with its weld stretched to 0.1044 m (followed false), and came to rest one second after the write (drift 0.0067 m)",
+   "evidence": "summary, seeds.*.*.two_body_follow; docs/design/spike_libero_place_offset.json"
   },
   {
    "finding": "the bowls land 0.1 m off their region: the written prim is the converter's colliderless outer MJCF body",
@@ -2860,15 +2860,15 @@
    "libero_semantics": "LIBERO places the inner body: its agentview frame shows the bowl beside the plate, not on it (/home/user/libero_assets/spike/renders/libero_agentview_next_to_plate_demo0_frame0.png vs /home/user/libero_assets/spike/renders/place_offset_seed1.png). Believed to be robosuite's MujocoXMLObject keeping only body[@name='object']; not checked, the robosuite/LIBERO env code is not on this machine.",
    "attempt_offset": "bounds shifted +0.1 m in y for the bowls (offset 0 for the rest), region checked on Geometry/Body/object: drift < 1 cm in 47/50 movable-seeds, in_region 50/50. Failures: seed 3 bowl_1 0.051 m / plate 0.018 m (bowl-plate centre distance 0.111 m < bowl radius 0.056 + plate radius 0.069: LIBERO's two regions allow touching draws, and this path has no rejection); seed 0 bowl_2 3805 m (inferred: struck by the cabinet snapping back toward its play-start anchor (-0.25, 0.3), beside the bowl_2/ramekin regions; not isolated)",
    "fix": "merge the outer body in the converter (Task 2 _findings[0] already asks for it); then the brief's bounds are right as they are. For touching draws, a redraw on overlap such as cube_stack's 12 cm rule",
-   "evidence": "summary; /home/user/libero_assets/spike/spike_libero_place_offset.json, /home/user/libero_assets/spike/spike_libero_randomize_offset.yaml"
+   "evidence": "summary; docs/design/spike_libero_place_offset.json, /home/user/libero_assets/spike/spike_libero_randomize_offset.yaml"
   },
   {
    "finding": "fixtures cannot be placed during play by writing their root (R5's target is necessary, not sufficient)",
    "detail": "the root write moves the fixture's bodies (seed 0: both land exactly on the sample, cabinet yaw 154.047 deg = sample), but the world weld (body0 = the root Xform) keeps the anchor PhysX built at play start: within 1 s the stove snaps back 0.72 m (drift_m 0.7218) and the cabinet, snapping back through 154 deg, goes NaN (null here; 'Invalid PhysX transform' and 'non-finite bounds' in the log) and stays NaN. Later writes move the stove by the root's delta only (body = new root x the snapped-back local offset): seed 1 PhysX (0.1589, 0.303) = settled (0.1522, 0.3) + (sample 1 - sample 0), exactly. Baseline in_region 1/10 for both; drawer_recheck all null.",
-   "attempt_preplay": "stop, fire, reset per seed: both fixtures 10/10 in_region, yaw_ok and drift 0 (PhysX = sample to 0.0001 m / 0.001 deg); after ten root writes with yaw the drawers reach -0.1599 / 0.0099 as in Task 2. The YAML is right for fixtures; the write must land before PhysX parses the scene. Cost: fire 203 ms mean plus a full stop/reset per layout. Movables in that run failed (bowl offset not compensated; not analysed further).",
+   "attempt_preplay": "stop, fire, reset per seed: both fixtures 10/10 in_region, yaw_ok and drift 0 (PhysX = sample to 0.0001 m; yaw error 0.004 deg for the stove, seed 0); after ten root writes with yaw the drawers reach -0.1599 / 0.0099 as in Task 2. The YAML is right for fixtures; the write must land before PhysX parses the scene. Cost: fire 203 ms mean plus a full stop/reset per layout. Movables in that run: bowl offset not compensated; seed 0 movables did not land on the first stopped fire (cause not found; cookies err 0.305 m at the Task-2 rest, ramekin 0.655, plate 0.666, bowls 0.47-0.49); seeds 1-9 landed (err <= 5 mm).",
    "attempt_tensor": "one unseeded fire before play, then during play Articulation.set_world_poses with the sampled pose after each fire: the fixture lands on the sample every seed (err 0) and snaps back again (stove drift 0.7084-0.725 m each seed, cabinet NaN, drawers null). The weld is a joint anchored at play start, not a fixed base that a root teleport moves. A first version without the pre-play fire stopped at seed 1 with AttributeError: 'Articulation' object has no attribute '_physics_view' (superseded; not kept).",
    "not_tried": "writing the weld's physics:localPos0/localRot0 with modify.attribute during play; dropping the weld for kinematic fixtures",
-   "evidence": "seeds.*.wooden_cabinet_1 / flat_stove_1, drawer_recheck; /home/user/libero_assets/spike/spike_libero_place_final.log; /home/user/libero_assets/spike/spike_libero_place_preplay.json, /home/user/libero_assets/spike/spike_libero_place_tensor.json"
+   "evidence": "seeds.*.wooden_cabinet_1 / flat_stove_1, drawer_recheck; /home/user/libero_assets/spike/spike_libero_place_final.log; docs/design/spike_libero_place_preplay.json, docs/design/spike_libero_place_tensor.json"
   },
   {
    "finding": "fire(seed=0) does not reseed on a fresh app",
