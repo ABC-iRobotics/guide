@@ -24,7 +24,8 @@ class MoveToJointConfiguration(BaseNode):
             robot (Robot): The robot to move.
             target_configuration (Dict[str, float]): Target position per arm joint, keyed
                 "<joint>.pos" (e.g. "fr3_joint1.pos"); a ROS2Robot needs every arm joint.
-            speed (float): MoveIt's velocity scaling factor for the move, 0 to 1 (default: 1.0).
+            speed (float): 0 to 1 (default: 1.0): MoveIt's velocity scaling factor, or
+                controller: oscbf's cruise speed, speed x 0.5 m/s.
         Returns:
             ExecutionResult: The result of the move execution.
         """
@@ -43,10 +44,10 @@ class MoveToJointConfiguration(BaseNode):
             robot.config.arm_action_type = (
                 ActionType.JOINT_POSITION
             )  # Ensure the robot is in Joint mode
-            robot._moveit2.max_velocity = speed  # Set the speed for the move
-
             for _ in range(3):  # Retry logic for robustness
-                success = robot.send_action(action=target_configuration, wait_for_execution=True)
+                success = robot.send_action(
+                    action=target_configuration, wait_for_execution=True, speed=speed
+                )
                 if success:
                     break
         else:

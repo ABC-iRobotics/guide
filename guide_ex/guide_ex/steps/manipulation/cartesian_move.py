@@ -30,10 +30,12 @@ class MoveToCartesianPose(BaseNode):
         Args:
             robot (Robot): The robot to move.
             target_pose (Pose): The target pose to move to.
-            speed (float): MoveIt's velocity scaling factor for the move, 0 to 1 (default: 1.0).
+            speed (float): 0 to 1 (default: 1.0): MoveIt's velocity scaling factor, or
+                controller: oscbf's cruise speed, speed x 0.5 m/s.
             cartesian (bool): Whether to execute the move in Cartesian space (default: False).
             min_fraction (float): A straight-line move MoveIt can compute for less than
-                this share of the way is refused before the arm moves.
+                this share of the way is refused before the arm moves (controller: moveit;
+                oscbf plans straight lines or refuses).
         Returns:
             ExecutionResult: The result of the move execution.
         """
@@ -52,35 +54,15 @@ class MoveToCartesianPose(BaseNode):
             robot.config.arm_action_type = (
                 ActionType.CARTESIAN_POSE
             )  # Ensure the robot is in Cartesian mode
-            robot._moveit2.max_velocity = speed  # Set the speed for the move
-
-            # MoveIt executes whatever part of a Cartesian path it could compute and the
-            # robot reports success (pymoveit2's threshold defaults to 0): stopping short of
-            # a cube, or at the edge of a self-collision no later plan can start from.
-            # Ask for the path first; one MoveIt cannot (nearly) finish is not executed.
-            if cartesian and (
-                robot._moveit2.plan(
-                    pose=target_pose.to_ros(),
-                    frame_id=robot.config.frame_id,
-                    cartesian=True,
-                    cartesian_fraction_threshold=min_fraction,
-                    start_joint_state=robot.joint_state,
-                )
-                is None
-            ):
-                where = target_pose.toDict()
-                message = f"[{self.name}] no straight path (< {min_fraction:.0%}) to " + ", ".join(
-                    f"{k}={v:.3f}" for k, v in where.items()
-                )
-                self.logger.warning(message)
-                return ExecutionResult(
-                    status=DemoStatus.FAILURE,
-                    error_message=message,
-                )
-
+            # speed and min_fraction go to the robot: MoveIt's velocity scaling and straight-line
+            # check (controller: moveit), or the planner's cruise speed (controller: oscbf).
             for _ in range(3):  # Retry logic for robustness
                 success = robot.send_action(
-                    action=target_pose.to_ros(), cartesian=cartesian, wait_for_execution=True
+                    action=target_pose.to_ros(),
+                    cartesian=cartesian,
+                    wait_for_execution=True,
+                    speed=speed,
+                    min_fraction=min_fraction,
                 )
                 if success:
                     break

@@ -47,15 +47,16 @@ def test_a_cartesian_velocity_command_that_went_through_is_sent_once():
     assert result.status == DemoStatus.PERFECT and len(sent) == 1
 
 
-def test_set_gripper_state_sends_every_joint_it_is_given(monkeypatch):
-    monkeypatch.setattr(SetGripperState, "SETTLE_SECONDS", 0.0)
-    sent = []
+def test_set_gripper_state_sends_every_joint_and_settles_on_sim_time():
+    sent, slept = [], []
     robot = fake_robot(
         config=SimpleNamespace(gripper_action_type=ActionType.JOINT_POSITION),
         send_action=lambda action, **kwargs: sent.append(action) or True,
+        sleep=slept.append,  # ROS2Robot.sleep: the node's (sim) clock
     )
 
     result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.04, "fr3_finger_joint2": 0.04})
 
     assert result.status == DemoStatus.PERFECT
     assert sent == [{"fr3_finger_joint1.pos": 0.04, "fr3_finger_joint2.pos": 0.04}]
+    assert slept == [SetGripperState.SETTLE_SECONDS]

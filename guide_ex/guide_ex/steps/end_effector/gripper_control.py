@@ -1,4 +1,3 @@
-import time
 from typing import Dict
 
 from irob_lerobot_ros.config import ActionType
@@ -54,7 +53,7 @@ class SetGripperState(BaseNode):
                 f"Waiting {self.SETTLE_SECONDS:.2f}s for gripper/arm to settle "
                 f"before continuing."
             )
-            time.sleep(self.SETTLE_SECONDS)
+            robot.sleep(self.SETTLE_SECONDS)  # sim time: the same settle at any RTF
             # TODO: Proper success checking based on robot response
             success = True
 
