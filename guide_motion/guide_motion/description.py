@@ -70,7 +70,7 @@ def fix_urdf(text: str, robot: str) -> str:
                     effort[name] = force
     for name, joint in joints.items():
         mimic, limit = joint.find("mimic"), joint.find("limit")
-        if mimic is not None and mimic.get("multiplier") == "-1":
+        if mimic is not None and float(mimic.get("multiplier", "1")) == -1.0:
             mimic.set("multiplier", "1")
         if limit is None:
             continue

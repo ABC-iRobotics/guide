@@ -36,6 +36,12 @@ def test_exporter_defects_are_fixed():
     assert fixed["fr3_joint1"].find("limit").get("upper") == raw["fr3_joint1"].find("limit").get("upper")  # USD limits kept
 
 
+def test_a_mimic_multiplier_written_as_a_float_is_fixed_too():
+    text = RAW_URDF.replace('multiplier="-1"', 'multiplier="-1.0"')  # a Panda export may write it so
+    assert 'multiplier="-1.0"' in text
+    assert joints(description.fix_urdf(text, "fr3"))["fr3_finger_joint2"].find("mimic").get("multiplier") == "1"
+
+
 def test_geometry_is_dropped():
     text = description.fix_urdf(RAW_URDF, "fr3")
     assert "<visual" not in text and "<collision" not in text and "<mesh" not in text
