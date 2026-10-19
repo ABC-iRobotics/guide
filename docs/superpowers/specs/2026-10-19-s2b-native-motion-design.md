@@ -75,7 +75,14 @@ No Isaac imports, no ROS imports. It is a plain pyproject package installed into
     2. apply it as a delta from the **measured** end-effector pose at the policy step (`goal_pos = p + Δp`, `goal_ori = R(Δω)·R`), not from the previous target;
     3. hold the result for one 50 ms step.
   - `from_libero_normalized(action)` / `to_libero_normalized(action)` convert to and from LIBERO's normalized convention (×0.05 m, ×0.5 rad, gripper ±1 ↔ width). They are used **only** at the 2×2 evaluation boundary, chosen by a per-checkpoint flag: when a LIBERO-trained policy runs in GUIDE, or a GUIDE-trained policy runs in MuJoCo LIBERO.
-  - **Recorded action** = the commanded target delta (target − measured pose at the policy step) taken from `MotionTarget`, at the 20 Hz action rate. It is not the achieved pose change between frames, which trails the command by the tracking lag (≈ 15 mm at 10 cm/s). The recorder change itself belongs to S6/S7, which own the dataset schema.
+  - **Recorded action = the controller's input exactly as given** (user decision 2026-10-19). At each 20 Hz step the recorder stores what `MotionTarget` handed the controller:
+    - the delta action in metres and radians;
+    - the gripper width;
+    - the absolute target pose alongside.
+
+    It never stores the pose change measured between frames, which trails the command by the tracking lag (≈ 15 mm at 10 cm/s).
+  - **Recording rate:** LIBERO tasks record frames and actions at the **same 20 Hz** as the action rate (`dataset.fps: 20`). GUIDE's tasks record at 10 Hz today.
+  - The recorder change belongs to S6/S7, which own the dataset schema; this spec fixes what they must record.
 - **`planner`:** `plan(goal, q) -> list[Target]` with Pink IK, used for moves larger than one target step. It runs only on new goals.
 - **`description`:** the pipeline in 4.2, run as a CLI.
 
