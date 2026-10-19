@@ -29,6 +29,7 @@
 5. **Recording the controller inputs:** a record field in the task's `init.yaml` `dataset` section selects it (e.g. `action: controller_input`). The recorder then stores the `MotionTarget` handed to the controller at 20 Hz (delta action, gripper width, absolute target) instead of the joint command.
 6. **Strict version compatibility:** `uv pip check` must report **zero** lines; no `--override`. If lerobot's caps conflict with Isaac's exact pins, find a lerobot release that resolves cleanly with Isaac 6.0.1's pins (or report BLOCKED with the exact conflict). Never weaken a pin.
 7. **OSCBF is a git submodule, not vendored** (user, 2026-10-19): `guide_motion/external/oscbf` at 6082329 (github.com/StanfordASL/oscbf, MIT), reached through the symlink `guide_motion/oscbf` -> `external/oscbf/oscbf`. Its code never enters the guide repo's history (the unpushed branch was rewritten). Not a pip dependency: OSCBF's own metadata pins `cbfpy==0.0.1` (numpy<2), pybullet and matplotlib.
+8. **lerobot 0.6.1** (user, 2026-10-19): `.venv` upgraded in place from 0.6.0 (only draccus 0.10.0 -> 0.11.6 moved; guide_core + guide_ex 161 tests and block_bin_eval 351 tests pass). 0.6.1 carries the same `numpy<2.3` / `packaging<26` caps as 0.6.0, so Task 1's strict re-pin still waits on the single-env question.
 
 ## Spec questions (recorded; the plan follows the reading shown)
 

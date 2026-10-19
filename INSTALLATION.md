@@ -55,7 +55,7 @@ uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
   --index-url https://download.pytorch.org/whl/cu130
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
+uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.1" "transformers>=5.4,<5.6" -c $PINS
 git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT) at its pinned commit
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
 uv pip check --python .venv/bin/python     # must report no incompatibilities
@@ -63,10 +63,10 @@ uv pip check --python .venv/bin/python     # must report no incompatibilities
 
 - `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
   which uv skips by default.
-- `-c $PINS` on every torch-dependent install: lerobot 0.6.0 caps `numpy<2.3.0`, so
+- `-c $PINS` on every torch-dependent install: lerobot 0.6.1 caps `numpy<2.3.0`, so
   without it uv downgrades numpy to 2.2.6 and drags torch to 2.10.0 / torchvision to
   0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins (numpy
-  2.3.1 runs fine for lerobot). lerobot 0.6.0 also needs `transformers 5.4–5.6` and
+  2.3.1 runs fine for lerobot). lerobot 0.6.1 also needs `transformers 5.4–5.6` and
   `huggingface-hub 1.x`.
 - After a drift (also a cu128 torch pulled in by another project), restore with
   `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
