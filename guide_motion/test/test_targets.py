@@ -36,6 +36,16 @@ def test_clamp_holds_at_libero_bounds():
     assert t.mode == POSE and t.gripper_width == 0.04
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("axis", [0, 4, 6])
+def test_a_non_finite_action_is_refused(bad, axis):
+    """A policy's output is a trust boundary: a NaN there would become NaN torques."""
+    action = np.zeros(7)
+    action[axis] = bad
+    with pytest.raises(ValueError):
+        delta_action_to_target(action, (np.zeros(3), np.eye(3)))
+
+
 def test_libero_gripper_is_open_at_minus_one_and_closed_at_plus_one():
     assert from_libero_normalized([0, 0, 0, 0, 0, 0, -1])[6] == pytest.approx(OPEN_WIDTH)
     assert from_libero_normalized([0, 0, 0, 0, 0, 0, 1])[6] == pytest.approx(0.0)

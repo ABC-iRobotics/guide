@@ -36,6 +36,8 @@ def delta_action_to_target(action, measured_pose) -> Target:
     goal_pos = p + dp, goal_ori = R(dw) @ R. The caller holds the result for one 50 ms step.
     """
     a = np.asarray(action, dtype=float)
+    if not np.all(np.isfinite(a)):  # a policy's output: a NaN here would become NaN torques
+        raise ValueError(f"non-finite action {a}")
     position, rotation = measured_pose
     dp = np.clip(a[:3], -MAX_DPOS, MAX_DPOS)
     dw = np.clip(a[3:6], -MAX_DROT, MAX_DROT)
