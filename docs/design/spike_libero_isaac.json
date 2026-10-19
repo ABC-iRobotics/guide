@@ -1,0 +1,365 @@
+{
+ "_isaac": "6.0.1.0",
+ "_articulation": {
+  "wooden_cabinet_1": {
+   "joints": {
+    "top_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.1599,
+     "reached_closed": 0.0099
+    },
+    "middle_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.1599,
+     "reached_closed": 0.0099
+    },
+    "bottom_level": {
+     "type": "PhysicsPrismaticJoint",
+     "lower": -0.16,
+     "upper": 0.01,
+     "open_at": "lower",
+     "reached_open": -0.16,
+     "reached_closed": 0.0099
+    }
+   },
+   "render_positions": {
+    "top_level": -0.16,
+    "middle_level": -0.0002,
+    "bottom_level": -0.0002
+   }
+  },
+  "flat_stove_1": {
+   "joints": {
+    "button": {
+     "type": "PhysicsRevoluteJoint",
+     "lower": -0.005,
+     "upper": 2.1,
+     "open_at": "upper",
+     "reached_open": 2.0999,
+     "reached_closed": -0.0049
+    }
+   }
+  }
+ },
+ "_renders": [
+  "/home/user/libero_assets/spike/renders/isaac_overview.png",
+  "/home/user/libero_assets/spike/renders/isaac_cabinet_open.png"
+ ],
+ "_render_ptp": {
+  "isaac_overview.png": 250,
+  "isaac_cabinet_open.png": 216
+ },
+ "akita_black_bowl_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/akita_black_bowl_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/akita_black_bowl_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/akita_black_bowl_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 40,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1118,
+   0.1113,
+   0.0526
+  ],
+  "place_prim": "/Scene_0/objects/akita_black_bowl_1/Geometry/Body",
+  "placed_xy": [
+   -0.25,
+   -0.2
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   -0.25,
+   -0.1,
+   -0.0016,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0016,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "akita_black_bowl_2": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/akita_black_bowl_2/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/akita_black_bowl_2"
+    ],
+    "body1": [
+     "/Scene_0/objects/akita_black_bowl_2/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 40,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1118,
+   0.1113,
+   0.0526
+  ],
+  "place_prim": "/Scene_0/objects/akita_black_bowl_2/Geometry/Body",
+  "placed_xy": [
+   0.0,
+   -0.2
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   0.0,
+   -0.1,
+   -0.0016,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0016,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "cookies_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/cookies_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/cookies_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/cookies_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 1,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.0614,
+   0.0836,
+   0.0201
+  ],
+  "place_prim": "/Scene_0/objects/cookies_1/Geometry/Body",
+  "placed_xy": [
+   0.25,
+   -0.2
+  ],
+  "dropped_from_z": 0.06,
+  "rest_pose": [
+   0.25,
+   -0.2,
+   0.0094,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.0094,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "flat_stove_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/flat_stove_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/flat_stove_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/flat_stove_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [],
+  "hidden_collision_geoms": 20,
+  "massless_bodies_given_0.1g": [],
+  "bbox_size": [
+   0.2945,
+   0.19,
+   0.0739
+  ],
+  "place_prim": "/Scene_0/objects/flat_stove_1",
+  "placed_xy": [
+   0.25,
+   0.3
+  ],
+  "dropped_from_z": null,
+  "rest_pose": [
+   0.1522,
+   0.3,
+   0.02,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.02,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "glazed_rim_porcelain_ramekin_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/glazed_rim_porcelain_ramekin_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 25,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.0887,
+   0.0887,
+   0.0433
+  ],
+  "place_prim": "/Scene_0/objects/glazed_rim_porcelain_ramekin_1/Geometry/Body",
+  "placed_xy": [
+   -0.125,
+   -0.45
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   -0.125,
+   -0.45,
+   -0.0007,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0007,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "plate_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/plate_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/plate_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/plate_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [
+   "/Geometry/Body/PhysicsFixedJoint"
+  ],
+  "hidden_collision_geoms": 10,
+  "massless_bodies_given_0.1g": [
+   "/Geometry/Body"
+  ],
+  "bbox_size": [
+   0.1372,
+   0.137,
+   0.0166
+  ],
+  "place_prim": "/Scene_0/objects/plate_1/Geometry/Body",
+  "placed_xy": [
+   0.125,
+   -0.45
+  ],
+  "dropped_from_z": 0.05,
+  "rest_pose": [
+   0.125,
+   -0.45,
+   0.0025,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": 0.0025,
+  "final_speed": 0.0,
+  "fell_through": false
+ },
+ "wooden_cabinet_1": {
+  "loaded": true,
+  "body_prim": "/Scene_0/objects/wooden_cabinet_1/Geometry/Body",
+  "world_joints": [
+   {
+    "joint": "/Geometry/Body/PhysicsFixedJoint",
+    "body0": [
+     "/Scene_0/objects/wooden_cabinet_1"
+    ],
+    "body1": [
+     "/Scene_0/objects/wooden_cabinet_1/Geometry/Body"
+    ]
+   }
+  ],
+  "disabled_world_joints": [],
+  "hidden_collision_geoms": 36,
+  "massless_bodies_given_0.1g": [],
+  "bbox_size": [
+   0.2564,
+   0.2218,
+   0.217
+  ],
+  "place_prim": "/Scene_0/objects/wooden_cabinet_1",
+  "placed_xy": [
+   -0.25,
+   0.3
+  ],
+  "dropped_from_z": null,
+  "rest_pose": [
+   -0.2536,
+   0.2992,
+   -0.0046,
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rest_z_above_table": -0.0046,
+  "final_speed": 0.0001,
+  "fell_through": false
+ }
+}
