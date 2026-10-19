@@ -59,7 +59,8 @@ guide/
 └── TODO.md            deferred work
 ```
 - `modules/` is git-ignored; it holds the separately cloned dependencies `pymoveit2` and
-  `irob_lerobot_ros` (see [Installation](#installation), step 2).
+  `irob_lerobot_ros` (see [Installation](#installation), step 2) and the lerobot submodule
+  `modules/lerobot` (step 3).
 - Two companion packages are kept outside this repository: `block_bin_eval` (policy
   evaluation for `block_bin`) and `guide_dataset_tools` (building, merging and inspecting
   LeRobot datasets).
@@ -146,10 +147,12 @@ for old, new in [('"numpy>=2.0.0,<2.3.0"', '"numpy>=2.0.0,<2.4.0"'),
     text = text.replace(old, new)
 path.write_text(text)
 EOF
+# (building the copy needs network access: uv fetches the setuptools build backend)
 uv pip install --python .venv/bin/python --no-sources $LEROBOT python-fcl "transformers>=5.4,<5.6" -c $PINS
+rm -rf $LEROBOT
 git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT), pinned
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
-uv pip check --python .venv/bin/python     # must print no incompatibility
+uv pip check --python .venv/bin/python     # pass: no incompatibility lines ("All installed packages are compatible")
 ```
 > Pass `-c $PINS` on every install: it holds Isaac's nine exact pins plus `huggingface-hub==1.16.1`
 > (1.24 needs `click>=8.4.2`) and `fsspec==2026.2.0`. No lerobot release resolves with them
@@ -427,7 +430,7 @@ which the injection does not reach.
 - **Every camera image comes back empty:** `CUDA_DEVICE_ORDER` is set in the simulator's
   environment; unset it.
 - **`uv pip check` reports incompatibilities** (an install without `-c $PINS`): restore all eleven pins with
-  `uv pip install --python .venv/bin/python -c $PINS torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 packaging==26.0 opencv-python-headless==4.13.0.90 filelock==3.25.2 click==8.1.7 typing-extensions==4.12.2 jinja2==3.1.5 huggingface-hub==1.16.1 fsspec==2026.2.0 --index-url https://download.pytorch.org/whl/cu130 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match`.
+  `uv pip install --python .venv/bin/python -c $PINS -r $PINS --index-url https://download.pytorch.org/whl/cu130 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match`, and re-run the lerobot rebuild step if a PyPI lerobot crept in with the drift.
 - **Depth videos do not play in a browser or the Hugging Face viewer:** browsers cannot decode
   12-bit HEVC; read them with the `pyav` backend as above.
 - Official docs: [Isaac Sim 6.0](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html) · [MoveIt 2](https://moveit.picknik.ai/main/index.html) · [LeRobot](https://github.com/huggingface/lerobot)
