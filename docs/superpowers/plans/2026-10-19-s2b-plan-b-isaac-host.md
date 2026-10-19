@@ -26,6 +26,17 @@
 4. **Coordinates:** every interface a solver, policy or dataset sees is in the **robot's base frame** (`robots.<name>.base_name`, e.g. `fr3_link0`): GUIDE-EX poses, `MotionTarget`, `ROS2Robot`, the PoseRequest results and the recorded states and actions. GUIDE alone converts between that frame and the actual scene/world coordinates, per scene and per robot, so several scenes work at once and datasets are alike whichever scene recorded them. No `/tf` lookup in the solver.
 5. **Recording the controller inputs:** a record field in the task's `init.yaml` `dataset` section selects it (e.g. `action: controller_input`). The recorder then stores the `MotionTarget` handed to the controller at 20 Hz (delta action, gripper width, absolute target) instead of the joint command.
 6. **Strict version compatibility:** `uv pip check` must report **zero** lines; no `--override`. If lerobot's caps conflict with Isaac's exact pins, find a lerobot release that resolves cleanly with Isaac 6.0.1's pins (or report BLOCKED with the exact conflict). Never weaken a pin.
+7. **OSCBF is a git submodule, not vendored** (user, 2026-10-19): `guide_motion/external/oscbf` at 6082329 (github.com/StanfordASL/oscbf, MIT), reached through the symlink `guide_motion/oscbf` -> `external/oscbf/oscbf`. Its code never enters the guide repo's history (the unpushed branch was rewritten). Not a pip dependency: OSCBF's own metadata pins `cbfpy==0.0.1` (numpy<2), pybullet and matplotlib.
+8. **lerobot 0.6.1** (user, 2026-10-19): `.venv` upgraded in place from 0.6.0 (only draccus 0.10.0 -> 0.11.6 moved; guide_core + guide_ex 161 tests and block_bin_eval 351 tests pass). 0.6.1 carries the same `numpy<2.3` / `packaging<26` caps as 0.6.0, so Task 1's strict re-pin still waits on the single-env question.
+9. **Single strict env with a rebuilt lerobot** (user, 2026-10-19): lerobot is a git submodule, `modules/lerobot` (already declared in `.gitmodules`), pinned at v0.6.1 (7e241bd). `.venv` installs a wheel built from a copy of it with exactly two `pyproject.toml` lines changed (`numpy>=2.0.0,<2.4.0`, `packaging>=24.2,<27.0`) and the version `0.6.1+guide.1`. `uv pip install --no-sources` keeps lerobot's own cu128 torch index out. The submodule is never edited. INSTALLATION.md documents the method step by step, with a check that fails if the upstream lines differ. Pins: `huggingface-hub==1.16.1` (1.24 needs click>=8.4.2; Isaac pins click==8.1.7) and `fsspec==2026.2.0` join `$PINS`. Gate: `uv pip check` reports zero lines.
+10. **Correct the FR3's mass properties** (user, 2026-10-19): the description pipeline's mass override sets `fr3_link8` and `fr3_hand_tcp` (frames on the real robot, 1.0 kg bodies in Isaac 6.0's asset) to 1 g with a negligible inertia. `fr3_hand` and both fingers take franka_description's mass, COM and inertia. link0 is left as is (fixed base). The override layer is committed as `robots/fr3/fr3.usda`, the self-checks re-run against the corrected PhysX model, and GUIDE's scenes must load that layer (Plan B).
+
+**Controller rulings (2026-10-20, from Plan A's final review; they override the text below):**
+
+- **Mass overrides in every scene.** The host applies `description.ROBOTS[robot]["mass_override"]` (the corrected masses, COMs and inertias Plan A committed) to the scene's robot prims at registration, before play. Any scene that embeds the robot (block_bin.usd embeds the FR3) then runs on the corrected dynamics without referencing `robots/<robot>/<robot>.usda` or Isaac's S3 asset URL; the compiled controller matches PhysX at the first substep, and the 1e-3 M/g check guards it. Spec question 1's "PhysX's own inertials for the bare asset" is superseded: the description is the corrected one.
+- **Standalone check script (Task 4)** loads `description.ROBOTS_DIR / robot / f"{robot}.usda"` for both robots, never the bare asset, so the FR3 is validated on Ruling 10's masses.
+- **Non-finite state:** `Controller.step` maps non-finite output to 0 and counts it as infeasible (Plan A's final fix); the host also never writes a non-finite effort and flags it in diagnostics.
+- **Deferred from Plan A:** FR3 link7's small inertia (2.8e-4) and the Panda's fixed base (no root FixedJoint in franka.usd; PhysX runs it fixed, drift 0.0) are exercised by Task 4's hold and square checks.
 
 ## Spec questions (recorded; the plan follows the reading shown)
 
@@ -1031,8 +1042,7 @@ world = World(stage_units_in_meters=1.0, physics_dt=1.0 / PHYSICS_HZ, rendering_
 world.get_physics_context().enable_gpu_dynamics(False)
 world.scene.add_default_ground_plane()
 UsdLux.DistantLight.Define(world.stage, "/World/light").CreateIntensityAttr(3000)
-source = (str(description.ROBOTS_DIR / "panda" / "panda.usda") if args.robot == "panda"
-          else get_assets_root_path() + description.ROBOTS["fr3"]["usd"])
+source = str(description.ROBOTS_DIR / args.robot / f"{args.robot}.usda")  # Ruling 10: corrected masses
 stage_utils.add_reference_to_stage(source, "/World/robot")
 camera = rep.create.camera(position=(1.6, 1.2, 1.1), look_at=(0.3, 0.0, 0.3))
 annotator = rep.AnnotatorRegistry.get_annotator("rgb")
