@@ -19,8 +19,9 @@ SCENE = "/Scene_0"
 TABLE = (1.0, 1.2, 0.05)  # LIBERO table_full_size; top at scene z = 0, centre at the origin
 DT = 1.0 / 60.0
 FIXTURES = ("wooden_cabinet", "flat_stove")
-# Which limit is "open" (inferred from the ranges; LIBERO's env code is not checked out):
-# the drawers slide out along -Y (range -0.16..0.01 m), the knob turns on toward +rad (-0.005..2.1).
+# Which limit is "open", inferred from the ranges (LIBERO's env code is not checked out). The
+# drawers slide out along -Y to -0.16 m (seen in isaac_cabinet_open.png). The stove knob is
+# assumed "on" toward +2.1 rad (range -0.005..2.1): inferred, not verified.
 OPEN_AT = {"wooden_cabinet": "lower", "flat_stove": "upper"}
 MOVABLE_SPOTS = [(-0.25, -0.2), (0.0, -0.2), (0.25, -0.2), (-0.125, -0.45), (0.125, -0.45)]  # >= 25 cm apart
 FIXTURE_SPOTS = {"wooden_cabinet_1": (-0.25, 0.3), "flat_stove_1": (0.25, 0.3)}
@@ -231,6 +232,10 @@ def main():
     asset_of = {inst: n for n, insts in assets.items() for inst in insts}
     out = {"_isaac": importlib.metadata.version("isaacsim"), "_articulation": {}, "_renders": [], "_render_ptp": {}}
     out_path = DESIGN / "spike_libero_isaac.json"
+    # _findings / _texture_check are evidence recorded from earlier runs and LIBERO references,
+    # not measured here: keep them across re-runs
+    prev = json.loads(out_path.read_text()) if out_path.exists() else {}
+    out.update({k: prev[k] for k in ("_findings", "_texture_check") if k in prev})
     RENDERS.mkdir(parents=True, exist_ok=True)
     stage = omni.usd.get_context().get_stage()
     try:
@@ -315,7 +320,7 @@ def main():
     finally:
         out_path.write_text(json.dumps(out, indent=1) + "\n")
         print(json.dumps(out, indent=1), flush=True)
-    app.close()
+        app.close()
 
 
 if __name__ == "__main__":
