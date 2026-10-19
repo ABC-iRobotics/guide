@@ -89,8 +89,8 @@ git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 ```
 
-**2. Clone GUIDE's vendored modules.** The `.gitmodules` gitlinks are not committed, so
-`--recurse-submodules` pulls nothing; clone them explicitly:
+**2. Clone GUIDE's vendored modules.** Of the `.gitmodules` entries under `modules/` only
+`modules/lerobot` has a committed gitlink (step 3 initialises it); clone the other two explicitly:
 ```bash
 mkdir -p ~/ros2_ws/src/guide/modules && cd ~/ros2_ws/src/guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
@@ -102,27 +102,57 @@ git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
 PINS=src/guide/modules/isaac6-safe-pins.txt
-# Constraints protecting Isaac Sim 6.0.1's exact pins (not tracked: modules/ is git-ignored):
-printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
+# Isaac Sim 6.0.1's exact pins + the two the rest of .venv needs (not tracked: modules/ is git-ignored):
+cat > $PINS <<'EOF'
+numpy==2.3.1
+torch==2.11.0
+torchvision==0.26.0
+packaging==26.0
+opencv-python-headless==4.13.0.90
+filelock==3.25.2
+click==8.1.7
+typing-extensions==4.12.2
+jinja2==3.1.5
+huggingface-hub==1.16.1
+fsspec==2026.2.0
+EOF
 
 # PyTorch first — match the wheel index to the machine's CUDA version (cu130 shown):
-uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
+uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 -c $PINS \
   --index-url https://download.pytorch.org/whl/cu130
 
 # Isaac Sim 6.0.1 (--prerelease=allow is required by a pre-release build dependency):
-uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
+uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" -c $PINS \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 
-# GUIDE runtime deps (-c protects Isaac's torch/numpy pins from being upgraded):
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.1" "transformers>=5.4,<5.6" -c $PINS
+# lerobot 0.6.1, rebuilt from the submodule modules/lerobot (7e241bd) with exactly its numpy and
+# packaging caps raised to Isaac's pins; the submodule itself is never edited:
+git -C src/guide submodule update --init modules/lerobot
+LEROBOT=$(mktemp -d)
+git -C src/guide/modules/lerobot archive HEAD | tar -x -C $LEROBOT
+python3 - $LEROBOT/pyproject.toml <<'EOF'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+for old, new in [('"numpy>=2.0.0,<2.3.0"', '"numpy>=2.0.0,<2.4.0"'),
+                 ('"packaging>=24.2,<26.0"', '"packaging>=24.2,<27.0"'),
+                 ('version = "0.6.1"', 'version = "0.6.1+guide.1"')]:
+    if text.count(old) != 1:
+        sys.exit(f"{path}: expected {old} exactly once, found {text.count(old)}: not lerobot v0.6.1?")
+    text = text.replace(old, new)
+path.write_text(text)
+EOF
+uv pip install --python .venv/bin/python --no-sources $LEROBOT python-fcl "transformers>=5.4,<5.6" -c $PINS
 git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT), pinned
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
-uv pip check --python .venv/bin/python     # must report no incompatibilities
+uv pip check --python .venv/bin/python     # must print no incompatibility
 ```
-> Always pass `-c $PINS` when installing torch-dependent packages — without it the resolver
-> re-resolves torch/numpy and breaks the CUDA/Isaac stack. lerobot 0.6.1 caps `numpy<2.3.0`,
-> which conflicts with Isaac's exact `numpy==2.3.1`; `-c $PINS` forces Isaac's version (works
-> for lerobot at runtime). lerobot 0.6.1 also needs `transformers 5.4-5.6` + `huggingface-hub 1.x`.
+> Pass `-c $PINS` on every install: it holds Isaac's nine exact pins plus `huggingface-hub==1.16.1`
+> (1.24 needs `click>=8.4.2`) and `fsspec==2026.2.0`. No lerobot release resolves with them
+> (0.6.x caps `numpy<2.3.0` and `packaging<26.0`), so lerobot 0.6.1 is rebuilt from a copy of the
+> `modules/lerobot` submodule with exactly those two caps raised and the version `0.6.1+guide.1`;
+> the script stops if the upstream lines differ. `--no-sources` keeps lerobot's own cu128 torch
+> index out. Step by step and why: [INSTALLATION.md](INSTALLATION.md), section 2.
 
 **4. Build the workspace** (`.venv` is hidden, so colcon skips it automatically):
 ```bash
@@ -392,8 +422,8 @@ which the injection does not reach.
   takes `127.0.0.1:50050` and kills its holder. Use one simulator and add scenes instead.
 - **Every camera image comes back empty:** `CUDA_DEVICE_ORDER` is set in the simulator's
   environment; unset it.
-- **`uv pip check` reports incompatibilities** (a torch-dependent install without `-c`):
-  `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
+- **`uv pip check` reports incompatibilities** (an install without `-c $PINS`): restore all eleven pins with
+  `uv pip install --python .venv/bin/python -c $PINS torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 packaging==26.0 opencv-python-headless==4.13.0.90 filelock==3.25.2 click==8.1.7 typing-extensions==4.12.2 jinja2==3.1.5 huggingface-hub==1.16.1 fsspec==2026.2.0 --index-url https://download.pytorch.org/whl/cu130 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match`.
 - **Depth videos do not play in a browser or the Hugging Face viewer:** browsers cannot decode
   12-bit HEVC; read them with the `pyav` backend as above.
 - Official docs: [Isaac Sim 6.0](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html) · [MoveIt 2](https://moveit.picknik.ai/main/index.html) · [LeRobot](https://github.com/huggingface/lerobot)

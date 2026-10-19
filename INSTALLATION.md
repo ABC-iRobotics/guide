@@ -41,8 +41,9 @@ git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 | `topic_based_ros2_control` | ros2_control over the joint topics Isaac publishes |
 | `modules/pymoveit2`, `modules/irob_lerobot_ros` | MoveIt from Python; the LeRobot robot (`ROS2Robot`) the solvers drive |
 
-**Why:** `modules/` is git-ignored (`.gitmodules` lists submodules but no gitlinks are
-committed), so the two modules are cloned by hand.
+**Why:** `modules/` is git-ignored. Of the submodules `.gitmodules` lists there, only
+`modules/lerobot` has a committed gitlink (section 2 initialises it); the two modules above are
+cloned by hand.
 
 ### 2. Python environment
 
@@ -50,26 +51,72 @@ committed), so the two modules are cloned by hand.
 cd ~/ros2_ws
 uv venv --python /usr/bin/python3.12 .venv
 PINS=src/guide/modules/isaac6-safe-pins.txt
-printf 'numpy==2.3.1\ntorch==2.11.0\ntorchvision==0.26.0\n' > $PINS
-uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
+cat > $PINS <<'EOF'
+numpy==2.3.1
+torch==2.11.0
+torchvision==0.26.0
+packaging==26.0
+opencv-python-headless==4.13.0.90
+filelock==3.25.2
+click==8.1.7
+typing-extensions==4.12.2
+jinja2==3.1.5
+huggingface-hub==1.16.1
+fsspec==2026.2.0
+EOF
+uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 -c $PINS \
   --index-url https://download.pytorch.org/whl/cu130
-uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
+uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" -c $PINS \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
-uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.1" "transformers>=5.4,<5.6" -c $PINS
+# lerobot 0.6.1, rebuilt from the submodule modules/lerobot (7e241bd) with exactly its numpy and
+# packaging caps raised to Isaac's pins; the submodule itself is never edited:
+git -C src/guide submodule update --init modules/lerobot
+LEROBOT=$(mktemp -d)
+git -C src/guide/modules/lerobot archive HEAD | tar -x -C $LEROBOT
+python3 - $LEROBOT/pyproject.toml <<'EOF'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+for old, new in [('"numpy>=2.0.0,<2.3.0"', '"numpy>=2.0.0,<2.4.0"'),
+                 ('"packaging>=24.2,<26.0"', '"packaging>=24.2,<27.0"'),
+                 ('version = "0.6.1"', 'version = "0.6.1+guide.1"')]:
+    if text.count(old) != 1:
+        sys.exit(f"{path}: expected {old} exactly once, found {text.count(old)}: not lerobot v0.6.1?")
+    text = text.replace(old, new)
+path.write_text(text)
+EOF
+uv pip install --python .venv/bin/python --no-sources $LEROBOT python-fcl "transformers>=5.4,<5.6" -c $PINS
 git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT) at its pinned commit
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
-uv pip check --python .venv/bin/python     # must report no incompatibilities
+uv pip check --python .venv/bin/python     # must print no incompatibility
 ```
 
 - `--prerelease=allow`: isaacsim-core needs the pre-release `tinyobjloader==2.0.0rc13`,
   which uv skips by default.
-- `-c $PINS` on every torch-dependent install: lerobot 0.6.1 caps `numpy<2.3.0`, so
-  without it uv downgrades numpy to 2.2.6 and drags torch to 2.10.0 / torchvision to
-  0.25.0, and `uv pip check` reports 9 incompatibilities with Isaac's exact pins (numpy
-  2.3.1 runs fine for lerobot). lerobot 0.6.1 also needs `transformers 5.4–5.6` and
-  `huggingface-hub 1.x`.
-- After a drift (also a cu128 torch pulled in by another project), restore with
-  `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
+- `-c $PINS` on every install into `.venv`. `$PINS` holds Isaac 6.0.1's nine exact pins
+  (`isaacsim-kernel`, `isaacsim-core`) and two more the rest of `.venv` needs with them:
+  `huggingface-hub==1.16.1` (1.24 needs `click>=8.4.2`; Isaac pins `click==8.1.7`) and
+  `fsspec==2026.2.0` (pinned by isaacsim-core). `uv pip check` must print no incompatibility;
+  anything it prints is drift.
+- **lerobot, step by step.** No lerobot release resolves with Isaac's pins: 0.6.x caps
+  `numpy<2.3.0` and `packaging<26.0` (Isaac: 2.3.1, 26.0), 0.4–0.5 cap torch/torchvision below
+  Isaac's, 0.3.2 needs `fsspec<=2025.3.0`. So `.venv` gets lerobot 0.6.1 rebuilt from a copy of
+  the submodule `modules/lerobot` (v0.6.1, 7e241bd):
+  1. `git submodule update --init modules/lerobot` checks out the pinned commit;
+  2. `git archive HEAD` copies it into a temporary directory; the submodule is never edited;
+  3. the script changes exactly three lines of the copy's `pyproject.toml`: `numpy>=2.0.0,<2.4.0`,
+     `packaging>=24.2,<27.0` and the version `0.6.1+guide.1` (so `uv pip list` shows it is not
+     PyPI's). It exits with an error if any of the three upstream lines is not found exactly once,
+     i.e. if the submodule is not v0.6.1;
+  4. `uv pip install --no-sources … -c $PINS` builds and installs the copy. `--no-sources` makes uv
+     ignore lerobot's own `[tool.uv.sources]`, which would fetch torch/torchvision from a
+     pytorch-cu128 index and replace Isaac's 2.11.0+cu130.
+
+  lerobot runs at Isaac's versions: guide_core + guide_ex (161) and block_bin_eval (351) tests and
+  a LeRobotDataset write/read round trip pass. To move to another lerobot release: bump the
+  submodule, update the three expected lines in the script, rebuild.
+- After a drift (also a cu128 torch pulled in by another project), restore all eleven pins with
+  `uv pip install --python .venv/bin/python -c $PINS torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 packaging==26.0 opencv-python-headless==4.13.0.90 filelock==3.25.2 click==8.1.7 typing-extensions==4.12.2 jinja2==3.1.5 huggingface-hub==1.16.1 fsspec==2026.2.0 --index-url https://download.pytorch.org/whl/cu130 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match`.
 - The venv is uv's: it has no `pip`; always `uv pip ... --python .venv/bin/python`.
 - `guide_motion` (S2b) is a plain Python package, not a colcon one (`COLCON_IGNORE`): it is
   installed editable into `.venv`, so the solver and the Isaac process import the checkout. OSCBF
