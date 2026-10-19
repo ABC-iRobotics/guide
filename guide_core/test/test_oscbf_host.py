@@ -325,3 +325,15 @@ def test_a_stop_does_not_revive_the_last_target_on_the_next_play(host_module, mo
     host._on_stop(None)
     run(host, 80)  # the new clock passes 0.34 s, where the old target was put
     assert all(t is not old for t in host._controller.targets[60:]) and host.diagnostics["stale"]
+
+
+def test_the_home_hold_survives_a_stop(host_module, monkeypatch):
+    """Ruling 2 pin (controller, B3b): a stop forgets old targets, but Reset's home hold is exempt
+    from staleness and stays held on the next play, until a fresh target replaces it."""
+    host, arm = make_host(host_module, monkeypatch)
+    host.home()
+    run(host, 5)
+    home = host._controller.targets[-1]
+    host._on_stop(None)
+    run(host, 60)
+    assert all(t is home for t in host._controller.targets) and not host.diagnostics["stale"]

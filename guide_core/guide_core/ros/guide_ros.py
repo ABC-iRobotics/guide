@@ -58,7 +58,7 @@ from scipy.spatial.transform import Rotation
 
 from guide_core.core.guide_simulator import GUIDESimulator
 from guide_core.types.geometry import Pose
-from guide_motion.targets import POSE, Target
+from guide_motion.targets import JOINTS, POSE, TWIST, Target
 from guide_msgs.msg import MotionTarget
 from guide_msgs.srv import Attribute, CheckSuccess, Collision, FinalizeRecording
 from guide_msgs.srv import Pose as PoseSrv
@@ -259,6 +259,14 @@ class GUIDEROS2Interface(Node):
             if msg.frame_id and msg.frame_id != host.model.base_link:
                 self._logger.warning(
                     f"{host.topic}: target in '{msg.frame_id}', expected '{host.model.base_link}'; dropped",
+                    throttle_duration_sec=5.0,
+                )
+                return
+            # Controller.step reads an unknown mode as POSE, and raises every substep on a wrong-length q
+            if msg.mode not in (POSE, TWIST, JOINTS) or (msg.mode == JOINTS and len(msg.joints) != len(host.model.arm_joints)):
+                self._logger.warning(
+                    f"{host.topic}: mode {msg.mode} with {len(msg.joints)} joints is not a target for "
+                    f"{len(host.model.arm_joints)} arm joints; dropped",
                     throttle_duration_sec=5.0,
                 )
                 return

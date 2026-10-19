@@ -90,7 +90,10 @@ class OscbfHost:
         # The physics clock restarts on play: a target from before the stop would turn fresh again
         # once the new clock passed the time it was put at. Targets put from now on go to the new slot.
         # ponytail: a put racing this swap lands in the old slot and is lost; the next 20 Hz target replaces it
+        latest, _ = self.holder.get(self._t)
         self.holder = TargetHolder(stale_after=0.25)
+        if latest is not None and latest is self._home:
+            self.holder.put(latest)  # Ruling 2: Reset's home hold never goes stale, a stop included
 
     def _on_step(self, dt, context) -> None:
         if self.diagnostics["refused"] or not (self._attached or self._attach(dt)):

@@ -238,6 +238,9 @@ def test_a_motion_target_with_a_zero_quaternion_is_dropped_with_a_warning(isaac_
     me._logger.warning.assert_called_once()
 
 
+ARM_JOINTS = [f"fr3_joint{i}" for i in range(1, 8)]
+
+
 def test_a_nan_gripper_width_passes_through_to_leave_the_gripper(isaac_import):
     """FIX B1: NaN means "leave the gripper" (Target's convention). rosidl cannot default the
     field to NaN, so publishers set it; the ROS boundary must hand it to the holder unchanged."""
@@ -249,7 +252,7 @@ def test_a_nan_gripper_width_passes_through_to_leave_the_gripper(isaac_import):
     me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
                          create_subscription=lambda *args, **kwargs: subscriptions.append(args))
     target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
-                                  model=SimpleNamespace(base_link="fr3_link0"))
+                                  model=SimpleNamespace(base_link="fr3_link0", arm_joints=ARM_JOINTS))
     ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
     (_, _, put, _), = subscriptions
 
@@ -273,3 +276,60 @@ def test_reset_homes_the_oscbf_robots_of_that_scene(command_module):
 
     assert module._cmd_reset_scene(runtime, 1) is True
     assert homed == [1]
+
+
+def motion_subscription(isaac_import):
+    """GUIDE's motion_target callback for an FR3 host, on a fake node: (node, host, put)."""
+    from guide_motion.targets import TargetHolder
+
+    ros = isaac_import("guide_core.ros.guide_ros")
+    subscriptions = []
+    me = SimpleNamespace(_logger=MagicMock(), _reentrant_group=None,
+                         create_subscription=lambda *args, **kwargs: subscriptions.append(args))
+    target_host = SimpleNamespace(topic="/Sim_0/Scene_0/franka/motion_target", holder=TargetHolder(),
+                                  model=SimpleNamespace(base_link="fr3_link0", arm_joints=ARM_JOINTS))
+    ros.GUIDEROS2Interface._subscribe_motion_target(me, target_host)
+    (_, _, put, _), = subscriptions
+    return me, target_host, put
+
+
+def test_a_joints_target_of_the_wrong_length_is_dropped_with_a_warning(isaac_import):
+    """REVIEWER C B3: an empty (the message default) or wrong-length joints array would raise in
+    Controller.step on every physics substep; it is dropped at the ROS boundary instead."""
+    from guide_msgs.msg import MotionTarget
+
+    me, target_host, put = motion_subscription(isaac_import)
+    for n in (0, 3, 12):
+        put(MotionTarget(mode=MotionTarget.MODE_JOINTS, frame_id="fr3_link0", joints=[0.1] * n))
+    assert target_host.holder.get(0.0) == (None, True) and me._logger.warning.call_count == 3
+    put(MotionTarget(mode=MotionTarget.MODE_JOINTS, frame_id="fr3_link0", joints=[0.1] * 7))
+    assert len(target_host.holder.get(0.0)[0].joints) == 7
+
+
+def test_a_motion_target_of_an_unknown_mode_is_dropped_with_a_warning(isaac_import):
+    """REVIEWER C B3: Controller.step reads any mode it does not know as POSE, with the default
+    position (the base origin) as the goal; such a message is dropped at the ROS boundary."""
+    from guide_msgs.msg import MotionTarget
+
+    me, target_host, put = motion_subscription(isaac_import)
+    put(MotionTarget(mode=9, frame_id="fr3_link0"))
+    assert target_host.holder.get(0.0) == (None, True)
+    me._logger.warning.assert_called_once()
+
+
+def test_reset_runs_reset_yaml_before_homing(command_module):
+    """Ruling 2 pin (controller, B3b): reset.yaml places the objects and drives the fingers first;
+    the oscbf hosts are homed after it."""
+    module = command_module("_cmd_simulator")
+    calls = []
+    manager = SimpleNamespace(reset_preprocess=lambda i: ["reset.yaml"], reset_postprocess=lambda i, results: True,
+                              _scenes=[SimpleNamespace(reset_fire=lambda: None)])
+    runtime = host(
+        _simulator=SimpleNamespace(_scene_manager=manager),
+        _execute_instructions_directly=lambda instructions: calls.extend(instructions) or [],
+        _motion_hosts={0: [SimpleNamespace(home=lambda: calls.append("home"))]},
+    )
+
+    module._cmd_reset_scene(runtime, 0)
+
+    assert calls == ["reset.yaml", "home"]
