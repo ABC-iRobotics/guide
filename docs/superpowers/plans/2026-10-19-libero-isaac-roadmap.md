@@ -27,6 +27,11 @@ YAML, `mujoco` 3.8.0 + `mujoco_usd_converter` 0.2.0 (already in `.venv`), lerobo
 **Spec:** none yet — this roadmap is the decomposition agreed in the 2026-10-19 brainstorm.
 Each step's spec links back here.
 
+**Live tracker:** [LIBERO Isaac Roadmap](https://claude.ai/artifact/HC3YKe5CcfYdCf4wbTLVzE), a
+claude.ai page (private, owner's account) with the steps, ongoing work, problems, open questions,
+decisions and a change log. It is updated whenever any of these change; this file keeps the
+step contents and candidate solutions.
+
 ## Evaluation design (user decision, 2026-10-19)
 
 Round 1 is a 2 × 2 cross-domain test with the same model recipe:
@@ -63,8 +68,9 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 | Step | State | Branch / artifact | Updated |
 |---|---|---|---|
 | S0 Workspace & tracking | in progress | `feat/libero` (guide), this file | 2026-10-19 |
-| S1 Asset route (spike) | next | — | — |
+| S1 Asset route (spike) | in progress | `spike/libero-assets` | 2026-10-19 |
 | S2 Embodiments | not started | — | — |
+| S2b Native motion planning + OSC | later | `feat/libero-native-motion` | 2026-10-19 |
 | S3 BDDL → GUIDE compiler | not started | — | — |
 | S4 Success predicates | not started | — | — |
 | S5 Demonstrations (H1 replay, H2 solvers) | not started | — | — |
@@ -78,13 +84,14 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 
 ## S0 — Workspace & tracking
 
-- [x] Branch `feat/libero` from local `dev` (834bb48, = content of `origin/main`, GUIDE 2.0.0), worktree `src/guide/.claude/worktrees/libero`
+- [x] Branch `feat/libero` from local `dev` (834bb48, = content of `origin/main`, GUIDE 2.0.0), checked out in `~/ros2_ws/src/guide` (no worktrees, user decision 2026-10-19)
+- [x] Live tracker page (link above)
 - [x] This roadmap
 - [x] Memory (2026-10-19):
   - file memory `guide-libero-isaac`;
   - claude-mem corpus `libero-isaac` (322 decisions/discoveries for the project; rebuild with a LIBERO query once claude-mem's search backend works);
-  - graphify graph of this worktree in `graphify-out/` (git-ignored): 1,459 nodes, 94 labelled communities, code AST + 33 docs. Refresh after each step with `/graphify . --update` from the worktree root.
-- [ ] Decide: put `guide_dataset_tools` and `vla_training` under git. Both are touched by S7/S8 and are **not** repositories today (user decision).
+  - graphify graph of the guide repo in `graphify-out/` (git-ignored): 1,459 nodes, 94 labelled communities, code AST + 33 docs. Refresh after each step with `/graphify . --update` from `~/ros2_ws/src/guide`.
+- [x] `guide_dataset_tools` and `vla_training` stay outside git (user decision 2026-10-19), although S7/S8 change them.
 
 ## S1 — Asset route (spike, LIBERO-Spatial)
 
@@ -105,7 +112,10 @@ Question: which route gives Isaac-loadable USD with sane colliders, working arti
 Photoreal upgrade (materials/textures on top of exact geometry) is a separate knob. "Same
 semantics" constrains geometry and poses, not appearance.
 
-- [ ] Probe a + c on the Spatial object set: load in Isaac 6.0.1, drop test, drawer open/close, render
+User decision (2026-10-19): probe option **a** (`mujoco_usd_converter`) on branch
+`spike/libero-assets`, placing the objects from the BDDL regions with **Replicator**.
+
+- [ ] Probe a on the Spatial object set: load in Isaac 6.0.1, Replicator placement, drop test, drawer open/close, render
 - [ ] Check licences of LIBERO's asset families (scanned, HOPE, TurboSquid, articulated)
 - [ ] Recommendation recorded here
 
@@ -118,6 +128,22 @@ Round 1 needs **Panda** (LIBERO's robot). Later: FR3, UR5e and others.
 - LIBERO's robot sits on a pedestal mount at a fixed offset from the table. Reproduce the base pose and both cameras (`agentview`, `robot0_eye_in_hand`) exactly for round 1.
 - [ ] Panda in GUIDE: config, MoveIt, gripper, base pose matched to LIBERO
 - [ ] An OSC-equivalent controller for **evaluation** (LIBERO's policy outputs OSC deltas at 20 Hz). Options: Isaac Lab differential-IK / OSC, MoveIt Servo, Pink (as `eval_policy_pink`).
+
+## S2b — Native motion planning + OSC (branch `feat/libero-native-motion`, later)
+
+User decision (2026-10-19): a feature branch off `feat/libero` that removes the ROS 2 planning
+pipeline (MoveIt through `pymoveit2`/`irob_lerobot_ros`) and plans trajectories natively from
+the USD. Operational space control (OSC) goes on top of the planner. Worked on later; it gets
+its own brainstorm → spec → plan.
+
+| Candidate | Notes |
+|---|---|
+| cuRobo (GPU motion generation; cuMotion is its Isaac ROS / MoveIt packaging) | world from the USD stage, robot from URDF/USD; fast batched planning; check Isaac 6.0.1 / torch 2.11 compatibility |
+| PINK (Pinocchio differential IK, already used by `eval_policy_pink`) | robot from URDF; no collision-aware global planning by itself; light and runs on the real robot too |
+| Isaac Lab controllers (differential IK, OSC) | OSC layer candidate |
+
+Open question: GUIDE-EX solvers drive the real FR3 as well, and robot-agnostic layers must not
+hold Isaac-specific code. Planning "from the USD" has to keep that boundary.
 
 ## S3 — BDDL → GUIDE task compiler
 
