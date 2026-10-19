@@ -97,3 +97,12 @@ def test_franka_inertials_cover_the_arm_and_the_hand():
     assert set(fer) == {f"panda_link{i}" for i in range(8)} | {"panda_hand", "panda_leftfinger", "panda_rightfinger"}
     assert fer["panda_hand"][0] == pytest.approx(0.6544)
     np.testing.assert_allclose(fer["panda_rightfinger"][1], fer["panda_leftfinger"][1])
+
+
+def test_principal_inertia_rebuilds_the_tensor():
+    from scipy.spatial.transform import Rotation
+
+    I = np.array([[0.0090, 0.0, 0.0020], [0.0, 0.0115, 0.0], [0.0020, 0.0, 0.0085]])  # franka_description fer link0
+    diagonal, (w, x, y, z) = description.principal_inertia(I)
+    R = Rotation.from_quat([x, y, z, w]).as_matrix()
+    np.testing.assert_allclose(R @ np.diag(diagonal) @ R.T, I, atol=1e-12)

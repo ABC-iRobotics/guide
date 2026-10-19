@@ -209,3 +209,202 @@ def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str):
         "usd_to_urdf": {name: X.tolist() for name, X in frames.items()},
     }
     return urdf, xrdf, description
+
+
+def principal_inertia(inertia):
+    """USD's (diagonalInertia, principalAxes wxyz) for a full 3x3 inertia about the COM."""
+    diagonal, axes = np.linalg.eigh(np.asarray(inertia, float))
+    if np.linalg.det(axes) < 0:
+        axes[:, 0] *= -1
+    x, y, z, w = Rotation.from_matrix(axes).as_quat()
+    return diagonal, np.array([w, x, y, z])
+
+
+def _write_mass_override(path: str, source: str, inertials: dict) -> None:
+    """A wrapper USD that references `source` and overrides its links' mass properties (Kit's pxr)."""
+    from pxr import Gf, Usd, UsdPhysics
+
+    stage = Usd.Stage.CreateNew(path)
+    root = stage.DefinePrim("/" + Path(path).stem, "Xform")
+    root.GetReferences().AddReference(source)
+    stage.SetDefaultPrim(root)
+    links = {prim.GetName(): prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.MassAPI)}
+    for name, (mass, com, inertia) in inertials.items():
+        diagonal, (w, x, y, z) = principal_inertia(inertia)
+        api = UsdPhysics.MassAPI(links[name])
+        api.CreateMassAttr().Set(float(mass))
+        api.CreateCenterOfMassAttr().Set(Gf.Vec3f(*(float(v) for v in com)))
+        api.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(*(float(v) for v in diagonal)))
+        api.CreatePrincipalAxesAttr().Set(Gf.Quatf(float(w), float(x), float(y), float(z)))
+    stage.GetRootLayer().Save()
+
+
+def main(argv=None) -> None:
+    import argparse
+    import os
+    import shutil
+    import sys
+    import tempfile
+
+    parser = argparse.ArgumentParser(description="Build guide_motion/robots/<robot> from Isaac's robot USD.")
+    parser.add_argument("--robot", choices=sorted(ROBOTS), required=True)
+    parser.add_argument("--spheres", type=int, default=6, help="collision spheres per link (the XRDF test used 6)")
+    parser.add_argument("--radius-offset", type=float, default=0.01, help="the editor UI's default")
+    parser.add_argument("--franka-description", type=Path, default=FRANKA_DESCRIPTION)
+    args = parser.parse_args(argv)
+    robot = args.robot
+
+    from isaacsim import SimulationApp
+
+    app = SimulationApp({"headless": True})
+    from isaacsim.core.utils.extensions import enable_extension
+
+    for extension in ("isaacsim.robot_setup.xrdf_editor", "isaacsim.asset.exporter.urdf",
+                      "isaacsim.robot_motion.cumotion", "isaacsim.storage.native"):
+        enable_extension(extension)
+    app.update()
+
+    import cumotion
+    import isaacsim.core.experimental.utils.xform as xform_utils
+    import isaacsim.robot_motion.cumotion as cu
+    import omni.timeline
+    import omni.usd
+    from isaacsim.asset.exporter.urdf.converter import UsdToUrdfConverter
+    from isaacsim.core.experimental.prims import Articulation
+    from isaacsim.robot_setup.xrdf_editor import EditorState, articulation_discovery, sphere_generation
+    from isaacsim.storage.native import get_assets_root_path
+    from pxr import Usd, UsdPhysics
+
+    from guide_motion.model import Model
+
+    def fail(check: str, detail) -> None:
+        print(f"[guide_motion.description] {robot}: check '{check}' FAILED: {detail}; nothing written", flush=True)
+        os._exit(1)  # skip Kit's teardown: nothing to save
+
+    tmp = Path(tempfile.mkdtemp(prefix=f"guide_motion_{robot}_"))
+    source = get_assets_root_path() + ROBOTS[robot]["usd"]
+    stage_path = source
+    if robot == "panda":  # the shipped inertias are ~1e-7 kg m^2: torque control chattered (spec 4.2.3)
+        stage_path = str(tmp / "panda.usda")
+        _write_mass_override(stage_path, source, franka_inertials("fer", args.franka_description))
+    context = omni.usd.get_context()
+    context.open_stage(stage_path)
+    while context.get_stage_loading_status()[2] > 0:
+        app.update()
+    stage = context.get_stage()
+    while any(prim.IsInstanceable() for prim in stage.Traverse()):  # instanced meshes cannot feed the sphere generator
+        for prim in stage.Traverse():
+            if prim.IsInstanceable():
+                prim.SetInstanceable(False)
+    app.update()
+    base = articulation_discovery.find_all_articulation_base_paths(stage)[0]
+    bodies = {p.GetName(): p for p in Usd.PrimRange(stage.GetPrimAtPath(base)) if p.HasAPI(UsdPhysics.RigidBodyAPI)}
+    link0 = str(bodies[f"{robot}_link0"].GetPath())
+
+    # Timeline stopped: authored link poses, and an export that does not bake the current pose (defect D).
+    usd_poses = {name: np.asarray(xform_utils.get_relative_transform(prim, link0)) for name, prim in bodies.items()}
+    raw = tmp / "raw"
+    raw.mkdir()
+    UsdToUrdfConverter(stage=stage, root_prim_path=base, mesh_dir_name="meshes", mesh_path_prefix="./").convert(str(raw / f"{robot}.urdf"))
+
+    timeline = omni.timeline.get_timeline_interface()
+    timeline.play()
+    for _ in range(10):
+        app.update()
+    editor = EditorState()
+    editor.select_articulation(base)
+    for link, meshes in editor.link_to_meshes.items():  # one mesh per link, as the UI's "Generate Spheres"
+        mesh = "/collisions" if "/collisions" in meshes else meshes[0]
+        path = editor.link_path(link)
+        points, faces, counts = sphere_generation.compute_link_frame_mesh(path, path + mesh)
+        editor.collision_sphere_editor.generate_spheres(path, points, faces, counts, args.spheres, args.radius_offset, False)
+    editor.active_joints[:] = [name.startswith(f"{robot}_joint") for name in editor.dof_names]
+    editor.joint_positions = np.array((HOME + [0.0, 0.0])[: editor.num_dof], dtype=float)
+    editor.export_xrdf(str(raw / f"{robot}.xrdf"), format_version=2.0)
+    urdf, xrdf, meta = build((raw / f"{robot}.urdf").read_text(), yaml.safe_load((raw / f"{robot}.xrdf").read_text()), usd_poses, robot)
+
+    # The simulator's mass properties go into the URDF (in its link frames).
+    arm = Articulation(base)
+    app.update()
+    dofs = list(arm.dof_names)
+    arm_dofs = [dofs.index(j) for j in xrdf["cspace"]["joint_names"]]
+
+    def settle(q):
+        full = np.zeros(arm.num_dofs)
+        full[arm_dofs] = q
+        arm.set_dof_positions(full[None])
+        arm.set_dof_position_targets(full[None])
+        arm.set_dof_velocities(np.zeros((1, arm.num_dofs)))
+        app.update()
+        return arm.get_dof_positions().numpy()[0][arm_dofs].astype(float)
+
+    settle(HOME)
+    names = list(arm.link_names)
+    unknown = sorted(set(names) - set(meta["usd_to_urdf"]))
+    if unknown:
+        fail("links", f"PhysX links the URDF lacks: {unknown}")
+    masses = arm.get_link_masses().numpy()[0]
+    coms = arm.get_link_coms()[0].numpy()[0]
+    inertias = arm.get_link_inertias().numpy()[0].reshape(-1, 3, 3)
+    frames = {name: np.array(X) for name, X in meta["usd_to_urdf"].items()}
+    urdf = set_inertials(urdf, to_urdf_frames(dict(zip(names, masses)), dict(zip(names, coms)), dict(zip(names, inertias)), frames))
+    out = tmp / robot
+    out.mkdir()
+    (out / f"{robot}.urdf").write_text(urdf)
+    (out / f"{robot}.xrdf").write_text(yaml.safe_dump(xrdf, sort_keys=False))
+    model = Model.load(out)
+
+    # Self-validation (spec 4.2.5): fail loudly, write nothing.
+    checks = {}
+    try:
+        description_robot = cu.load_cumotion_robot(str(out), f"{robot}.urdf", str(out / f"{robot}.xrdf")).robot_description
+    except Exception as error:
+        fail("cumotion_load", error)
+    checks["cumotion_load"] = "ok"
+    inspector = cumotion.create_robot_world_inspector(description_robot, cumotion.create_world().add_world_view())
+    home_hits = inspector.frames_in_self_collision(description_robot.default_cspace_configuration())
+    if home_hits:
+        fail("home_self_collision", home_hits)
+    checks["home_self_collision"] = "free"
+    kinematics = description_robot.kinematics()
+    limits = np.array([[kinematics.cspace_coord_limits(i).lower, kinematics.cspace_coord_limits(i).upper]
+                       for i in range(kinematics.num_cspace_coords())])
+    samples = np.random.default_rng(0).uniform(limits[:, 0], limits[:, 1], size=(1000, len(limits)))
+    fraction = float(np.mean([bool(inspector.frames_in_self_collision(q.reshape(-1, 1))) for q in samples]))
+    if fraction > 0.08:
+        fail("random_self_collision", f"{fraction:.3f} > 0.08")
+    checks["random_self_collision"] = round(fraction, 3)
+    worst_M = worst_g = 0.0
+    for q in [model.home] + list(np.random.default_rng(1).uniform(model.lower, model.upper, size=(5, len(arm_dofs)))):
+        q = settle(q)
+        M_physx = arm.get_mass_matrices().numpy()[0][np.ix_(arm_dofs, arm_dofs)]
+        g_physx = arm.get_dof_gravity_compensation_forces().numpy()[0][arm_dofs]
+        M, g = np.asarray(model.manipulator.mass_matrix(q)), np.asarray(model.manipulator.gravity_vector(q))
+        worst_M = max(worst_M, float(np.linalg.norm(M - M_physx) / np.linalg.norm(M_physx)))
+        worst_g = max(worst_g, float(np.linalg.norm(g - g_physx) / np.linalg.norm(g_physx)))
+    if max(worst_M, worst_g) > 1e-3:
+        fail("dynamics", f"M {worst_M:.2e}, g {worst_g:.2e} relative > 1e-3")
+    checks["mass_matrix_rel"], checks["gravity_rel"] = worst_M, worst_g
+
+    # Spec 9: the FR3's masses come from PhysX's colliders; compare once with franka_description's.
+    datasheet = franka_inertials(ROBOTS[robot]["datasheet"], args.franka_description)
+    meta["mass_check_kg"] = {n: [float(m), datasheet[n][0]] for n, m in zip(names, masses) if n in datasheet}
+    for name, (physx, sheet) in meta["mass_check_kg"].items():
+        print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet:.3f} kg")
+    meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
+    (out / "description.json").write_text(json.dumps(meta, indent=1))
+    if robot == "panda":
+        shutil.copy(stage_path, out / "panda.usda")
+    timeline.stop()
+    app.update()
+    destination = ROBOTS_DIR / robot
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(out, destination)
+    print(f"[guide_motion.description] {robot}: wrote {destination}: {checks}", flush=True)
+    app.close()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

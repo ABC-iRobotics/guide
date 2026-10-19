@@ -1,0 +1,123 @@
+<robot name="fr3">
+  <link name="fr3_link0">
+    <inertial><origin xyz="-0.0290470235 -0.00113619864 0.05647432804" rpy="0 0 0" /><mass value="2.928108454" /><inertia ixx="0.00874913577" ixy="-5.803866952e-05" ixz="-0.001337693073" iyy="0.01124545466" iyz="-3.113163984e-05" izz="0.01158545353" /></inertial></link>
+  <link name="fr3_link1">
+    <inertial><origin xyz="0.0386035921 -0.01812513173 4.106075187e-07" rpy="0 0 0" /><mass value="2.927465439" /><inertia ixx="0.00720241759" ixy="-0.002120138146" ixz="-1.807237584e-06" iyy="0.01749466918" iyz="-4.398452442e-06" izz="0.02022172324" /></inertial></link>
+  <link name="fr3_link2">
+    <inertial><origin xyz="-0.008814615634 -0.07432216737 0.003182890093" rpy="0 0 0" /><mass value="2.9355371" /><inertia ixx="0.0150251209" ixy="0.003538578117" ixz="-0.0001881753075" iyy="0.008231659713" iyz="5.012806854e-05" izz="0.01870401201" /></inertial></link>
+  <link name="fr3_link3">
+    <inertial><origin xyz="0.02897314584 -0.004820064604 0.04070158472" rpy="0 0 0" /><mass value="2.244901419" /><inertia ixx="0.008857597723" ixy="0.0006418609576" ixz="0.00223909285" iyy="0.008570606762" iyz="-0.00155253279" izz="0.009103556096" /></inertial></link>
+  <link name="fr3_link4">
+    <inertial><origin xyz="0.008518744589 0.06304926331 -0.04591010469" rpy="0 0 0" /><mass value="2.615595579" /><inertia ixx="0.01136683645" ixy="-0.003418172244" ixz="0.002169761148" iyy="0.01105884801" iyz="0.003218578944" izz="0.01240466225" /></inertial></link>
+  <link name="fr3_link5">
+    <inertial><origin xyz="0.09729667072 0.02925360341 -0.001603887089" rpy="0 0 0" /><mass value="2.327120781" /><inertia ixx="0.005256389272" ixy="0.00358853042" ixz="1.161226176e-05" iyy="0.01851424761" iyz="-2.631594361e-05" izz="0.02046329714" /></inertial></link>
+  <link name="fr3_link6">
+    <inertial><origin xyz="0.01016927216 -0.04102953646 0.05971316699" rpy="0 0 0" /><mass value="1.817037702" /><inertia ixx="0.009602579541" ixy="0.001395970672" ixz="-0.0006204741834" iyy="0.00494509631" iyz="0.0006256975545" izz="0.007436043579" /></inertial></link>
+  <link name="fr3_link7">
+    <inertial><origin xyz="0.01616324269 0.008626202855 0.004522590853" rpy="0 0 0" /><mass value="0.6271432638" /><inertia ixx="0.0009472547936" ixy="0.0001178584041" ixz="0.0003480723973" iyy="0.00630204281" iyz="-0.0001833001577" izz="0.00627991106" /></inertial></link>
+  <link name="fr3_link8"><inertial><origin xyz="2.801076672e-08 7.507424045e-09 6.595163438e-08" rpy="0 0 0" /><mass value="1" /><inertia ixx="0.00400000019" ixy="8.009970787e-26" ixz="3.461998735e-24" iyy="0.00400000019" iyz="4.584779892e-24" izz="0.00400000019" /></inertial></link>
+  <link name="fr3_hand">
+    <inertial><origin xyz="-0.009999990794 1.844477154e-08 0.03000007344" rpy="0 0 0" /><mass value="0.7300000191" /><inertia ixx="0.002454395388" ixy="7.611763592e-06" ixz="4.438547772e-05" iyy="0.0005852763059" iyz="-5.313674717e-05" izz="0.002269291315" /></inertial></link>
+  <link name="fr3_leftfinger">
+    <inertial><origin xyz="-0.01388636422 2.461085168e-09 -0.02500802078" rpy="0 0 0" /><mass value="0.01513542887" /><inertia ixx="4.684724079e-06" ixy="-1.55475093e-13" ixz="9.687259856e-07" iyy="4.839786016e-06" iyz="5.464205691e-13" izz="1.14491959e-06" /></inertial></link>
+  <link name="fr3_rightfinger">
+    <inertial><origin xyz="-0.01388634551 -8.280494214e-10 -0.02500801553" rpy="0 0 0" /><mass value="0.01513542887" /><inertia ixx="4.684724811e-06" ixy="1.82670058e-13" ixz="9.687246481e-07" iyy="4.839786016e-06" iyz="-6.993957633e-13" izz="1.144918858e-06" /></inertial></link>
+  <link name="fr3_hand_tcp"><inertial><origin xyz="-4.511803833e-09 5.580362381e-09 6.794076646e-08" rpy="0 0 0" /><mass value="1" /><inertia ixx="0.00400000019" ixy="-3.049931665e-18" ixz="-2.727240996e-24" iyy="0.00400000019" iyz="4.993681707e-24" izz="0.00400000019" /></inertial></link>
+  <joint name="fr3_joint1" type="revolute">
+    <origin xyz="0 0 0.333" rpy="0 1.57079627 0" />
+    <parent link="fr3_link0" />
+    <child link="fr3_link1" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.74369988" upper="2.74369988" velocity="2.61999977" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 87.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0.00000006 -1.57079627" />
+    <parent link="fr3_link1" />
+    <child link="fr3_link2" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.78369994" upper="1.78369994" velocity="2.61999977" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 87.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint3" type="revolute">
+    <origin xyz="-0.00000005 -0.31600005 0" rpy="0 0 1.57079617" />
+    <parent link="fr3_link2" />
+    <child link="fr3_link3" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.90069988" upper="2.90069988" velocity="2.61999977" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 87.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint4" type="revolute">
+    <origin xyz="0.00000003 0.00000002 0.08250001" rpy="0 0.00000012 1.57079636" />
+    <parent link="fr3_link3" />
+    <child link="fr3_link4" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-3.04209988" upper="-0.1518" velocity="2.61999977" effort="87" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 87.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint5" type="revolute">
+    <origin xyz="-0.00000012 0.38400004 -0.08250004" rpy="0 0 -1.570796" />
+    <parent link="fr3_link4" />
+    <child link="fr3_link5" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.80649988" upper="2.80649988" velocity="5.26000041" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 12.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint6" type="revolute">
+    <origin xyz="0 0.00000001 0.00000003" rpy="0 0 1.570796" />
+    <parent link="fr3_link5" />
+    <child link="fr3_link6" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0.54449996" upper="4.51689964" velocity="4.17999991" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 12.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint7" type="revolute">
+    <origin xyz="0 0.00000001 0.08800001" rpy="0 0.00000012 1.57079653" />
+    <parent link="fr3_link6" />
+    <child link="fr3_link7" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-3.01589971" upper="3.01589971" velocity="5.26000041" effort="12" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 12.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_joint8" type="fixed">
+    <origin xyz="-0.10700001 0.00000002 -0.00000004" rpy="0 -1.57079624 -0.00000014" />
+    <parent link="fr3_link7" />
+    <child link="fr3_link8" />
+  </joint>
+  <joint name="fr3_hand_joint" type="fixed">
+    <origin xyz="0 0 -0.00000001" rpy="0 0 -0.78539825" />
+    <parent link="fr3_link8" />
+    <child link="fr3_hand" />
+  </joint>
+  <joint name="fr3_finger_joint1" type="prismatic">
+    <origin xyz="0 0 0.0584" rpy="-3.14159265 0 -1.57079635" />
+    <parent link="fr3_hand" />
+    <child link="fr3_leftfinger" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.04" velocity="0.2000000857" effort="100" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 6000.0, "max_force": 100.0, "stiffness": 60000.0, "target_position": 0.0}, "instance": "linear", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_finger_joint2" type="prismatic">
+    <origin xyz="0 0 0.0584" rpy="-3.14159265 0 1.57079642" />
+    <parent link="fr3_hand" />
+    <child link="fr3_rightfinger" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.04" velocity="0.2000000857" effort="100" />
+    <dynamics friction="0" />
+    <mimic joint="fr3_finger_joint1" multiplier="1" offset="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 0.0, "max_force": Infinity, "stiffness": 0.0, "target_position": 0.0}, "instance": "linear", "source": "physx"} -->
+  </joint>
+  <joint name="fr3_hand_tcp_joint" type="fixed">
+    <origin xyz="0 0 0.1034" rpy="0 0 0.00000003" />
+    <parent link="fr3_hand" />
+    <child link="fr3_hand_tcp" />
+  </joint>
+</robot>
