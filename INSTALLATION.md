@@ -166,7 +166,6 @@ ros2 launch block_bin bringup.launch.py                    # MoveIt + the solver
   `ISAACSIM_PYTHON`) and sets `OMNI_KIT_ACCEPT_EULA=YES`. The first start compiles RTX
   shaders for about two minutes. `camera_topics:=true` adds the `/cam_*` image topics
   (needed only by a live policy).
-- `GUIDE_HEADLESS=1` forces headless without editing init.yaml (`0` forces the window).
 - **One GUIDE simulator per machine:** its recorder server listens on `127.0.0.1:50050`
   and frees the port at start-up by killing whatever holds it, a running simulator's
   recorder included.

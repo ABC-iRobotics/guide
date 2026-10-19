@@ -46,20 +46,3 @@ def test_runtime_call_timeout():
     with pytest.raises(TimeoutError):
         rt.call("echo", 0.01, "x")
 
-
-def test_guide_headless_overrides_startup_headless(monkeypatch):
-    """GUIDE_HEADLESS=1 forces headless without editing init.yaml (controller, B5)."""
-    from guide_core.core.runtime import UNINITIALIZED
-
-    rt = TestableRuntime()
-    rt.state = UNINITIALIZED
-    for value, expected in (("1", True), ("TRUE", True), ("yes", True), ("0", False), ("False", False), ("No", False)):
-        monkeypatch.setenv("GUIDE_HEADLESS", value)
-        assert rt._parse_config({"startup": {"headless": not expected}})[0]["headless"] is expected
-    monkeypatch.delenv("GUIDE_HEADLESS")
-    assert rt._parse_config({"startup": {"headless": False}})[0]["headless"] is False
-    monkeypatch.setenv("GUIDE_HEADLESS", "")  # REVIEWER C B4-M6: set but empty (a launch file passing an unset one) = unset
-    assert rt._parse_config({"startup": {"headless": False}})[0]["headless"] is False
-    monkeypatch.setenv("GUIDE_HEADLESS", "maybe")
-    with pytest.raises(ValueError, match="GUIDE_HEADLESS"):
-        rt._parse_config({"startup": {}})

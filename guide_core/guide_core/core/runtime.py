@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import os
 import time
 from dataclasses import dataclass
 from queue import Empty, Queue
@@ -300,12 +299,6 @@ class IsaacSimRuntime:
         assert self.state == UNINITIALIZED
 
         startup_config: dict = config.get("startup", {})
-        headless = os.environ.get("GUIDE_HEADLESS")
-        if headless:  # forces headless (or not) without editing init.yaml; set but empty = unset
-            value = {"1": True, "true": True, "yes": True, "0": False, "false": False, "no": False}.get(headless.strip().lower())
-            if value is None:
-                raise ValueError(f"GUIDE_HEADLESS={headless!r}: expected 1/true/yes or 0/false/no")
-            startup_config["headless"] = value
         self._logger.debug(f"Startup config: {startup_config}")
 
         extensions_config: list = config.get("extensions", [])
