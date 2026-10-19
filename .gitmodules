@@ -9,3 +9,6 @@
 	path = modules/rclpy
 	url = https://github.com/ros2/rclpy.git
 	branch = humble
+[submodule "guide_motion/external/oscbf"]
+	path = guide_motion/external/oscbf
+	url = https://github.com/StanfordASL/oscbf.git

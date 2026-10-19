@@ -56,6 +56,7 @@ uv pip install --python .venv/bin/python torch==2.11.0 torchvision \
 uv pip install --python .venv/bin/python "isaacsim[all,extscache]==6.0.1.0" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 uv pip install --python .venv/bin/python python-fcl "lerobot==0.6.0" "transformers>=5.4,<5.6" -c $PINS
+uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer
 uv pip check --python .venv/bin/python     # must report no incompatibilities
 ```
 
@@ -69,6 +70,9 @@ uv pip check --python .venv/bin/python     # must report no incompatibilities
 - After a drift (also a cu128 torch pulled in by another project), restore with
   `uv pip install --python .venv/bin/python torch==2.11.0 torchvision==0.26.0 numpy==2.3.1 -c $PINS`.
 - The venv is uv's: it has no `pip`; always `uv pip ... --python .venv/bin/python`.
+- `guide_motion` (S2b) is a plain Python package, not a colcon one (`COLCON_IGNORE`): it is
+  installed editable into `.venv`, so the solver and the Isaac process import the checkout. It
+  vendors OSCBF unmodified (`guide_motion/oscbf`, MIT) because OSCBF's own pins need numpy<2.
 
 ### 3. Build
 

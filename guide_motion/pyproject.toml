@@ -1,0 +1,52 @@
+# guide_motion: GUIDE's motion layer (S2b). Plain Python: no Isaac and no ROS imports.
+# Install: uv pip install --python ~/ros2_ws/.venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"
+#
+# oscbf/ is OSCBF (github.com/StanfordASL/oscbf, MIT, oscbf/LICENSE), vendored unmodified at commit
+# 6082329f8e1d61ee8e875a63a5cd80a14d513e12. As a pip dependency it would pull cbfpy==0.0.1
+# (numpy<2), pybullet and matplotlib; its core runs on cbfpy 0.1.0 and numpy 2.3.1.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guide_motion"
+version = "0.1.0"
+description = "Pink IK planning and OSCBF control for GUIDE robots"
+requires-python = ">=3.12"
+license = "GPL-3.0-only"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pyyaml",
+    "jax==0.4.30",
+    "jaxlib==0.4.30",
+    "cbfpy==0.1.0",
+    "qpax==0.1.4",
+    "ml-dtypes",
+    "opt-einsum",
+    "pin",
+    "pin-pink",
+    "quadprog",
+    # the vendored OSCBF's URDF parser (oscbf/utils/urdfpy)
+    "lxml",
+    "networkx",
+    "pillow",
+    "six",
+    "trimesh",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "h5py"]
+
+# package-dir "" = ".": the editable install becomes a plain .pth entry. setuptools' default import
+# hook for a flat layout loses to this directory itself, which Python finds first as a namespace
+# package from ~/ros2_ws/src/guide (cwd), so `import guide_motion` skipped __init__.py there.
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["guide_motion*", "oscbf*"]
+
+[tool.setuptools.package-data]
+guide_motion = ["robots/*/*"]
+oscbf = ["LICENSE"]

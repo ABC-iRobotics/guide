@@ -1,0 +1,206 @@
+format: "xrdf"
+
+format_version: 2.0
+
+default_joint_positions: 
+  fr3_joint1: 0.0
+  fr3_joint2: -0.7854
+  fr3_joint3: 0.0
+  fr3_joint4: -2.3562
+  fr3_joint5: 0.0
+  fr3_joint6: 1.5708
+  fr3_joint7: 0.7854
+  fr3_finger_joint1: 0.0
+
+cspace: 
+  joint_names: 
+    - "fr3_joint1"
+    - "fr3_joint2"
+    - "fr3_joint3"
+    - "fr3_joint4"
+    - "fr3_joint5"
+    - "fr3_joint6"
+    - "fr3_joint7"
+  acceleration_limits: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+  jerk_limits: [10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0, 10000.0]
+
+world_collision: 
+  geometry: "auto_generated_collision_sphere_group"
+
+self_collision: 
+  geometry: "auto_generated_collision_sphere_group"
+  ignore: 
+    fr3_link0: 
+      - "fr3_link1"
+    fr3_link1: 
+      - "fr3_link2"
+    fr3_link2: 
+      - "fr3_link3"
+    fr3_link3: 
+      - "fr3_link4"
+    fr3_link4: 
+      - "fr3_link5"
+    fr3_link5: 
+      - "fr3_link6"
+    fr3_link6: 
+      - "fr3_link7"
+    fr3_link7: 
+      - "fr3_link8"
+    fr3_link8: 
+      - "fr3_hand"
+    fr3_hand: 
+      - "fr3_leftfinger"
+      - "fr3_rightfinger"
+      - "fr3_hand_tcp"
+    fr3_leftfinger: 
+      - "fr3_rightfinger"
+      - "fr3_hand_tcp"
+    fr3_rightfinger: 
+      - "fr3_hand_tcp"
+
+geometry: 
+  auto_generated_collision_sphere_group: 
+    spheres: 
+      fr3_link0: 
+        - center: [-0.023, -0.002, 0.069]
+          radius: 0.0794
+        - center: [-0.006, 0.001, 0.067]
+          radius: 0.0768
+        - center: [-0.084, -0.01, 0.042]
+          radius: 0.0515
+        - center: [-0.082, 0.027, 0.039]
+          radius: 0.0483
+        - center: [-0.055, -0.034, 0.044]
+          radius: 0.054
+        - center: [-0.005, 0.044, 0.038]
+          radius: 0.0477
+      fr3_link1: 
+        - center: [0.0, -0.029, -0.04]
+          radius: 0.0644
+        - center: [0.001, -0.012, -0.13]
+          radius: 0.0644
+        - center: [0.0, -0.073, 0.0]
+          radius: 0.0618
+        - center: [-0.001, -0.055, -0.057]
+          radius: 0.0612
+        - center: [0.001, -0.042, -0.0]
+          radius: 0.0638
+        - center: [0.0, -0.012, -0.093]
+          radius: 0.0644
+      fr3_link2: 
+        - center: [0.0, -0.12, 0.012]
+          radius: 0.0647
+        - center: [0.0, -0.007, 0.044]
+          radius: 0.0647
+        - center: [-0.0, -0.067, 0.041]
+          radius: 0.064
+        - center: [0.0, -0.0, 0.068]
+          radius: 0.0628
+        - center: [-0.0, -0.143, -0.004]
+          radius: 0.0608
+        - center: [0.001, -0.069, 0.019]
+          radius: 0.064
+      fr3_link3: 
+        - center: [0.045, 0.026, -0.039]
+          radius: 0.068
+        - center: [0.082, 0.046, -0.0]
+          radius: 0.0632
+        - center: [-0.002, 0.001, -0.072]
+          radius: 0.059
+        - center: [0.029, 0.017, -0.062]
+          radius: 0.0662
+        - center: [0.081, 0.06, 0.001]
+          radius: 0.0608
+        - center: [0.011, 0.005, -0.05]
+          radius: 0.059
+      fr3_link4: 
+        - center: [-0.033, 0.034, 0.03]
+          radius: 0.0684
+        - center: [-0.082, 0.072, 0.0]
+          radius: 0.0605
+        - center: [-0.0, -0.0, 0.054]
+          radius: 0.0623
+        - center: [-0.058, 0.068, 0.015]
+          radius: 0.066
+        - center: [0.006, -0.008, 0.031]
+          radius: 0.0533
+        - center: [-0.072, 0.047, 0.003]
+          radius: 0.0557
+      fr3_link5: 
+        - center: [0.001, 0.014, -0.201]
+          radius: 0.0631
+        - center: [-0.0, 0.048, -0.11]
+          radius: 0.0616
+        - center: [-0.0, 0.072, -0.002]
+          radius: 0.0594
+        - center: [0.001, 0.042, -0.044]
+          radius: 0.0579
+        - center: [0.0, 0.025, -0.131]
+          radius: 0.0616
+        - center: [0.0, 0.067, -0.053]
+          radius: 0.0601
+      fr3_link6: 
+        - center: [0.037, -0.007, 0.011]
+          radius: 0.0528
+        - center: [0.089, -0.002, -0.001]
+          radius: 0.0528
+        - center: [0.074, 0.037, 0.003]
+          radius: 0.0509
+        - center: [0.0, 0.008, 0.015]
+          radius: 0.049
+        - center: [0.032, 0.024, 0.01]
+          radius: 0.05
+        - center: [-0.003, -0.009, 0.015]
+          radius: 0.0481
+      fr3_link7: 
+        - center: [0.001, 0.022, 0.079]
+          radius: 0.0368
+        - center: [-0.007, -0.015, 0.079]
+          radius: 0.0368
+        - center: [0.027, 0.009, 0.079]
+          radius: 0.0368
+        - center: [0.026, 0.039, 0.08]
+          radius: 0.0325
+        - center: [-0.015, 0.01, 0.081]
+          radius: 0.0361
+        - center: [0.009, -0.014, 0.08]
+          radius: 0.0368
+      fr3_hand: 
+        - center: [-0.001, -0.005, 0.01]
+          radius: 0.039
+        - center: [-0.001, 0.054, 0.015]
+          radius: 0.0353
+        - center: [0.0, -0.046, 0.026]
+          radius: 0.0344
+        - center: [0.0, 0.029, 0.041]
+          radius: 0.0317
+        - center: [-0.0, 0.072, 0.044]
+          radius: 0.0308
+        - center: [0.0, -0.072, 0.041]
+          radius: 0.0308
+      fr3_leftfinger: 
+        - center: [-0.005, 0.018, 0.026]
+          radius: 0.0129
+        - center: [0.0, 0.022, 0.007]
+          radius: 0.0129
+        - center: [0.005, 0.021, 0.02]
+          radius: 0.0129
+        - center: [-0.003, 0.014, 0.006]
+          radius: 0.0129
+        - center: [-0.001, 0.013, 0.033]
+          radius: 0.0129
+        - center: [0.006, 0.016, 0.029]
+          radius: 0.0129
+      fr3_rightfinger: 
+        - center: [-0.004, -0.022, 0.02]
+          radius: 0.0129
+        - center: [-0.0, -0.022, 0.007]
+          radius: 0.0129
+        - center: [-0.004, -0.014, 0.009]
+          radius: 0.0129
+        - center: [0.003, -0.014, 0.006]
+          radius: 0.0129
+        - center: [-0.0, -0.014, 0.031]
+          radius: 0.0129
+        - center: [0.006, -0.016, 0.028]
+          radius: 0.0129
