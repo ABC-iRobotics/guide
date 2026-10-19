@@ -29,10 +29,11 @@ def libero_demo(file_index=0, demo="demo_0"):
 
 
 def test_clamp_holds_at_libero_bounds():
-    p, R = np.array([0.4, 0.0, 0.3]), np.eye(3)
+    p, R = np.array([0.4, 0.0, 0.3]), Rotation.from_euler("xyz", [0.3, -0.2, 1.0]).as_matrix()
     t = delta_action_to_target([0.2, -0.2, 0.01, 1.0, -1.0, 0.1, 0.04], (p, R))
     np.testing.assert_allclose(t.position - p, [0.05, -0.05, 0.01])
-    np.testing.assert_allclose(Rotation.from_matrix(t.rotation).as_rotvec(), [0.5, -0.5, 0.1], atol=1e-12)
+    # goal_ori = R(dw) @ R: the delta turns in the base frame, before the measured orientation
+    np.testing.assert_allclose(Rotation.from_matrix(t.rotation @ R.T).as_rotvec(), [0.5, -0.5, 0.1], atol=1e-12)
     assert t.mode == POSE and t.gripper_width == 0.04
 
 
@@ -95,6 +96,7 @@ def test_holder_latest_wins_and_goes_stale():
     assert holder.get(1.26)[1]
     holder.put(b)  # re-sending the same target refreshes it
     assert not holder.get(1.3)[1]
+    assert holder.get(0.5)[1]  # a clock that ran backwards (the host restarted it on play) is stale
 
 
 def test_holder_put_from_another_thread():

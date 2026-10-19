@@ -80,4 +80,5 @@ class TargetHolder:
         seq, target = self._slot
         if seq != self._seen:
             self._seen, self._fresh_at = seq, now
-        return target, target is None or now - self._fresh_at > self.stale_after
+        # a clock that ran backwards (the host restarts its physics clock on play) counts as stale
+        return target, target is None or not 0.0 <= now - self._fresh_at <= self.stale_after
