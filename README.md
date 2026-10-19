@@ -96,7 +96,8 @@ git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 ```bash
 mkdir -p ~/ros2_ws/src/guide/modules && cd ~/ros2_ws/src/guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+# -b feat/oscbf-mode: until feat/oscbf-mode is merged into irob_lerobot_ros main
+git clone -b feat/oscbf-mode https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 ```
 
 **3. Create the Python 3.12 environment and install Isaac Sim 6.0.1 + dependencies:**
@@ -188,8 +189,10 @@ ros2 launch guide_core bringup.launch.py
 > The first launch spends ~2 minutes compiling RTX shaders before the viewport appears.
 
 Register a task's scene with the simulator, then launch the task from `guide_tasks`. For
-example, the `block_bin` pick-and-place demonstration task (its launch file starts MoveIt and
-the task's solver node, under the `.venv` interpreter, for each scene):
+example, the `block_bin` pick-and-place demonstration task (its launch file starts the task's
+solver node, under the `.venv` interpreter, for each scene, and MoveIt under
+`robots.franka.controller: moveit`, the shipped default; after changing that switch, rebuild
+block_bin, restart GUIDE, register the scene, then launch):
 
 ```bash
 ros2 service call /Sim_0/Register guide_msgs/srv/RegisterScene "{path: 'block_bin'}"
@@ -242,11 +245,11 @@ guide_tasks/block_bin/
 │   ├── reset.yaml            where everything goes on Reset
 │   └── success.yaml          the success check
 ├── launch/
-│   └── bringup.launch.py     MoveIt + the solver, per scene
+│   └── bringup.launch.py     the solver per scene (+ MoveIt under controller: moveit)
 ├── assets/
 │   ├── block_bin.usd         the scene
 │   └── RealSenseD435_Camera_Mount.usd
-├── test/                     ament lint tests
+├── test/                     ament lint tests; test_dry_run.py: the tree on a fake robot
 ├── package.xml
 └── setup.py
 ```

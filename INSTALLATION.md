@@ -30,7 +30,8 @@ git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git 
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 mkdir -p guide/modules && cd guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+# -b feat/oscbf-mode: until feat/oscbf-mode is merged into irob_lerobot_ros main
+git clone -b feat/oscbf-mode https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 ```
 
 | Repository | Gives GUIDE |
@@ -43,9 +44,12 @@ git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 
 **Why:** `modules/` is git-ignored. Of the submodules `.gitmodules` lists there, only
 `modules/lerobot` has a committed gitlink (section 2 initialises it); the two modules above are
-cloned by hand. `irob_lerobot_ros` has its own nested lerobot submodule (its `main` pins 0b067df,
-v0.4.3; the bump to v0.6.1 is on the unmerged branch `chore/lerobot-0.6.1`). Do not initialise it:
-`.venv` uses the rebuilt `modules/lerobot` (section 2) either way.
+cloned by hand. GUIDE needs `irob_lerobot_ros`'s branch `feat/oscbf-mode` (until it is merged into
+its `main`): `send_action(speed=, min_fraction=)`, the `controller` field and the sim-time `sleep`
+that GUIDE-EX and block_bin call; with `main` every move fails with a `TypeError`. The branch
+includes `chore/lerobot-0.6.1`, the bump of its own nested lerobot submodule from 0b067df (v0.4.3)
+to v0.6.1. Do not initialise that submodule: `.venv` uses the rebuilt `modules/lerobot` (section 2)
+either way.
 
 ### 2. Python environment
 
@@ -150,6 +154,9 @@ source install/setup.zsh
   running. A hand-edited file under `install/` that is newer than its source is not
   overwritten by the rebuild; compare or delete it.
 - Sourcing `setup.bash` under zsh silently fails (empty `ros2 pkg list`); use `setup.zsh`.
+- After a `guide_msgs` change (S2b added `frame_id` to `Pose.srv`), rebuild it, then restart GUIDE
+  and every solver: a running process keeps the old type, and its calls to a new one never complete
+  or are answered in the world frame.
 
 ### 4. Run
 
@@ -193,7 +200,8 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
   `moveit` (move_group + ros2_control; what the shipped file selects) or `oscbf` (guide_motion's OSCBF
   controller in Isaac's physics step; ROS2Robot streams `guide_msgs/MotionTarget` at 20 Hz, and the
   bring-up starts no move_group). GUIDE and the block_bin bring-up both read it: rebuild block_bin
-  after changing it, then register the scene again.
+  after changing it, then restart GUIDE, register the scene, and launch block_bin (registering again
+  in a running GUIDE adds a second scene, which the bring-up does not drive).
 - **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
   base**: the prim named by `robots.<name>.base_name` in the task's `config/init.yaml`
   (`fr3_link0` for both FR3 tasks; the robot prim when unset), whatever the scene index.
@@ -214,7 +222,8 @@ Both are ament_python packages in `src/`, so the same `colcon build` builds them
 ```bash
 cd ~/ros2_ws/src/guide
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/python -m pytest -q \
-  guide_core/test guide_ex/test guide_tasks/cube_stack/test guide_motion/test \
+  guide_core/test guide_ex/test guide_tasks/cube_stack/test guide_tasks/block_bin/test guide_motion/test \
+  modules/irob_lerobot_ros/test \
   --ignore-glob='*test_flake8.py' --ignore-glob='*test_pep257.py' --ignore-glob='*test_copyright.py'
 ```
 Run it from a shell with the workspace sourced; the tests import the installed packages
