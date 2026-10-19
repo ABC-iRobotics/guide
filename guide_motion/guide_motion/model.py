@@ -60,7 +60,7 @@ class Model:
     def load(cls, robot) -> "Model":
         """`robot`: a name under guide_motion/robots ('fr3', 'panda') or a directory."""
         d = Path(robot)
-        if not d.is_dir():
+        if str(robot) in description.ROBOTS or not d.is_dir():  # a known name never means the cwd's dir
             d = description.ROBOTS_DIR / str(robot)
         meta = json.loads((d / "description.json").read_text()) if (d / "description.json").exists() else {}
         model = cls((d / f"{d.name}.urdf").read_text(), yaml.safe_load((d / f"{d.name}.xrdf").read_text()), meta.get("usd_to_urdf"))

@@ -26,7 +26,10 @@ CACHE_DIR = Path.home() / ".cache" / "guide_motion" / "jax"
 
 
 def enable_compilation_cache(path=CACHE_DIR) -> None:
-    """JAX's persistent cache: a restart loads the compiled step instead of recompiling."""
+    """JAX's persistent cache: a restart loads the compiled step instead of recompiling.
+
+    Call it before any JAX computation in the process: after one, the cache stays silently off.
+    """
     import jax
 
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -67,7 +70,8 @@ class Controller:
             position, rotation = self.model.ee_pose(q)
             twist = np.asarray(target.twist, float)
         else:
-            position, rotation = target.position, target.rotation
+            # float64 like every other input: a float32 pose would recompile the step (~4 s)
+            position, rotation = np.asarray(target.position, float), np.asarray(target.rotation, float)
         u, violation = self._fn(q, qd, position, rotation, twist[:3], twist[3:], des_q)
         u = np.asarray(u)
         if not np.all(np.isfinite(u)) or float(violation) > INFEASIBLE_TOL:
@@ -77,7 +81,8 @@ class Controller:
                 u = np.asarray(self._gravity(q)) - self.gains["kd_null"] * qd
             else:
                 u = np.zeros_like(q)
-        return np.clip(u, -self.limit, self.limit)
+        # a non-finite state (a NaN measurement) leaves even the fallback non-finite: command nothing there
+        return np.clip(np.where(np.isfinite(u), u, 0.0), -self.limit, self.limit)
 
     def barrier_values(self, q) -> np.ndarray:
         """Every barrier h(q); all > 0 means q is inside the safe set."""

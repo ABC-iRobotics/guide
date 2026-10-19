@@ -45,3 +45,9 @@ def test_the_panda_tool_frame_is_where_the_fr3_s_is():
     (p_fr3, R_fr3), (p_panda, R_panda) = fr3.ee_pose(fr3.home), panda.ee_pose(fr3.home)
     assert np.linalg.norm(p_panda - p_fr3) < 1e-3, (p_fr3, p_panda)
     assert Rotation.from_matrix(R_panda @ R_fr3.T).magnitude() < np.radians(1.0), (R_fr3, R_panda)
+
+
+def test_a_robot_name_loads_the_committed_description_before_the_cwd(tmp_path, monkeypatch):
+    (tmp_path / "fr3").mkdir()  # a stray directory of the same name where the process runs
+    monkeypatch.chdir(tmp_path)
+    assert Model.load("fr3").robot_dir == description.ROBOTS_DIR / "fr3"

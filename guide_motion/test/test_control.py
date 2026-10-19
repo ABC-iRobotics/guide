@@ -122,3 +122,20 @@ def test_the_barrier_rows_catch_self_collision_and_the_workspace(controller):
     low[1], low[3] = 1.7, -0.3  # the tool 10 cm below the base plane
     h = controller.barrier_values(low)
     assert h[37] < 0 and np.delete(h, 37).min() > 0  # row 37: tool z above the box's floor
+
+
+def test_a_non_finite_state_gives_a_zero_command(controller):
+    """Every host routes through step: a NaN measurement must not become a NaN command."""
+    before = controller.events["infeasible"]
+    q = HOME.copy()
+    q[2] = np.nan
+    np.testing.assert_array_equal(controller.step(hold(controller.model), q, np.zeros(7)), np.zeros(7))
+    assert controller.events["infeasible"] == before + 1
+
+
+def test_a_float32_pose_target_does_not_recompile(controller):
+    """A recompile is a ~4 s stall inside the physics callback."""
+    p, R = controller.model.ee_pose(HOME)
+    compiled = controller._fn._cache_size()
+    controller.step(Target(position=p.astype(np.float32), rotation=R.astype(np.float32)), HOME, np.zeros(7))
+    assert controller._fn._cache_size() == compiled
