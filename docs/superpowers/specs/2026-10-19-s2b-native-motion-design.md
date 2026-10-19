@@ -17,6 +17,7 @@
 5. **Recording the controller inputs:** a record field in the task's `init.yaml` `dataset` section selects it (e.g. `action: controller_input`). The recorder then stores the `MotionTarget` handed to the controller at 20 Hz (delta action, gripper width, absolute target) instead of the joint command.
 6. **Strict version compatibility:** `uv pip check` must report **zero** lines; no `--override`. If lerobot's caps conflict with Isaac's exact pins, find a lerobot release that resolves cleanly with Isaac 6.0.1's pins (or report BLOCKED with the exact conflict). Never weaken a pin.
 7. **OSCBF is a git submodule, not vendored** (user, 2026-10-19): `guide_motion/external/oscbf` at 6082329 (github.com/StanfordASL/oscbf, MIT), reached through the symlink `guide_motion/oscbf` -> `external/oscbf/oscbf`. Its code never enters the guide repo's history (the unpushed branch was rewritten). Not a pip dependency: OSCBF's own metadata pins `cbfpy==0.0.1` (numpy<2), pybullet and matplotlib.
+11. **Stale target in velocity mode holds the pose** (controller, 2026-10-20, from Plan B Task 4): in both modes a stale target makes the host step the controller on the latched current pose. Section 8's "zero velocity" cannot hold the arm: after the switch to velocity mode the drives have stiffness 0, so a zero velocity target is an open-loop damper and the FR3 sagged 9.5 mm (spec 7 requires ≤ 0.1 mm). The intent, "hold the current pose" (section 2's error table), stands.
 
 ## 1. Goal
 
