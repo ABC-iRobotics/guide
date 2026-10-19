@@ -35,3 +35,13 @@ def test_the_fr3_masses_are_corrected():
     assert meta["mass_override_kg"]["fr3_link8"] == pytest.approx({"asset": 1.0, "override": 0.001})
     assert "fr3_link0" not in meta["mass_override_kg"]
     assert "FrankaFR3/fr3.usd" in (description.ROBOTS_DIR / "fr3" / "fr3.usda").read_text()
+
+
+def test_the_panda_tool_frame_is_where_the_fr3_s_is():
+    """C1: the two arms share their kinematics, so at the same home the TCPs coincide (1 mm, 1 deg)."""
+    from scipy.spatial.transform import Rotation
+
+    fr3, panda = Model.load("fr3"), Model.load("panda")
+    (p_fr3, R_fr3), (p_panda, R_panda) = fr3.ee_pose(fr3.home), panda.ee_pose(fr3.home)
+    assert np.linalg.norm(p_panda - p_fr3) < 1e-3, (p_fr3, p_panda)
+    assert Rotation.from_matrix(R_panda @ R_fr3.T).magnitude() < np.radians(1.0), (R_fr3, R_panda)

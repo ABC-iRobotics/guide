@@ -7,6 +7,7 @@ import numpy as np
 import pinocchio as pin
 import pytest
 import yaml
+from scipy.spatial.transform import Rotation
 
 from fr3_fixture import DATA, usd_poses
 from guide_motion import description
@@ -92,15 +93,25 @@ def test_geometry_is_dropped():
     assert "<visual" not in text and "<collision" not in text and "<mesh" not in text
 
 
-def test_a_missing_tool_frame_is_added_on_the_hand():
+def test_a_missing_tool_frame_is_added_in_the_usd_hand_frame():
+    """C1: the Panda's exporter hand link is the USD's (franka_description's) hand turned 90 deg, so the
+    TCP goes 0.1034 m along the USD hand's z, not along the exporter link's."""
     text = re.sub(r'\s*<link name="fr3_hand_tcp"/>', "", RAW_URDF)
     text = re.sub(r'\s*<joint name="fr3_hand_tcp_joint".*?</joint>', "", text, flags=re.S)
     assert "fr3_hand_tcp" not in text
-    poses = description.link_poses(description.fix_urdf(text, "fr3"))
-    offset = np.linalg.inv(poses["fr3_hand"]) @ poses["fr3_hand_tcp"]
-    expected = np.eye(4)
-    expected[2, 3] = 0.1034
-    np.testing.assert_allclose(offset, expected, atol=1e-12)
+    usd = usd_poses()
+    turn = np.eye(4)
+    turn[:3, :3] = Rotation.from_euler("x", 90, degrees=True).as_matrix()
+    usd["fr3_hand"] = usd["fr3_hand"] @ turn  # the USD hand frame is no longer the exporter's
+    urdf, _, _ = description.build(text, RAW_XRDF, usd, "fr3")
+    along_z = np.eye(4)
+    along_z[2, 3] = 0.1034
+    np.testing.assert_allclose(description.link_poses(urdf)["fr3_hand_tcp"], usd["fr3_hand"] @ along_z, atol=1e-9)
+
+
+def test_an_existing_tool_frame_is_kept():
+    urdf, _, _ = description.build(RAW_URDF, RAW_XRDF, usd_poses(), "fr3")
+    assert urdf == description.fix_urdf(RAW_URDF, "fr3")  # the FR3's own fr3_hand_tcp, nothing added
 
 
 def test_xrdf_fixes():

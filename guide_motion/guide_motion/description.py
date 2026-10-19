@@ -47,9 +47,6 @@ ROBOTS = {
         "mass_override": "fer",
     },
 }
-# franka_description's right finger frame is the USD's turned pi about z (both assets keep it in the left
-# finger's orientation; measured for the FR3 by the XRDF test, for the Panda against fer.urdf.xacro).
-_FD_TO_USD = {"rightfinger": np.diag([-1.0, -1.0, 1.0, 1.0])}
 _DRIVE = re.compile(r"\s*isaac:source_drive\s+(\{.*\})\s*$", re.S)
 
 
@@ -68,8 +65,7 @@ def fix_urdf(text: str, robot: str) -> str:
     C: no effort -> the USD drive's max force (a mimic joint, or one without a drive, takes its leader's).
     E: a floating joint from a parentless world link -> dropped. F: a mimic joint takes its leader's velocity.
     Joint limits stay the USD's. Visual and collision geometry are dropped: collision is
-    the XRDF's spheres, and OSCBF's URDF parser would load every mesh. A missing
-    <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the hand's z.
+    the XRDF's spheres, and OSCBF's URDF parser would load every mesh.
     Input must be the raw exporter/editor output; running it on its own output corrupts the finger velocity.
     """
     root = _parse(text)
@@ -107,13 +103,6 @@ def fix_urdf(text: str, robot: str) -> str:
         for tag in ("visual", "collision"):
             for element in link.findall(tag):
                 link.remove(element)
-    tcp = f"{robot}_hand_tcp"
-    if root.find(f"link[@name='{tcp}']") is None:
-        ET.SubElement(root, "link", name=tcp)
-        joint = ET.SubElement(root, "joint", name=f"{tcp}_joint", type="fixed")
-        ET.SubElement(joint, "origin", xyz=f"0 0 {TCP_Z}", rpy="0 0 0")
-        ET.SubElement(joint, "parent", link=f"{robot}_hand")
-        ET.SubElement(joint, "child", link=tcp)
     return ET.tostring(root, encoding="unicode")
 
 
@@ -231,7 +220,9 @@ def mass_override(robot: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
     out = {}
     for link, value in spec.items():
         if isinstance(value, str):  # a franka_description link, moved into the USD's body frame
-            X = next((T for suffix, T in _FD_TO_USD.items() if value.endswith(suffix)), np.eye(4))
+            # franka_description's right finger frame is the USD's turned pi about z (both assets keep it in
+            # the left finger's orientation; measured for the FR3 by the XRDF test, the Panda against xacro).
+            X = np.diag([-1.0, -1.0, 1.0, 1.0]) if value.endswith("rightfinger") else np.eye(4)
             (mass, com, inertia), = to_urdf_frames({link: sheet[value][0]}, {link: sheet[value][1]}, {link: sheet[value][2]}, {link: X}).values()
             value = (mass, com, inertia)
         out[link] = value
@@ -239,9 +230,18 @@ def mass_override(robot: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
 
 
 def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str):
-    """Kit-free half of the pipeline: (urdf text, xrdf dict, description dict)."""
+    """Kit-free half of the pipeline: (urdf text, xrdf dict, description dict).
+
+    A missing <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the USD's hand z
+    (franka_description's hand frame): the exporter's Panda hand link is that frame turned 90 deg.
+    """
     urdf = fix_urdf(raw_urdf, robot)
     frames = usd_to_urdf(usd_poses, urdf)
+    tcp, hand = f"{robot}_hand_tcp", f"{robot}_hand"
+    if _parse(urdf).find(f"link[@name='{tcp}']") is None:
+        along_z = np.eye(4)
+        along_z[2, 3] = TCP_Z
+        urdf = set_inertials(urdf, {}, {tcp: (hand, frames[hand] @ along_z)})
     xrdf = reframe_spheres(fix_xrdf(raw_xrdf, robot), frames)
     description = {
         "robot": robot,

@@ -108,4 +108,4 @@
     <mimic joint="panda_finger_joint1" multiplier="1" offset="0" />
     <!-- isaac:source_drive {"armature": 0.0, "instance": "linear", "source": "physx"} -->
   </joint>
-<link name="panda_hand_tcp" /><joint name="panda_hand_tcp_joint" type="fixed"><origin xyz="0 0 0.1034" rpy="0 0 0" /><parent link="panda_hand" /><child link="panda_hand_tcp" /></joint></robot>
+<link name="panda_hand_tcp" /><joint name="panda_hand_tcp_fixed" type="fixed"><origin xyz="-0.1034002325 -1.167997758e-07 -3.308135054e-08" rpy="1.570796409 -0.785397933 -1.570796368" /><parent link="panda_hand" /><child link="panda_hand_tcp" /></joint></robot>
