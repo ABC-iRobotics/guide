@@ -24,7 +24,7 @@ from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility import recording
 from guide_ex.utility.exception import NodeException
-from guide_ex.utility.pose import InvertPose, TransformPose
+from guide_ex.utility.pose import TransformPose
 from guide_ex.utility.rotation import ProjectRotationToBaseZ, ReduceRotationToSymmetry
 from guide_ex.utility.wait import WaitForSeconds
 from guide_msgs.srv import (
@@ -59,11 +59,14 @@ def solveTask(scene_id, robot, zone=None, path=""):
     time.sleep(5)
 
     # rest_pose is the only pose fed into the GUIDE-EX graph as context; every
-    # other pose (scene/cube/bin/approach/retreat) is computed inside the node
-    # tree (GetPrimPose / InvertPose / TransformPose), so no imperative pose
-    # math lives here.
+    # other pose (cube/bin/approach/retreat) is computed inside the node tree
+    # (GetPrimPose / TransformPose), so no imperative pose math lives here.
+    # All of them are in the robot's base frame, fr3_link0 (S2b Ruling 4), the frame
+    # GetPrimPose answers in. The rest pose stays where the arm has always had it:
+    # (0, 0, 0.5) of Scene_0 with the base at (-0.3, 0, 0) there, as MoveIt mounts it
+    # (launch/bringup.launch.py) and as the base-frame datasets of 2026-10-10 end.
     rest_pose = PoseType(
-        position=PointType([0.0, 0.0, 0.5]),
+        position=PointType([0.3, 0.0, 0.5]),
         orientation=RotationType(R.from_euler("xyz", [np.pi, 0.0, 0.0])),
     )
 
@@ -78,7 +81,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
         "robot_prim": "/fr3/fr3_rightfinger",
         "target": target,
         "goal": goal,
-        "scene_path": "",
         "rest_pose": rest_pose,
         "dataset_path": path,
     }
@@ -94,24 +96,8 @@ def solveTask(scene_id, robot, zone=None, path=""):
             "sim_namespace": "sim_namespace",
             "scene_namespace": "scene_namespace",
             "target": "target",
-            "scene_path": "scene_path",
         },
         children=[
-            GetPrimPose(
-                alias="GetScenePose",
-                dynamic_map={
-                    "robot": "robot",
-                    "sim_namespace": "sim_namespace",
-                    "scene_namespace": "scene_namespace",
-                    "prim_path": "scene_path",
-                },
-                output_map={"pose": "scene_pose"},
-            ),
-            InvertPose(
-                alias="InvertScenePose",
-                dynamic_map={"pose": "scene_pose"},
-                output_map={"pose": "scene_pose_inv"},
-            ),
             GetPrimPose(
                 alias="GetCubePose",
                 dynamic_map={
@@ -120,11 +106,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
                     "scene_namespace": "scene_namespace",
                     "prim_path": "target",
                 },
-                output_map={"pose": "cube_pose"},
-            ),
-            TransformPose(
-                alias="TransformCubePose",
-                dynamic_map={"l_pose": "scene_pose_inv", "r_pose": "cube_pose"},
                 output_map={"pose": "cube_pose"},
             ),
             # Flatten the cube's orientation to a pure base-Z rotation so the grasp
@@ -152,8 +133,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
             ),
         ],
         output_map={
-            "scene_pose": "scene_pose",
-            "scene_pose_inv": "scene_pose_inv",
             "cube_pose": "cube_pose",
         },
     )
@@ -168,7 +147,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
             "scene_namespace": "scene_namespace",
             "robot_prim": "robot_prim",
             "target": "target",
-            "scene_path": "scene_path",
             "cube_pose": "cube_pose",
             "rest_pose": "rest_pose",
         },
@@ -306,7 +284,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
             "sim_namespace": "sim_namespace",
             "scene_namespace": "scene_namespace",
             "goal": "goal",
-            "scene_pose_inv": "scene_pose_inv",
         },
         children=[
             # Get bin approach pose
@@ -318,11 +295,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
                     "scene_namespace": "scene_namespace",
                     "prim_path": "goal",
                 },
-                output_map={"pose": "bin_pose"},
-            ),
-            TransformPose(
-                alias="TransformBinPose",
-                dynamic_map={"l_pose": "scene_pose_inv", "r_pose": "bin_pose"},
                 output_map={"pose": "bin_pose"},
             ),
             # Same treatment for the bin: drop straight in, minimal wrist rotation.
@@ -459,7 +431,6 @@ def solveTask(scene_id, robot, zone=None, path=""):
                     "robot": "robot",
                     "sim_namespace": "sim_namespace",
                     "scene_namespace": "scene_namespace",
-                    "scene_path": "scene_path",
                     "target": "target",
                 },
                 output_map={
@@ -634,7 +605,6 @@ def main():
     scene_id = int(match.group()) if match else 0
 
     config = FR3RobotConfig(
-        frame_id=namespace_base.split("/")[-1] if namespace_base else "world",
         namespace=f"{namespace_base}/franka",
         planner_id="BiESTkConfigDefault",
         fallback_planner_id="PRMstarkConfigDefault",

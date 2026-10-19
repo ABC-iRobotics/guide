@@ -28,7 +28,11 @@ def fake_robot(**attrs):
 
 def test_get_prim_pose_fails_when_the_simulator_has_no_such_prim():
     no_prim = PoseSrv.Response(success=False, message="no prim at /Scene_0/blocks/pink_block")
-    robot = fake_robot(pose=object(), callService=lambda client, request, message: no_prim)
+    robot = fake_robot(
+        pose=object(),
+        config=SimpleNamespace(frame_id="fr3_link0"),
+        callService=lambda client, request, message: no_prim,
+    )
 
     result = GetPrimPose().run(robot, "/Sim_0", "/Scene_0", "/blocks/pink_block")
 
@@ -60,3 +64,17 @@ def test_set_gripper_state_sends_every_joint_and_settles_on_sim_time():
     assert result.status == DemoStatus.PERFECT
     assert sent == [{"fr3_finger_joint1.pos": 0.04, "fr3_finger_joint2.pos": 0.04}]
     assert slept == [SetGripperState.SETTLE_SECONDS]
+
+
+def test_get_prim_pose_asks_for_the_robots_own_frame():
+    asked = []
+    robot = fake_robot(
+        pose=object(),
+        config=SimpleNamespace(frame_id="fr3_link0"),
+        callService=lambda client, request, message: asked.append(request) or PoseSrv.Response(success=True),
+    )
+
+    result = GetPrimPose().run(robot, "/Sim_0", "/Scene_0", "/blocks/red_block")
+
+    assert result.status == DemoStatus.PERFECT
+    assert (asked[0].path, asked[0].frame_id) == ("/Scene_0/blocks/red_block", "fr3_link0")

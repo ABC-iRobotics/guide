@@ -374,3 +374,42 @@ def test_register_scene_reports_refused_robots_in_its_message(isaac_import):
 
     assert response.success and "/Sim_0/Scene_0/franka" in response.message and "q_rest breaks a barrier" in response.message
     assert "/ur" not in response.message
+
+
+def test_a_pose_request_answers_in_the_requesting_robots_base_frame(isaac_import):
+    """Ruling 4: GUIDE converts. A block on Scene_1 (world y + 10, z + 1), its robot's base at
+    (-0.3, 10, 1.013) turned 90 deg about z: the answer is the block as that base sees it."""
+    import numpy as np
+    from guide_msgs.srv import Pose as PoseSrv
+    from scipy.spatial.transform import Rotation as R
+
+    from guide_core.types.geometry import Point, Pose, Rotation
+
+    ros = isaac_import("guide_core.ros.guide_ros").GUIDEROS2Interface
+    world = {
+        "/Scene_1": Pose(Point([0.0, 10.0, 1.0])),
+        "/Scene_1/fr3/fr3_link0": Pose(Point([-0.3, 10.0, 1.013]), Rotation(R.from_euler("z", 90, degrees=True))),
+        # 0.4 ahead of the base (world +y once it is turned) and 0.4 above it
+        "/Scene_1/blocks/red_block": Pose(Point([-0.3, 10.4, 1.413])),
+    }
+    config = {"robots": {"franka": {"path": "/fr3", "base_name": "fr3_link0"}}}
+    backend = SimpleNamespace(
+        call=lambda name, prim_path: world[prim_path],
+        _scene_manager=SimpleNamespace(_scenes=[None, SimpleNamespace(_config=config)]),
+    )
+    me = SimpleNamespace(_backend=backend)
+
+    def ask(frame_id):
+        request = PoseSrv.Request(path="/Scene_1/blocks/red_block", frame_id=frame_id)
+        return ros._pose_request_callback(me, request, None)
+
+    reply = ask("fr3_link0")
+    p, q = reply.pose.position, reply.pose.orientation
+    assert reply.success and np.allclose([p.x, p.y, p.z], [0.4, 0.0, 0.4])
+    assert np.allclose([q.x, q.y, q.z, q.w], [0.0, 0.0, -np.sqrt(0.5), np.sqrt(0.5)])  # the base's -90 deg
+    p = ask("Scene_1").pose.position  # the scene's own frame, as a solver with frame_id Scene_<i> moves in
+    assert np.allclose([p.x, p.y, p.z], [-0.3, 0.4, 0.413])
+    p = ask("").pose.position  # no frame: world, as before
+    assert np.allclose([p.x, p.y, p.z], [-0.3, 10.4, 1.413])
+    reply = ask("ur_base_link")
+    assert not reply.success and "ur_base_link" in reply.message

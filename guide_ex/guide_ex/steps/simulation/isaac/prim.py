@@ -18,7 +18,8 @@ class GetPrimPose(BaseNode):
         self, robot: Node, sim_namespace: str, scene_namespace: str, prim_path: str
     ) -> ExecutionResult:
         """
-        Retrieves the current world pose of the specified primitive.
+        Retrieves the current pose of the specified primitive in the robot's frame_id
+        (Ruling 4: its base link; GUIDE converts from the scene).
 
         Args:
             robot (ROS2Robot): The ROS2 robot to use for service calls.
@@ -26,7 +27,7 @@ class GetPrimPose(BaseNode):
             scene_namespace (str): The scene namespace.
             prim_path (str): The prim path, relative to the scene.
         Returns:
-            ExecutionResult: outputs `pose`, the current world pose of the primitive.
+            ExecutionResult: outputs `pose`, the primitive's current pose in the robot's frame_id.
         """
 
         if not robot.node:
@@ -52,6 +53,8 @@ class GetPrimPose(BaseNode):
 
         request = PoseSrv.Request()
         request.path = scene_namespace + prim_path
+        # Ruling 4: GUIDE answers in the frame this robot moves in (its base link), within its scene
+        request.frame_id = robot.config.frame_id
 
         pose_response = robot.callService(robot.pose, request, f"Getting pose for {request.path}")
 
@@ -76,7 +79,8 @@ class GetPrimPoses(BaseNode):
         self, robot: Node, sim_namespace: str, scene_namespace: str, prim_paths: list
     ) -> ExecutionResult:
         """
-        Retrieves the current world poses of several primitives, in the given order.
+        Retrieves the current poses of several primitives, in the given order, each in
+        the robot's frame_id (GetPrimPose's).
 
         Args:
             robot (ROS2Robot): The ROS2 robot to use for service calls.

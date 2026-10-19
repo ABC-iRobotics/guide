@@ -1,4 +1,7 @@
 string path
+# The frame the pose is answered in (S2b Ruling 4): a robot's base link (robots.<name>.base_name,
+# e.g. fr3_link0) or the scene itself (Scene_<i>), looked up in the scene `path` lies in. Empty: world.
+string frame_id
 ---
 geometry_msgs/Pose pose
 string message

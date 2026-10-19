@@ -302,6 +302,9 @@ class GUIDEROS2Interface(Node):
             pose: Pose = self._backend.call("get_world_poses", prim_path=path)
             if isinstance(pose, bool):
                 raise Exception("Getting pose failed!")
+            if request.frame_id:  # Ruling 4: GUIDE converts into the requesting robot's frame, per scene
+                frame = pose_frame(self._backend._scene_manager._scenes, path, request.frame_id)
+                pose = self._backend.call("get_world_poses", prim_path=frame).inv() * pose
 
             response.pose = pose.to_ros()
             response.message = ""
@@ -463,6 +466,21 @@ class GUIDEROS2Interface(Node):
             response.success = False
         finally:
             return response
+
+
+def pose_frame(scenes, path: str, frame_id: str) -> str:
+    """The prim whose frame a PoseRequest for `path` answers in (S2b Ruling 4), looked up in the
+    scene `path` lies in: the scene root for frame_id "Scene_<i>", else the robot of that scene
+    whose base_name (init.yaml, directly under the robot's path) is frame_id."""
+    scene = path.split("/")[1]  # "/Scene_<i>/..." -> "Scene_<i>"
+    if frame_id == scene:
+        return f"/{scene}"
+    robots = scenes[int(scene.removeprefix("Scene_"))]._config.get("robots", {})
+    # ponytail: the first robot with this base_name; two robots of one scene sharing one need the robot's name in the request
+    for robot in robots.values():
+        if robot.get("base_name") == frame_id:
+            return f"/{scene}{robot['path']}/{frame_id}"
+    raise ValueError(f"{scene} has no robot with base_name '{frame_id}'")
 
 
 def target_from_msg(msg: MotionTarget) -> Target:
