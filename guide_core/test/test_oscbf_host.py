@@ -338,8 +338,9 @@ def test_the_home_hold_survives_a_stop(host_module, monkeypatch):
     run(host, 5)
     home = host._controller.targets[-1]
     host._on_stop(None)
-    run(host, 60)
-    assert all(t is home for t in host._controller.targets) and not host.diagnostics["stale"]
+    run(host, 60)  # re-planned from the arm's q at the new play: equal targets, new objects
+    assert all(t.mode == home.mode and np.array_equal(t.joints, home.joints) for t in host._controller.targets)
+    assert not host.diagnostics["stale"]
 
 
 def test_an_error_in_the_physics_step_refuses_the_robot_and_restores_its_position_drives(host_module, monkeypatch):
@@ -397,3 +398,24 @@ def test_velocity_mode_holds_the_latched_pose_when_stale(host_module, monkeypatc
     assert host.diagnostics["stale"] and len(held) == 3 and held[0].mode == POSE and all(t is held[0] for t in held)
     np.testing.assert_allclose(held[0].position, host.model.ee_pose(host.model.home)[0], atol=1e-6)
     assert len(arm.velocity_targets) == 3 and np.all(arm.velocity_targets[-1] == 0.5)
+
+
+def test_home_streams_planned_joint_targets_on_the_physics_clock(host_module, monkeypatch):
+    """Controller (B3b follow-up): a step target at home ran the FR3's joint 1 to 1.04x its URDF
+    velocity limit (velocity mode, 1 rad off home on joints 1, 2, 4). home() now streams Plan A's
+    plan(model, JOINTS home, q, speed=1.0), one target per 50 ms of the host's physics clock."""
+    from guide_motion.planner import plan
+    from guide_motion.targets import JOINTS
+
+    model = Model.load(ROBOT)
+    far = model.home + np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0])
+    expected = plan(model, Target(mode=JOINTS, joints=model.home), far, speed=1.0)
+    host, arm = make_host(host_module, monkeypatch)
+    arm.q[:7] = far
+    host.home()
+    run(host, 6 * len(expected) + 30)  # the plan, then 0.25 s more at the goal
+    steps = host._controller.targets
+    assert len(expected) > 10 and not host.diagnostics["stale"]
+    for i, step in enumerate(steps):
+        np.testing.assert_allclose(step.joints, expected[min(i // 6, len(expected) - 1)].joints, atol=1e-6, err_msg=f"substep {i}")  # q is float32
+    np.testing.assert_array_equal(steps[-1].joints, model.home)

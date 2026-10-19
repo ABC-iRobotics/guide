@@ -17,9 +17,12 @@ from scipy.spatial.transform import Rotation
 from guide_motion import description
 from guide_motion.control import Controller, enable_compilation_cache
 from guide_motion.model import Model
+from guide_motion.planner import DT as TARGET_DT
+from guide_motion.planner import plan
 from guide_motion.targets import JOINTS, Target, TargetHolder
 
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
+HOME_SPEED = 1.0  # Reset's homing at GUIDE-EX speed 1.0: the planner caps each joint below its URDF velocity limit
 RATE = {"torque": 120.0, "velocity": 60.0}  # Hz without an oscbf.rate: every substep / once per frame (spec Q4)
 
 
@@ -67,7 +70,7 @@ class OscbfHost:
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
         self._arm = Articulation(articulation_root)
         self._attached, self._switched, self._t, self._k = False, False, 0.0, 0
-        self._u, self._hold, self._width, self._home = None, None, None, None
+        self._u, self._hold, self._width, self._home, self._homing = None, None, None, None, None
         self._ids = [
             SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP),
             SimulationManager.register_callback(self._on_stop, SimulationEvent.SIMULATION_STOPPED),
@@ -75,8 +78,10 @@ class OscbfHost:
 
     def home(self) -> None:
         """Ruling 2: GUIDE's Reset under controller: oscbf. An effort- or velocity-driven arm ignores
-        drive targets, so hold a JOINTS target at the robot's home configuration, exempt from
-        staleness, until the next fresh target arrives (it replaces this one in the holder)."""
+        drive targets, so drive it home: Plan A's joint plan from the q at the next controller step,
+        one target per 50 ms of the physics clock, then the home configuration held. Exempt from
+        staleness until the next fresh target arrives (it replaces this one in the holder). A step
+        target instead ran joints past their URDF velocity limits (controller, B3b)."""
         self._home = Target(mode=JOINTS, joints=self.model.home.copy())
         self.holder.put(self._home)
 
@@ -133,6 +138,10 @@ class OscbfHost:
         target, stale = self.holder.get(self._t)
         if target is not None and target is self._home:
             stale = False  # Ruling 2: Reset's home target never goes stale
+            if self._homing is None or self._homing[0] is not target:
+                self._homing = (target, self._t, plan(self.model, target, q, speed=HOME_SPEED))
+            _, start, path = self._homing
+            target = path[min(int((self._t - start) / TARGET_DT + 1e-6), len(path) - 1)]
         if stale != self.diagnostics["stale"]:
             self._log("warning" if stale else "info", "no target for 0.25 s: holding the pose" if stale else "targets resumed")
         self.diagnostics["stale"] = stale
@@ -189,7 +198,7 @@ class OscbfHost:
             sample = self._view.get_dof_positions()  # its device: "cpu", or the GPU with GPU physics
             self._buffer, self._device = np.zeros(sample.shape, np.float32), sample.device
             self._index = wp.array([0], dtype=wp.int32, device=self._device)
-        self._t, self._k, self._hold, self._width = 0.0, 0, None, None
+        self._t, self._k, self._hold, self._width, self._homing = 0.0, 0, None, None, None  # the clock restarts
         self._attached = True
         self._log("info", f"attached: {self.mode}, controller every {self.every} substep(s), {'tensor view' if self._view else 'API'} I/O")
         return True
