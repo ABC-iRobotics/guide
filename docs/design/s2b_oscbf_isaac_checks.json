@@ -273,5 +273,53 @@
   "refused": null,
   "added_ms": 2.060664140431655,
   "pass": false
+ },
+ "fr3_torque_blockbin": {
+  "robot": "fr3",
+  "mode": "torque",
+  "check": "blockbin",
+  "frames": 300,
+  "nan": false,
+  "u_over_limit": 0.29734114125823724,
+  "infeasible": 0,
+  "refused": null,
+  "restart_q": [
+   0.0,
+   -0.7854,
+   0.0,
+   -2.3562,
+   0.0,
+   1.5708,
+   0.7854
+  ],
+  "hold_mm_mean": 3.814849127437509e-05,
+  "hold_mm_max": 4.409283471232626e-05,
+  "moved_error_rad": 0.000171142816543568,
+  "stale": false,
+  "pass": true
+ },
+ "fr3_velocity_blockbin": {
+  "robot": "fr3",
+  "mode": "velocity",
+  "check": "blockbin",
+  "frames": 300,
+  "nan": false,
+  "u_over_limit": 0.9999900228327634,
+  "infeasible": 0,
+  "refused": null,
+  "restart_q": [
+   0.0,
+   -0.7852,
+   -0.0,
+   -2.3561,
+   0.0,
+   1.5707,
+   0.7854
+  ],
+  "hold_mm_mean": 0.032856058587570125,
+  "hold_mm_max": 0.03314798765620336,
+  "moved_error_rad": 0.0010468299865722397,
+  "stale": false,
+  "pass": true
  }
 }

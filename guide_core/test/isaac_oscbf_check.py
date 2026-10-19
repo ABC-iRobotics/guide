@@ -8,6 +8,8 @@ square: 2 s hold, then a 10 cm square at 10 cm/s as a 20 Hz zero-order hold: mea
         on lap 2 <= 3 mm (torque) / 2 mm (velocity); no NaN; |command| <= the URDF limits. Saves q.
 home:   start 1 rad off home on joints 1, 2 and 4, then host.home() (Reset under oscbf, Ruling 2):
         peak |qd| per joint against the URDF velocity limits (controller, B3b); final error <= 0.01 rad.
+blockbin: block_bin.usd's FR3 (its wrist camera included), registered before play as GUIDE does;
+        then the restart check's 2 s stale hold and joint target, with the same gates.
 restart: 1 s, then World.stop() and play() as GUIDE's second RegisterScene does (the joints revert
         to the asset's authored state), then a 2 s stale hold (mean <= 0.1 mm over its last second) and
         3 s of a JOINTS target with joint 1 at home + 0.3 rad (final error <= 0.01 rad).
@@ -25,11 +27,12 @@ from types import SimpleNamespace
 parser = argparse.ArgumentParser()
 parser.add_argument("--robot", choices=["fr3", "panda"], required=True)
 parser.add_argument("--mode", choices=["torque", "velocity", "baseline"], required=True)
-parser.add_argument("--check", choices=["hold", "square", "rtf", "home", "restart"], required=True)
+parser.add_argument("--check", choices=["hold", "square", "rtf", "home", "restart", "blockbin"], required=True)
 parser.add_argument("--baseline", help="rtf: the baseline run's JSON")
 parser.add_argument("--out", required=True)
 args = parser.parse_args()
 assert args.mode != "baseline" or args.check == "rtf", "the baseline exists for the rtf check only"
+assert args.check != "blockbin" or args.robot == "fr3", "block_bin's robot is the FR3"
 
 from isaacsim import SimulationApp  # noqa: E402
 
@@ -72,34 +75,45 @@ world = World(stage_units_in_meters=1.0, physics_dt=1.0 / PHYSICS_HZ, rendering_
 world.get_physics_context().enable_gpu_dynamics(False)
 world.scene.add_default_ground_plane()
 UsdLux.DistantLight.Define(world.stage, "/World/light").CreateIntensityAttr(3000)
-source = str(description.ROBOTS_DIR / args.robot / f"{args.robot}.usda")  # Ruling 10: corrected masses
-stage_utils.add_reference_to_stage(source, "/World/robot")
+BLOCKBIN = args.check == "blockbin"
+ROOT = "/Scene_0/fr3" if BLOCKBIN else "/World/robot"
+if BLOCKBIN:  # GUIDE's scene, its FR3 as authored (the host applies the overrides at registration)
+    stage_utils.add_reference_to_stage(str(Path(__file__).resolve().parents[2] / "guide_tasks/block_bin/assets/block_bin.usd"), "/Scene_0")
+else:
+    source = str(description.ROBOTS_DIR / args.robot / f"{args.robot}.usda")  # Ruling 10: corrected masses
+    stage_utils.add_reference_to_stage(source, "/World/robot")
 camera = rep.create.camera(position=(1.6, 1.2, 1.1), look_at=(0.3, 0.0, 0.3))
 annotator = rep.AnnotatorRegistry.get_annotator("rgb")
 annotator.attach([rep.create.render_product(camera, (640, 480))])  # one camera: the measurement's light load
 
 model = Model.load(args.robot)
-arm = Articulation("/World/robot")
+arm = Articulation(ROOT)
 arm.set_sleep_thresholds(0.0)  # awake in every run: a sleeping arm's physics is free and fakes the baseline
+
+
+def register():
+    """GUIDE's RegisterScene: the host compiles (the persistent cache makes reruns quicker)."""
+    say = lambda message: print(message, flush=True)  # noqa: E731  the [oscbf] lines Step 2 greps
+    return OscbfHost(ROOT, robot=args.robot, mode=args.mode, rate=PHYSICS_HZ if args.mode == "torque" else FRAME_HZ,
+                     q_rest=model.home, logger=SimpleNamespace(info=say, warning=say, error=say))
+
+
+host = register() if BLOCKBIN else None  # before play, as in GUIDE: the arm starts at block_bin's authored joint state
 world.reset()
 dofs = list(arm.dof_names)
 ARM = [dofs.index(j) for j in model.arm_joints]
-home = np.zeros(arm.num_dofs)
-home[ARM] = model.home + (FAR if args.check == "home" else 0.0)
-arm.set_dof_positions(home[None])
-arm.set_dof_position_targets(home[None])
-for _ in range(SETTLE_FRAMES):  # position-driven settle at home, as GUIDE's scene is before registration
-    world.step(render=True)
-    annotator.get_data()
-
-host = None
-if args.mode != "baseline":  # registration: compiles (the persistent cache makes reruns quicker)
-    say = lambda message: print(message, flush=True)  # noqa: E731  the [oscbf] lines Step 2 greps
-    host = OscbfHost("/World/robot", robot=args.robot, mode=args.mode,
-                     rate=PHYSICS_HZ if args.mode == "torque" else FRAME_HZ, q_rest=model.home,
-                     logger=SimpleNamespace(info=say, warning=say, error=say))
-    if args.check == "home":
-        host.home()  # what GUIDE's Reset does under controller: oscbf
+if not BLOCKBIN:
+    home = np.zeros(arm.num_dofs)
+    home[ARM] = model.home + (FAR if args.check == "home" else 0.0)
+    arm.set_dof_positions(home[None])
+    arm.set_dof_position_targets(home[None])
+    for _ in range(SETTLE_FRAMES):  # position-driven settle at home
+        world.step(render=True)
+        annotator.get_data()
+    if args.mode != "baseline":
+        host = register()  # after the settle, with the timeline playing: <robot>.usda already carries the overrides
+        if args.check == "home":
+            host.home()  # what GUIDE's Reset does under controller: oscbf
 p0, R0 = model.ee_pose(arm.get_dof_positions().numpy()[0][ARM].astype(float))
 
 log = []
@@ -118,7 +132,7 @@ if args.check == "restart":  # GUIDE's second RegisterScene: stop and play with 
     world.stop()
     world.play()
     log.clear()
-frames = int(5.0 * FRAME_HZ) if args.check in ("hold", "home", "restart") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
+frames = int(5.0 * FRAME_HZ) if args.check in ("hold", "home", "restart", "blockbin") else int((HOLD_S + 2 * LAP_S) * FRAME_HZ)
 frame_ms, last_k = [], -1
 for i in range(frames):
     t = i / FRAME_HZ
@@ -126,7 +140,7 @@ for i in range(frames):
     if host is not None and args.check in ("square", "rtf") and k != last_k:
         host.holder.put(Target(position=p0 + square_offset(t), rotation=R0))  # GUIDE's ROS thread does this
         last_k = k
-    if args.check == "restart" and t >= HOLD_S and k != last_k:
+    if args.check in ("restart", "blockbin") and t >= HOLD_S and k != last_k:
         host.holder.put(Target(mode=JOINTS, joints=model.home + MOVED))
         last_k = k
     start = time.perf_counter()
@@ -163,7 +177,7 @@ else:
                       qd_over_limit=float((peak / model.max_velocity).max()),
                       final_error_rad=float(np.abs(q[-1] - model.home).max()), stale=host.diagnostics["stale"])
         ok = ok and result["qd_over_limit"] <= 1.0 + 1e-6 and result["final_error_rad"] <= 1e-2 and not result["stale"]  # 1e-6: float32 PhysX cap (2.62f vs 2.61999977), as u_over_limit
-    elif args.check == "restart":
+    elif args.check in ("restart", "blockbin"):
         error = 1e3 * np.linalg.norm(p - p[0], axis=1)[(t >= 1.0) & (t < HOLD_S)]  # p[0]: the pose held after the restart
         result.update(restart_q=q[0].round(4).tolist(), hold_mm_mean=float(error.mean()), hold_mm_max=float(error.max()),
                       moved_error_rad=float(np.abs(q[-1] - (model.home + MOVED)).max()), stale=host.diagnostics["stale"])

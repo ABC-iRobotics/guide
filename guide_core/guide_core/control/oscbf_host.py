@@ -11,7 +11,7 @@ import warp as wp
 from isaacsim.core.experimental.prims import Articulation
 from isaacsim.core.experimental.utils.stage import get_current_stage
 from isaacsim.core.simulation_manager import SimulationEvent, SimulationManager
-from pxr import Sdf, UsdPhysics
+from pxr import Sdf, Usd, UsdPhysics
 from scipy.spatial.transform import Rotation
 
 from guide_motion import description
@@ -49,6 +49,42 @@ def apply_mass_overrides(stage, articulation_root: str, robot: str) -> list:
     return []
 
 
+def include_attached_bodies(stage, articulation_root: str, links) -> list:
+    """Bodies hung off this robot by fixed joints excluded from its articulation join it (before play).
+
+    Controller ruling (B5-3): block_bin's wrist camera (0.2 kg on fr3_hand) sat outside the articulation,
+    so PhysX's M and g, which the attach check reads, never saw its weight (6.8 mm EE error). As
+    articulation links the attach fold models them. Only fixed joints under the robot's prim with one
+    body a link of this robot (transitively: a body that joined counts) and the other a rigid body
+    under the robot's prim in no other articulation; never the world, never a loop between two links.
+    Returns [(joint, body, authored mass or None)] for the joints it changed.
+    """
+    root = stage.GetPrimAtPath(articulation_root)
+    members = {str(prim.GetPath()) for prim in Usd.PrimRange(root) if prim.GetName() in links}
+    changed, growing = [], True
+    while growing:
+        growing = False
+        for prim in Usd.PrimRange(root):
+            joint = UsdPhysics.Joint(prim)
+            if not prim.IsA(UsdPhysics.FixedJoint) or not joint.GetExcludeFromArticulationAttr().Get():
+                continue
+            bodies = [str(path) for rel in (joint.GetBody0Rel(), joint.GetBody1Rel()) for path in rel.GetTargets()]
+            if len(bodies) != 2 or sum(body in members for body in bodies) != 1:  # the world, no robot link, or a loop
+                continue
+            body = stage.GetPrimAtPath(next(b for b in bodies if b not in members))
+            owner = body
+            while owner.IsValid() and not owner.HasAPI(UsdPhysics.ArticulationRootAPI):
+                owner = owner.GetParent()
+            if not body.HasAPI(UsdPhysics.RigidBodyAPI) or owner.GetPath() != root.GetPath():  # outside, or another articulation
+                continue
+            joint.GetExcludeFromArticulationAttr().Set(False)
+            members.add(str(body.GetPath()))
+            mass = UsdPhysics.MassAPI(body).GetMassAttr().Get() if body.HasAPI(UsdPhysics.MassAPI) else None
+            changed.append((str(prim.GetPath()), str(body.GetPath()), mass))
+            growing = True
+    return changed
+
+
 class OscbfHost:
     def __init__(self, articulation_root: str, robot: str = "fr3", mode: str = "torque", gains=None,
                  rate=None, barriers=None, q_rest=None, logger=None):
@@ -64,6 +100,9 @@ class OscbfHost:
         elif missing := apply_mass_overrides(get_current_stage(), articulation_root, robot):
             # else the step would recompile to the asset's masses at attach and pass its M/g check
             self._refuse(f"mass overrides: {articulation_root} has no {missing}")
+        for joint, body, mass in include_attached_bodies(get_current_stage(), articulation_root, self.model.usd_to_urdf):
+            self._log("info", f"{body} (mass {'from its colliders' if mass is None else f'{mass} kg'}) joins the articulation: "
+                              f"{joint} no longer excluded; folded into the model at attach")
         self._settings = (mode, gains, barriers, q_rest)
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
@@ -192,7 +231,9 @@ class OscbfHost:
         properties = [dict(zip(names, values)) for values in (masses, coms, inertias)]
         if self.model.set_mass_properties(*properties, extra_links=self._extra_links(names)):
             self._controller = Controller(self.model, *self._settings)
-            self._log("warning", f"PhysX mass properties differ from the description: recompiled in {self._controller.warm_up():.1f} s")
+            folded = {n: round(float(m), 4) for n, m in properties[0].items() if n not in self.model.usd_to_urdf}
+            self._log("warning", f"PhysX mass properties differ from the description{f' (extra links, kg: {folded})' if folded else ''}: "
+                                 f"recompiled in {self._controller.warm_up():.1f} s")
         q, _ = self._read_api()
         M = arm.get_mass_matrices().numpy()[0][np.ix_(self._arm_dofs, self._arm_dofs)]
         g = arm.get_dof_gravity_compensation_forces().numpy()[0][self._arm_dofs]

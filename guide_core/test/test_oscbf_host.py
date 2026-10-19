@@ -501,3 +501,65 @@ def test_an_unsafe_q_rest_refuses_the_robot_at_registration(host_module, monkeyp
     arm.q[:7] = 0.0
     run(host, 2)
     assert arm.modes == [] and arm.efforts == [] and arm.teleports == []
+
+
+def camera_stage():
+    """block_bin's wrist camera on the scene's FR3: two rigid bodies hung off fr3_hand by fixed joints
+    excluded from the articulation (the mount, then the RSD455 on the mount)."""
+    from pxr import Sdf, UsdPhysics
+
+    stage = robot_stage()
+    UsdPhysics.ArticulationRootAPI.Apply(stage.GetPrimAtPath("/Scene_0/fr3"))
+    for path, mass in (("/Scene_0/fr3/mount", None), ("/Scene_0/fr3/rsd455/RSD455", 0.103)):
+        body = stage.DefinePrim(path, "Xform")
+        UsdPhysics.RigidBodyAPI.Apply(body)
+        if mass:
+            UsdPhysics.MassAPI.Apply(body).CreateMassAttr(mass)
+    for path, body0, body1 in (("/Scene_0/fr3/fr3_hand/mount_joint", "/Scene_0/fr3/fr3_hand", "/Scene_0/fr3/mount"),
+                               ("/Scene_0/fr3/mount/camera_joint", "/Scene_0/fr3/mount", "/Scene_0/fr3/rsd455/RSD455")):
+        joint = UsdPhysics.FixedJoint.Define(stage, path)
+        joint.CreateBody0Rel().SetTargets([Sdf.Path(body0)])
+        joint.CreateBody1Rel().SetTargets([Sdf.Path(body1)])
+        joint.CreateExcludeFromArticulationAttr(True)
+    return stage
+
+
+def excluded(stage, path):
+    from pxr import UsdPhysics
+
+    return UsdPhysics.Joint(stage.GetPrimAtPath(path)).GetExcludeFromArticulationAttr().Get()
+
+
+def test_bodies_hung_off_the_robot_join_its_articulation_at_registration(host_module, monkeypatch):
+    """Controller (B5-3): block_bin's 0.2 kg wrist camera hangs off fr3_hand outside the articulation, so
+    PhysX's M and g (the attach check) never saw its weight: 6.8 mm EE error, an 18.7 mm hold drift. At
+    registration the host brings such bodies into the articulation (the mount, then the camera on it);
+    the fold at attach then models them."""
+    stage = camera_stage()
+    host, arm = make_host(host_module, monkeypatch, stage=stage)
+    assert not excluded(stage, "/Scene_0/fr3/fr3_hand/mount_joint") and not excluded(stage, "/Scene_0/fr3/mount/camera_joint")
+    assert host.diagnostics["refused"] is None
+    changed = host_module.include_attached_bodies(camera_stage(), "/Scene_0/fr3", host.model.usd_to_urdf)
+    assert [(j.rsplit("/", 1)[1], b.rsplit("/", 1)[1], m) for j, b, m in changed] == [
+        ("mount_joint", "mount", None), ("camera_joint", "RSD455", pytest.approx(0.103))]
+
+
+@pytest.mark.parametrize("case", ["world", "other articulation", "loop between two links", "body outside the robot"])
+def test_joints_to_the_world_or_other_articulations_are_never_touched(host_module, case):
+    from pxr import Sdf, UsdPhysics
+
+    stage = robot_stage()
+    UsdPhysics.ArticulationRootAPI.Apply(stage.GetPrimAtPath("/Scene_0/fr3"))
+    other = {"world": None, "loop between two links": "/Scene_0/fr3/fr3_link7",
+             "other articulation": "/Scene_0/fr3/tool/link", "body outside the robot": "/Scene_0/table"}[case]
+    if case == "other articulation":
+        UsdPhysics.ArticulationRootAPI.Apply(stage.DefinePrim("/Scene_0/fr3/tool", "Xform"))
+    if other and case != "loop between two links":
+        UsdPhysics.RigidBodyAPI.Apply(stage.DefinePrim(other, "Xform"))
+    joint = UsdPhysics.FixedJoint.Define(stage, "/Scene_0/fr3/fr3_hand/joint")
+    joint.CreateBody0Rel().SetTargets([Sdf.Path("/Scene_0/fr3/fr3_hand")])
+    if other:
+        joint.CreateBody1Rel().SetTargets([Sdf.Path(other)])
+    joint.CreateExcludeFromArticulationAttr(True)
+    assert host_module.include_attached_bodies(stage, "/Scene_0/fr3", Model.load(ROBOT).usd_to_urdf) == []
+    assert excluded(stage, "/Scene_0/fr3/fr3_hand/joint")
