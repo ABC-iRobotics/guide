@@ -11,9 +11,18 @@ from pathlib import Path
 import numpy as np
 import pinocchio as pin
 
+from guide_motion import description
+
 DATA = Path(__file__).parent / "data"
 FD_URDF = (DATA / "fr3_franka_description.urdf").read_text()
 ARM = [f"fr3_joint{i}" for i in range(1, 8)]
+HOME = np.array(description.HOME)
+
+
+def usd_poses() -> dict:
+    poses = description.link_poses(FD_URDF, root="fr3_link0")
+    poses["fr3_rightfinger"] = poses["fr3_leftfinger"]
+    return poses
 
 
 def fd_dynamics(q):
