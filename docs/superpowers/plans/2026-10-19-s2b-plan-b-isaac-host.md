@@ -4,7 +4,7 @@
 
 **Goal:** a robot whose task `init.yaml` says `controller: oscbf` is driven, in torque or velocity mode, by `guide_motion`'s OSCBF controller inside Isaac's `PHYSICS_PRE_STEP` callback, fed with `guide_msgs/MotionTarget`s that GUIDE's ROS node receives at depth 1, and validated headless against the spec's hold, path, determinism and RTF thresholds.
 
-**Architecture:** `guide_msgs/msg/MotionTarget.msg` is the 20 Hz target topic. `guide_core/guide_core/control/oscbf_host.py` (`OscbfHost`, Isaac-bound, ROS-free) owns one robot. At registration it loads the `guide_motion` description and compiles the controller. At the first substep after each play it reads the masses from PhysX, checks M and g, and switches the arm's drives. On every substep it steps the controller through the articulation's tensor view, falling back to the experimental API. `_cmd_register_scene` creates the hosts and keeps the oscbf robots' joint-state graph from subscribing `joint_command`. GUIDE's ROS node subscribes each host's `motion_target` and writes its single-slot holder. A manual headless script under `guide_core/test` measures the result.
+**Architecture:** `guide_msgs/msg/MotionTarget.msg` is the 20 Hz target topic. `guide_core/guide_core/control/oscbf_host.py` (`OscbfHost`, Isaac-bound, ROS-free) owns one robot. At registration (timeline stopped) it copies the mass overrides committed in `robots/<robot>/<robot>.usda` onto the scene's robot prims, loads the `guide_motion` description and compiles the controller. At the first substep after each play it reads the masses from PhysX, checks M and g, and switches the arm's drives. On every substep it steps the controller through the articulation's tensor view, falling back to the experimental API. `_cmd_register_scene` creates the hosts and keeps the oscbf robots' joint-state graph from subscribing `joint_command`. GUIDE's ROS node subscribes each host's `motion_target` and writes its single-slot holder. A manual headless script under `guide_core/test` measures the result.
 
 **Tech Stack:** Isaac Sim 6.0.1 (`isaacsim.core.simulation_manager.SimulationManager`, `isaacsim.core.experimental.prims.Articulation`, warp), ROS 2 Jazzy rclpy, `guide_motion` (Plan A), numpy/scipy, pytest 9 with Isaac stubbed.
 
@@ -189,8 +189,8 @@ git commit -m "feat(guide_msgs): MotionTarget, the 20 Hz target of the OSCBF con
 - Test: `guide_core/test/test_oscbf_host.py`
 
 **Interfaces:**
-- Consumes (Plan A): `guide_motion.model.Model.load(robot)` (`arm_joints`, `gripper_joint`, `ee_pose`, `usd_to_urdf`, `manipulator`, `set_mass_properties(masses, coms, inertias, extra_links) -> bool`, `home`, `lower`, `upper`); `guide_motion.control.Controller(model, mode, gains, barriers, q_rest)` with `warm_up() -> float`, `step(target, q, qd) -> ndarray(7)`, `events`; `guide_motion.control.enable_compilation_cache()`; `guide_motion.targets.Target`, `TargetHolder`. Isaac: `Articulation(path)` (`dof_names`, `link_names`, `get_dof_limits()`, `get_link_masses()`, `get_link_coms()`, `get_link_inertias()`, `get_mass_matrices()`, `get_dof_gravity_compensation_forces()`, `get_dof_positions()`, `get_dof_velocities()`, `set_dof_efforts`, `set_dof_velocity_targets`, `set_dof_position_targets`, `switch_dof_control_mode`, private `_physics_articulation_view` with `get_dof_positions/get_dof_velocities/set_dof_actuation_forces/set_dof_velocity_targets/get_link_transforms/shared_metatype`); `SimulationManager.register_callback(fn, SimulationEvent.PHYSICS_PRE_STEP | SIMULATION_STOPPED)`.
-- Produces `guide_core.control.oscbf_host.OscbfHost(articulation_root: str, robot: str = "fr3", mode: str = "torque", gains: dict | None = None, rate: float | None = None, barriers: dict | None = None, q_rest: list | None = None, logger=None)` with public `holder: TargetHolder` (the ROS side's `put`), `model: Model`, `mode`, `diagnostics = {"stale": bool, "infeasible": int, "refused": str | None}`, `every: int` (after attach), `close()`. The caller must keep the host referenced: `register_callback` holds bound methods by weak reference.
+- Consumes (Plan A): `guide_motion.model.Model.load(robot)` (`arm_joints`, `gripper_joint`, `ee_pose`, `usd_to_urdf`, `manipulator`, `set_mass_properties(masses, coms, inertias, extra_links) -> bool`, `home`, `lower`, `upper`); `guide_motion.control.Controller(model, mode, gains, barriers, q_rest)` with `warm_up() -> float`, `step(target, q, qd) -> ndarray(7)`, `events`; `guide_motion.control.enable_compilation_cache()`; `guide_motion.targets.Target`, `TargetHolder`; `guide_motion.description.ROBOTS_DIR / robot / f"{robot}.usda"` (the committed override layer: one `over "<link>"` per overridden link, directly under its default prim, carrying `PhysicsMassAPI`'s `physics:mass`, `physics:centerOfMass`, `physics:diagonalInertia`, `physics:principalAxes`). USD: `pxr.Sdf`, `pxr.UsdPhysics`; `isaacsim.core.experimental.utils.stage.get_current_stage()`. Isaac: `Articulation(path)` (`dof_names`, `link_names`, `get_dof_limits()`, `get_link_masses()`, `get_link_coms()`, `get_link_inertias()`, `get_mass_matrices()`, `get_dof_gravity_compensation_forces()`, `get_dof_positions()`, `get_dof_velocities()`, `set_dof_efforts`, `set_dof_velocity_targets`, `set_dof_position_targets`, `switch_dof_control_mode`, private `_physics_articulation_view` with `get_dof_positions/get_dof_velocities/set_dof_actuation_forces/set_dof_velocity_targets/get_link_transforms/shared_metatype`); `SimulationManager.register_callback(fn, SimulationEvent.PHYSICS_PRE_STEP | SIMULATION_STOPPED)`.
+- Produces `guide_core.control.oscbf_host.OscbfHost(articulation_root: str, robot: str = "fr3", mode: str = "torque", gains: dict | None = None, rate: float | None = None, barriers: dict | None = None, q_rest: list | None = None, logger=None)` with public `holder: TargetHolder` (the ROS side's `put`), `model: Model`, `mode`, `diagnostics = {"stale": bool, "infeasible": int, "refused": str | None}`, `every: int` (after attach), `close()`. The caller must keep the host referenced: `register_callback` holds bound methods by weak reference. Also the module function `apply_mass_overrides(stage, articulation_root: str, robot: str) -> list` (Controller ruling "mass overrides in every scene"; returns the override links the scene lacks, which refuses the robot).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -212,7 +212,7 @@ from guide_motion.targets import POSE, Target
 
 ROBOT = "fr3"
 STUBS = ("isaacsim", "isaacsim.core", "isaacsim.core.experimental", "isaacsim.core.experimental.prims",
-         "isaacsim.core.simulation_manager")
+         "isaacsim.core.experimental.utils", "isaacsim.core.experimental.utils.stage", "isaacsim.core.simulation_manager")
 DT = 1.0 / 120.0
 
 
@@ -325,10 +325,23 @@ def host_module(monkeypatch):
     sys.modules.update(before)
 
 
-def make_host(module, monkeypatch, mode="torque", rate=None, **arm):
+def robot_stage(drop=()):
+    """The scene's robot as block_bin.usd payloads the bare FR3: its link prims under /Scene_0/fr3."""
+    from pxr import Usd
+
+    stage = Usd.Stage.CreateInMemory()
+    for name in Model.load(ROBOT).usd_to_urdf:
+        if name not in drop:
+            stage.DefinePrim(f"/Scene_0/fr3/{name}", "Xform")
+    return stage
+
+
+def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, **arm):
     model = Model.load(ROBOT)
     fake = FakeArm(Model.load(ROBOT), model.home, **arm)
+    stage = robot_stage() if stage is None else stage
     monkeypatch.setattr(module, "Articulation", lambda path: fake)
+    monkeypatch.setattr(module, "get_current_stage", lambda: stage)
     host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate)
     return host, fake
 
@@ -437,12 +450,36 @@ def test_an_extra_physx_link_folds_into_its_parent(host_module):
     (parent, T), = host._extra_links(names).values()
     assert parent == "fr3_hand"
     np.testing.assert_allclose(T, host.model.usd_to_urdf["fr3_hand"] @ T_camera, atol=1e-7)
+
+
+def test_the_committed_mass_overrides_reach_the_scenes_robot_before_play(host_module, monkeypatch):
+    """Controller ruling 2026-10-20: at registration the host copies robots/fr3/fr3.usda's mass, COM and
+    inertia onto the scene's FR3 (Ruling 10: hand and fingers from franka_description, link8 and
+    hand_tcp 1 g; link0..7 keep the asset's). A scene without those links refuses the robot."""
+    from pxr import Sdf, UsdPhysics
+
+    stage = robot_stage()
+    host, arm = make_host(host_module, monkeypatch, stage=stage)
+    layer = Sdf.Layer.FindOrOpen(str(description.ROBOTS_DIR / ROBOT / f"{ROBOT}.usda"))
+    overs = layer.GetPrimAtPath(f"/{layer.defaultPrim}").nameChildren
+    assert {o.name for o in overs} == {"fr3_hand", "fr3_leftfinger", "fr3_rightfinger", "fr3_link8", "fr3_hand_tcp"}
+    for over in overs:
+        prim = stage.GetPrimAtPath(f"/Scene_0/fr3/{over.name}")
+        assert prim.HasAPI(UsdPhysics.MassAPI)
+        assert {a.name: prim.GetAttribute(a.name).Get() for a in over.attributes} == {a.name: a.default for a in over.attributes}
+    assert UsdPhysics.MassAPI(stage.GetPrimAtPath("/Scene_0/fr3/fr3_link8")).GetMassAttr().Get() == pytest.approx(0.001)
+    assert not stage.GetPrimAtPath("/Scene_0/fr3/fr3_link7").HasAPI(UsdPhysics.MassAPI)
+    assert host.diagnostics["refused"] is None
+
+    host, arm = make_host(host_module, monkeypatch, stage=robot_stage(drop={"fr3_link8"}))
+    run(host, 2)
+    assert "fr3_link8" in host.diagnostics["refused"] and arm.modes == [] and arm.efforts == []
 ```
 
 - [ ] **Step 2: Run them to see them fail**
 
 Run (sourced shell): `cd ~/ros2_ws/src/guide && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/python -m pytest -q guide_core/test/test_oscbf_host.py`
-Expected: 10 errors, `ModuleNotFoundError: No module named 'guide_core.control'`. (pytest imports the source tree through `guide_core/test/conftest.py`, so no build is needed for the tests.)
+Expected: 11 errors, `ModuleNotFoundError: No module named 'guide_core.control'`. (pytest imports the source tree through `guide_core/test/conftest.py`, so no build is needed for the tests.)
 
 - [ ] **Step 3: Implement**
 
@@ -459,14 +496,40 @@ over ROS per substep; states return over the existing per-frame /joint_states.
 import numpy as np
 import warp as wp
 from isaacsim.core.experimental.prims import Articulation
+from isaacsim.core.experimental.utils.stage import get_current_stage
 from isaacsim.core.simulation_manager import SimulationEvent, SimulationManager
+from pxr import Sdf, UsdPhysics
 from scipy.spatial.transform import Rotation
 
+from guide_motion import description
 from guide_motion.control import Controller, enable_compilation_cache
 from guide_motion.model import Model
 from guide_motion.targets import Target, TargetHolder
 
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
+
+
+def apply_mass_overrides(stage, articulation_root: str, robot: str) -> list:
+    """Copy robots/<robot>/<robot>.usda's mass, COM and inertia onto the scene's robot (before play).
+
+    Controller ruling 2026-10-20: a scene that embeds the bare asset (block_bin.usd: the FR3) then
+    simulates the masses the description was built on. Only the layer is read; its reference to
+    Isaac's asset is never resolved. Returns the override links the scene lacks (nothing written then).
+    """
+    layer = Sdf.Layer.FindOrOpen(str(description.ROBOTS_DIR / robot / f"{robot}.usda"))
+    overs = list(layer.GetPrimAtPath(f"/{layer.defaultPrim}").nameChildren)  # ponytail: direct children, as both layers are
+    prims = {over.name: stage.GetPrimAtPath(f"{articulation_root}/{over.name}") for over in overs}
+    missing = [name for name, prim in prims.items() if not prim.IsValid()]
+    if missing:
+        return missing
+    for over in overs:
+        prim = prims[over.name]
+        if not prim.HasAPI(UsdPhysics.MassAPI):
+            UsdPhysics.MassAPI.Apply(prim)
+        for attribute in over.attributes:  # a value already there stays unwritten: nothing for PhysX to re-parse
+            if prim.GetAttribute(attribute.name).Get() != attribute.default:
+                prim.CreateAttribute(attribute.name, attribute.typeName, custom=attribute.custom).Set(attribute.default)
+    return []
 
 
 class OscbfHost:
@@ -476,6 +539,10 @@ class OscbfHost:
         self.mode, self.rate, self._logger = mode, rate, logger
         self.diagnostics = {"stale": True, "infeasible": 0, "refused": None}
         self.model = Model.load(robot)
+        missing = apply_mass_overrides(get_current_stage(), articulation_root, robot)
+        if missing:  # else the step would recompile to the asset's masses at attach and pass its M/g check
+            self.diagnostics["refused"] = f"mass overrides: {articulation_root} has no {missing}"
+            self._log("error", f"robot not registered for OSCBF control, it stays position-driven: {self.diagnostics['refused']}")
         self._settings = (mode, gains, barriers, q_rest)
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
@@ -610,12 +677,12 @@ class OscbfHost:
             SimulationManager.deregister_callback(uid)
         self._ids = []
 ```
-Notes for the implementer: `Target` objects are truthy, so `self._hold or target` picks the latched hold when stale and the fresh target otherwise. The raw writes cover all DOFs: the fingers get effort 0 or velocity target 0, which their position drives already had (as in `run.py`).
+Notes for the implementer: `Target` objects are truthy, so `self._hold or target` picks the latched hold when stale and the fresh target otherwise. The raw writes cover all DOFs: the fingers get effort 0 or velocity target 0, which their position drives already had (as in `run.py`). GUIDE constructs the host inside `RegisterScene`, after `stop` and before `play`, so `apply_mass_overrides` authors onto a stopped stage; `pxr` imports outside Kit in `.venv` (it opens `.usda` layers and in-memory stages), which is what the test uses.
 
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `cd ~/ros2_ws/src/guide && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/python -m pytest -q guide_core/test/test_oscbf_host.py`
-Expected: `10 passed` in a few seconds (the fake controller compiles nothing; the dynamics check uses OSCBF's model eagerly).
+Expected: `11 passed` in a few seconds (the fake controller compiles nothing; the dynamics check uses OSCBF's model eagerly).
 
 - [ ] **Step 5: Commit**
 
@@ -945,7 +1012,7 @@ cd ~/ros2_ws/src/guide && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ~/ros2_ws/.venv/bin/p
   --ignore-glob='*test_flake8.py' --ignore-glob='*test_pep257.py' --ignore-glob='*test_copyright.py'
 cd ~/ros2_ws && colcon build --packages-select guide_core block_bin && source install/setup.zsh
 ```
-Expected: every guide_core test passes (the prototype: 153), including the three new ones; `Finished <<< guide_core`, `Finished <<< block_bin`.
+Expected: every guide_core test passes (154: the 140 before this plan, Task 2's 11 and these 3); `Finished <<< guide_core`, `Finished <<< block_bin`.
 
 - [ ] **Step 10: Commit**
 
@@ -967,7 +1034,7 @@ git status --porcelain   # guide_core/config/init.yaml still ' M', unstaged
 - Create (results): `docs/design/s2b_oscbf_isaac_checks.json`
 
 **Interfaces:**
-- Consumes: Task 2's `OscbfHost` (`holder.put`, `_u`, `_hold`, `diagnostics`); Plan A's `Model.load`, `description.ROBOTS`, `description.ROBOTS_DIR / "panda" / "panda.usda"`.
+- Consumes: Task 2's `OscbfHost` (`holder.put`, `_u`, `_hold`, `diagnostics`); Plan A's `Model.load` (`max_effort`, `max_velocity`, `ee_pose`, `home`, `arm_joints`) and `description.ROBOTS_DIR / robot / f"{robot}.usda"` for both robots.
 - Produces: `isaac_oscbf_check.py --robot {fr3,panda} --mode {torque,velocity,baseline} --check {hold,square,rtf} [--baseline JSON] --out JSON` → JSON with `pass`, and for hold `hold_mm_mean`, `hold_mm_max`, `stale`; for square `path_mm_mean`, `path_mm_peak` and `<out>.q.npy`; for rtf `frame_ms_mean`, `added_ms`; always `nan`, `u_over_limit`, `infeasible`, `refused` for controller runs. Exit code 1 on a failed threshold.
 
 - [ ] **Step 1: Write the check**
@@ -1014,7 +1081,6 @@ from isaacsim.core.api import World  # noqa: E402  (deprecated, but it is what G
 from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.experimental.utils import stage as stage_utils  # noqa: E402
 from isaacsim.core.simulation_manager import SimulationEvent, SimulationManager  # noqa: E402
-from isaacsim.storage.native import get_assets_root_path  # noqa: E402
 from pxr import UsdLux  # noqa: E402
 
 from guide_core.control.oscbf_host import OscbfHost  # noqa: E402
@@ -1123,7 +1189,7 @@ print("RESULT", json.dumps(result), flush=True)
 app.close()
 sys.exit(0 if ok else 1)
 ```
-The scene, render load, home settle and the square are `run.py`'s; the host replaces `run.py`'s inline controller. The spec's thresholds are means: "hold 0.03 mm" and "path deviation 1.7 mm mean, 4.6 mm peak" in spec 5 are means and peaks over the same windows, and the peak is reported, not gated.
+The scene, render load, home settle and the square are `run.py`'s; the host replaces `run.py`'s inline controller. The robot is referenced through `<robot>.usda`, so the host's `apply_mass_overrides` finds every value already in place and writes nothing: constructing the host after the settle, with the timeline playing, re-parses nothing in PhysX. The spec's thresholds are means: "hold 0.03 mm" and "path deviation 1.7 mm mean, 4.6 mm peak" in spec 5 are means and peaks over the same windows, and the peak is reported, not gated.
 
 - [ ] **Step 2: Run hold and square for both robots and modes**
 
@@ -1238,7 +1304,7 @@ git status --porcelain   # only guide_core/config/init.yaml ' M'
 
 ## Self-review (run by the plan's author)
 
-- **Spec coverage.** 4.4 message → Task 1. 4.3 configuration → Task 3 (`init.yaml`, `create_robot_graphs`); registration (description, mass properties, control-mode switch, compilation cache, warm-up) → Task 2 (`__init__`, `_attach`); per-substep read / holder / step / write → Task 2 (`_on_step`); rates → Task 2 (`every`); tensor view with API fallback → Task 2 (`_view`); depth-1 `KEEP_LAST` subscriber on GUIDE's ROS thread, one lock-protected write → Task 3 (`_subscribe_motion_target`, `TargetHolder.put`). Section 3's "states return over /joint_states" → the graph keeps publishing (Task 3, `subscribe=False` only drops the subscriber). Section 6 rules → per-substep traffic: none; persistent cache and warm-up at registration (Task 2); physics 120 Hz (unchanged); the RTF check → Task 5. Section 7 headless checks → Tasks 4–5. Section 8: stale target → hold plus a flag (Task 2); infeasible / non-finite and clamping → Plan A's `Controller`, counted in `diagnostics["infeasible"]` (Task 2); description validation → refusal with the check named (Task 2).
+- **Spec coverage.** 4.4 message → Task 1. 4.3 configuration → Task 3 (`init.yaml`, `create_robot_graphs`); registration (the committed mass overrides onto the scene's robot, description, mass properties, control-mode switch, compilation cache, warm-up) → Task 2 (`apply_mass_overrides`, `__init__`, `_attach`); per-substep read / holder / step / write → Task 2 (`_on_step`); rates → Task 2 (`every`); tensor view with API fallback → Task 2 (`_view`); depth-1 `KEEP_LAST` subscriber on GUIDE's ROS thread, one lock-protected write → Task 3 (`_subscribe_motion_target`, `TargetHolder.put`). Section 3's "states return over /joint_states" → the graph keeps publishing (Task 3, `subscribe=False` only drops the subscriber). Section 6 rules → per-substep traffic: none; persistent cache and warm-up at registration (Task 2); physics 120 Hz (unchanged); the RTF check → Task 5. Section 7 headless checks → Tasks 4–5. Section 8: stale target → hold plus a flag (Task 2); infeasible / non-finite and clamping → Plan A's `Controller`, counted in `diagnostics["infeasible"]` (Task 2); description validation → refusal with the check named (Task 2).
 - **Placeholders.** None: every code step has the code; every run its command and expected output.
 - **Type consistency.** `OscbfHost(articulation_root, robot, mode, gains, rate, barriers, q_rest, logger)`, `.holder`, `.model.base_link`, `.topic`, `.diagnostics` and `target_from_msg` are used with the same names in Tasks 2–5 and in Plan C; `MotionTarget` field names match spec 4.4 and Plan C's publisher.
 - **Review Focus.** Each line has its test in Task 2 or 3.
