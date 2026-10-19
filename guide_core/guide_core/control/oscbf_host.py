@@ -153,6 +153,8 @@ class OscbfHost:
         # stale: the controller holds the latched pose in both modes. A zero velocity target cannot:
         # on velocity drives (stiffness 0) it is only a damper, and the arm sags (FIX B4)
         u = self._controller.step(self._hold or target, q, qd)
+        if self.mode == "velocity":  # the drive pushes D (v_target - v): gravity needs v_target += tau_g / D (FIX B4-2)
+            u = u + np.asarray(self._controller._gravity(q)) / self._damping  # Controller's compiled gravity
         self.diagnostics["infeasible"] = self._controller.events["infeasible"]
         self._u = u
         self._write(u)
@@ -192,6 +194,11 @@ class OscbfHost:
         error_g = np.linalg.norm(np.asarray(man.gravity_vector(q)) - g) / np.linalg.norm(g)
         if max(error_M, error_g) > DYNAMICS_TOL:
             return self._refuse(f"dynamics check failed: M {error_M:.1e}, g {error_g:.1e} relative > {DYNAMICS_TOL}; PhysX links {names}")
+        if self.mode == "velocity":  # read before the switch: velocity mode keeps the drives' damping
+            self._damping = arm.get_dof_gains()[1].numpy()[0][self._arm_dofs].astype(np.float64)
+            bad = [j for j, d in zip(self.model.arm_joints, self._damping) if not (np.isfinite(d) and d > 0)]
+            if bad:
+                return self._refuse(f"velocity drives without damping on {bad}: {self._damping.tolist()}")
         arm.switch_dof_control_mode("effort" if self.mode == "torque" else "velocity", dof_indices=self._arm_dofs)
         self._switched = True
         if self._view is not None:
@@ -200,7 +207,8 @@ class OscbfHost:
             self._index = wp.array([0], dtype=wp.int32, device=self._device)
         self._t, self._k, self._hold, self._width, self._homing = 0.0, 0, None, None, None  # the clock restarts
         self._attached = True
-        self._log("info", f"attached: {self.mode}, controller every {self.every} substep(s), {'tensor view' if self._view else 'API'} I/O")
+        damping = f", drive damping {np.round(self._damping, 3).tolist()}" if self.mode == "velocity" else ""
+        self._log("info", f"attached: {self.mode}, controller every {self.every} substep(s), {'tensor view' if self._view else 'API'} I/O{damping}")
         return True
 
     def _extra_links(self, names):

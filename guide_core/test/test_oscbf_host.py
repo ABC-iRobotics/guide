@@ -54,6 +54,7 @@ class FakeArm:
         self.link_names = list(self.props)
         self.q = np.r_[q, 0.0, 0.0]
         self.scale_M = scale_M
+        self.damping = np.full(9, 100.0)  # the drives' damping (velocity mode keeps it, stiffness 0)
         self.efforts, self.velocity_targets, self.finger_targets, self.modes = [], [], [], []
 
     def get_link_masses(self):
@@ -83,6 +84,9 @@ class FakeArm:
     def get_dof_velocities(self):
         return Arr(np.zeros(9))
 
+    def get_dof_gains(self):
+        return Arr(np.zeros(9)), Arr(self.damping)
+
     def switch_dof_control_mode(self, mode, dof_indices):
         self.modes.append((mode, list(dof_indices)))
 
@@ -101,6 +105,7 @@ class FakeController:
 
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
+        self._gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
         FakeController.made += 1
 
     def warm_up(self):
@@ -397,7 +402,7 @@ def test_velocity_mode_holds_the_latched_pose_when_stale(host_module, monkeypatc
     held = host._controller.targets
     assert host.diagnostics["stale"] and len(held) == 3 and held[0].mode == POSE and all(t is held[0] for t in held)
     np.testing.assert_allclose(held[0].position, host.model.ee_pose(host.model.home)[0], atol=1e-6)
-    assert len(arm.velocity_targets) == 3 and np.all(arm.velocity_targets[-1] == 0.5)
+    assert len(arm.velocity_targets) == 3
 
 
 def test_home_streams_planned_joint_targets_on_the_physics_clock(host_module, monkeypatch):
@@ -419,3 +424,20 @@ def test_home_streams_planned_joint_targets_on_the_physics_clock(host_module, mo
     for i, step in enumerate(steps):
         np.testing.assert_allclose(step.joints, expected[min(i // 6, len(expected) - 1)].joints, atol=1e-6, err_msg=f"substep {i}")  # q is float32
     np.testing.assert_array_equal(steps[-1].joints, model.home)
+
+
+def test_velocity_mode_adds_gravity_over_the_drive_damping(host_module, monkeypatch):
+    """FIX B4-2 (controller ruling): a velocity drive pushes D (v_target - v), so with stiffness 0 it
+    holds gravity only with a standing pose error (Panda 0.113 mm). The host adds tau_g(q) / D to every
+    velocity target, D read from the drives at attach; a joint without damping refuses the robot."""
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    arm.damping[:7] = np.linspace(50.0, 200.0, 7)
+    run(host, 2)
+    q = arm.q[:7].astype(np.float32).astype(float)  # what the host reads
+    g = np.asarray(host.model.manipulator.gravity_vector(q))
+    np.testing.assert_allclose(arm.velocity_targets[-1], 0.5 + g / arm.damping[:7], rtol=1e-6)
+
+    host, arm = make_host(host_module, monkeypatch, mode="velocity")
+    arm.damping[3] = 0.0
+    run(host, 2)
+    assert "fr3_joint4" in host.diagnostics["refused"] and arm.modes == [] and arm.velocity_targets == []
