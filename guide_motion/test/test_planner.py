@@ -5,7 +5,7 @@ import pytest
 from scipy.spatial.transform import Rotation
 
 from fr3_fixture import HOME
-from guide_motion.planner import DT, JOINT_SPEED, MAX_SPEED, OMEGA, SPEED, V_FLOOR, PlanningError, plan, profile
+from guide_motion.planner import DT, JOINT_SPEED, MAX_SPEED, OMEGA, SPEED, V_FLOOR, PlanningError, _path_limit, plan, profile
 from guide_motion.targets import JOINTS, POSE, Target
 
 
@@ -35,9 +35,16 @@ def test_joint_goal_follows_the_profile_to_the_goal(fr3_model):
     goal = HOME + np.r_[0.5, 0, 0, 0, 0, 0, -0.2]
     targets = plan(fr3_model, Target(mode=JOINTS, joints=goal), HOME)
     assert len(targets) >= 10 and all(t.mode == JOINTS for t in targets)  # 0.5 rad at 1 rad/s, plus ramp and approach
-    np.testing.assert_allclose(targets[-1].joints, goal)
+    assert np.array_equal(targets[-1].joints, goal)  # ruling 3: the exact goal is sent
     steps = np.abs(np.diff([HOME] + [t.joints for t in targets], axis=0)).max(axis=1)
     assert steps.max() <= JOINT_SPEED * DT + 1e-12
+
+
+def test_the_last_joint_target_is_exactly_the_goal(fr3_model):
+    """Ruling 3: the exact goal is sent; -0.785398 + (0.3 + 0.785398) is not 0.3 in floating point."""
+    goal = HOME.copy()
+    goal[1] = 0.3
+    assert np.array_equal(plan(fr3_model, Target(mode=JOINTS, joints=goal), HOME)[-1].joints, goal)
 
 
 def test_joint_goal_outside_the_limits_raises(fr3_model):
@@ -61,6 +68,32 @@ def test_guide_ex_speed_sets_the_cruise_speed(fr3_model):
         assert 0.9 * speed * MAX_SPEED * DT < steps.max() < 1.1 * speed * MAX_SPEED * DT, (speed, steps.max())
     with pytest.raises(ValueError):
         plan(fr3_model, goal, HOME, speed=0.0)
+
+
+def test_a_path_limit_is_the_tightest_joint_limit():
+    """10 rad per metre of path on a joint limited to 10 rad/s^2: 1 m/s^2 of path."""
+    assert _path_limit(np.full(7, 10.0), np.r_[10.0, 0, 0, 0, 0, 0, 0]) == pytest.approx(1.0)
+    assert _path_limit(np.full(7, 10.0), np.r_[10.0, 0, 0, 0, 0, 0, -20.0]) == pytest.approx(0.5)
+
+
+def test_a_fast_joint_move_starts_within_the_joint_acceleration_limits(fr3_model):
+    """Speed 1.0, joint 1 by 2 rad: the ramp alone would ask 6 m/s^2 of path; the XRDF caps it at 1."""
+    goal = HOME + np.r_[2.0, 0, 0, 0, 0, 0, 0]
+    joints = np.array([HOME] + [t.joints for t in plan(fr3_model, Target(mode=JOINTS, joints=goal), HOME, speed=1.0)])
+    qd = np.diff(joints, axis=0) / DT
+    ramp = qd[: np.argmax(qd[:, 0]) + 1]
+    limits = np.asarray(fr3_model.xrdf["cspace"]["acceleration_limits"])
+    assert np.all(np.abs(np.diff(np.r_[np.zeros((1, 7)), ramp], axis=0)) / DT <= limits + 1e-9)
+    assert qd[0, 0] > 0.4 * limits[0] * DT  # the cap binds, it does not crawl
+
+
+def test_a_fast_joint_move_stays_within_the_joint_velocity_limits(fr3_model):
+    """Speed 1.0 (0.5 m/s of path = 5 rad/s on joint 1) against the URDF's 2.62 rad/s."""
+    goal = HOME + np.r_[2.0, 0, 0, 0, 0, 0, 0]
+    joints = np.array([HOME] + [t.joints for t in plan(fr3_model, Target(mode=JOINTS, joints=goal), HOME, speed=1.0)])
+    qd = np.abs(np.diff(joints, axis=0)) / DT
+    assert np.all(qd <= fr3_model.max_velocity + 1e-9), (qd.max(axis=0), fr3_model.max_velocity)
+    assert qd[:, 0].max() > 0.95 * fr3_model.max_velocity[0]  # and cruises at it
 
 
 # The profile itself (ruling 3), exactly: distances along the path at each 50 ms target.
@@ -110,6 +143,6 @@ def test_profile_approach_follows_the_exponential(v_max):
 def test_profile_arrives_on_the_floor_and_sends_the_goal_within_one_step():
     s = profile(0.3, 0.1)
     steps = np.diff(np.r_[0.0, s])
-    assert steps[:-1].min() >= V_FLOOR * DT - 1e-12  # never slower than 5 mm/s
-    assert steps[-1] <= V_FLOOR * DT + 1e-12  # the goal follows once d is below one (floor) step
-    assert steps[-2] < 2 * V_FLOOR * DT  # the stream slowed to the floor first, it was not cut short
+    assert steps[:-1].min() >= 0.005 * DT - 1e-12  # never slower than 5 mm/s
+    assert steps[-1] <= 0.005 * DT + 1e-12  # the goal follows once d is below one (floor) step
+    assert steps[-2] < 2 * 0.005 * DT  # the stream slowed to the floor first, it was not cut short

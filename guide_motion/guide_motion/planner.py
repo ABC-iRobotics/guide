@@ -52,13 +52,27 @@ def profile(length: float, v_max: float, a_max: float = math.inf) -> np.ndarray:
         out.append(s)
 
 
-def _accel_limit(model, rate) -> float:
-    """Path acceleration (m/s^2) at which the first joint reaches its XRDF acceleration limit.
+def _path_limit(limits, rate) -> float:
+    """The path rate (m/s or m/s^2) at which the first joint reaches its limit (rad/s or rad/s^2).
 
-    rate: joint motion per metre of path at the start (rad/m).
+    rate: joint motion per metre of path at the start configuration (rad/m).
     """
-    limits = np.asarray(model.xrdf["cspace"]["acceleration_limits"], float)
-    return float(np.min(limits / np.maximum(np.abs(rate), 1e-9)))
+    return float(np.min(np.asarray(limits, float) / np.maximum(np.abs(rate), 1e-9)))
+
+
+def _sigma(model, length: float, delta, v_max: float) -> np.ndarray:
+    """The targets' path parameters in (0, 1]: the profile with v_max and a_max capped where the first
+    joint reaches its URDF velocity / XRDF acceleration limit. [1.0] for a goal within one step.
+
+    delta: the whole move's joint motion (rad), linearised at the start for POSE goals.
+    """
+    if length == 0:
+        return np.ones(1)
+    rate = np.asarray(delta, float) / length  # rad of joint motion per metre of path
+    v_max = min(v_max, _path_limit(model.max_velocity, rate))
+    if length <= v_max * DT:
+        return np.ones(1)
+    return profile(length, v_max, _path_limit(model.xrdf["cspace"]["acceleration_limits"], rate)) / length
 
 
 def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
@@ -67,7 +81,8 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     speed: GUIDE-EX's speed (0..1]. POSE goals follow a straight line (slerp for the
     orientation), each waypoint tracked by Pink IK under the URDF joint limits, so every target
     is reachable. JOINTS goals are interpolated in joint space. Both follow the module's speed
-    profile; a goal within one cruise step is sent as is. TWIST goals pass through unchanged.
+    profile, capped by the joint velocity and acceleration limits; a goal within one cruise step
+    is sent as is. TWIST goals pass through unchanged.
     """
     if not speed > 0:
         raise ValueError(f"speed must be > 0, got {speed}")
@@ -79,10 +94,10 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
             raise PlanningError(f"joint goal outside the URDF limits: {np.round(goal_q, 4).tolist()}")
         dq = goal_q - q
         length = np.abs(dq).max() * SPEED / JOINT_SPEED  # metres of "path" per the profile
-        if length <= v_max * DT:
-            return [Target(JOINTS, joints=goal_q, gripper_width=width)]
-        sigma = profile(length, v_max, _accel_limit(model, dq / length)) / length
-        return [Target(JOINTS, joints=q + dq * s, gripper_width=width) for s in sigma]
+        sigma = _sigma(model, length, dq, v_max)
+        return [Target(JOINTS, joints=q + dq * s, gripper_width=width) for s in sigma[:-1]] + [
+            Target(JOINTS, joints=goal_q, gripper_width=width)  # exactly the goal
+        ]
     if goal.mode != POSE:
         return [goal]
     p0, R0 = model.ee_pose(q)
@@ -90,11 +105,11 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     # ponytail: one turn-to-metres ratio for every speed (5 rad/s at speed 1.0, above Franka's
     # 2.5 rad/s Cartesian limit); cap ANGULAR_SPEED separately if fast turns ever track badly.
     length = max(np.linalg.norm(goal.position - p0), np.linalg.norm(turn) * SPEED / ANGULAR_SPEED)
-    if length <= v_max * DT:
-        return [goal]
     tool = model.pin_model.getFrameId(model.tool_frame)
     J = pin.computeFrameJacobian(model.pin_model, model.pin_data, q, tool, pin.LOCAL_WORLD_ALIGNED)
-    sigma = profile(length, v_max, _accel_limit(model, np.linalg.pinv(J) @ np.r_[goal.position - p0, turn] / length)) / length
+    sigma = _sigma(model, length, np.linalg.pinv(J) @ np.r_[goal.position - p0, turn], v_max)
+    if len(sigma) == 1:
+        return [goal]
     slerp = Slerp([0.0, 1.0], Rotation.from_matrix([R0, goal.rotation]))
     configuration = pink.Configuration(model.pin_model, model.pin_model.createData(), q.copy())
     task = FrameTask(model.tool_frame, position_cost=1.0, orientation_cost=1.0)
