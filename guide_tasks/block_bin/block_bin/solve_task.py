@@ -55,8 +55,8 @@ def solveTask(scene_id, robot, zone=None, path=""):
     target = task_dict["target"]
     goal = task_dict["goal"]
 
-    # Allow the (now scene-level, seeded) randomization to settle before solving.
-    time.sleep(5)
+    # Allow the (now scene-level, seeded) randomization to settle before solving (sim time).
+    robot.sleep(5)
 
     # rest_pose is the only pose fed into the GUIDE-EX graph as context; every
     # other pose (cube/bin/approach/retreat) is computed inside the node tree
@@ -184,7 +184,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.01}},
             ),
-            WaitForSeconds(alias="WaitAfterClose", static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterClose", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
             # Lift 28 cm straight up before heading for the bin. 20 cm taught policies a
             # lift too shallow to clear the bin walls (their main failure mode).
             TransformPose(
@@ -271,7 +271,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}},
             ),
-            WaitForSeconds(alias="WaitAfterOpen", static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
         ],
     )
 
@@ -334,7 +334,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}},
             ),
-            WaitForSeconds(alias="WaitAfterOpen", static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
         ],
     )
 
@@ -354,7 +354,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 static_args={"speed": 1.0},
             ),
             # Wait for scene to settle
-            WaitForSeconds(alias="WaitAfterTask", static_args={"seconds": 5.0}),
+            WaitForSeconds(alias="WaitAfterTask", dynamic_map={"timer": "robot"}, static_args={"seconds": 5.0}),
         ],
     )
 
@@ -415,7 +415,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                             "gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}
                         },
                     ),
-                    WaitForSeconds(alias="WaitAfterOpenRecovery", static_args={"seconds": 2.0}),
+                    WaitForSeconds(alias="WaitAfterOpenRecovery", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
                     TransformPose(
                         alias="RotateCubePose",
                         dynamic_map={"l_pose": "cube_pose"},
@@ -597,6 +597,7 @@ def main():
         description="block_bin demonstration generator."
     )
     argparser.add_argument("--namespace", type=str, default="")
+    argparser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
     args = argparser.parse_known_args()
     global namespace_base
     namespace_base = args[0].namespace if args[0].namespace else ""
@@ -611,6 +612,7 @@ def main():
         max_velocity=1.0,
         max_acceleration=1.0,
         gripper_action_type=ActionType.JOINT_POSITION,
+        controller=args[0].controller,
     )
     config.cameras = {
         "cam_base": ROS2CameraConfig(

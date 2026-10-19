@@ -1,5 +1,7 @@
 import os
 
+import yaml
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -15,6 +17,12 @@ from launch_ros.actions import Node
 def generate_nodes(context, *args, **kwargs):
 
     num_env = int(LaunchConfiguration("num_env").perform(context))
+
+    # The motion layer: robots.franka.controller in this task's config/init.yaml, the switch GUIDE
+    # reads when it registers the scene (S2b). oscbf drives the arm from Isaac's physics step, so
+    # no move_group or ros2_control is started for it.
+    with open(os.path.join(get_package_share_directory("block_bin"), "config", "init.yaml")) as f:
+        controller = yaml.safe_load(f)["robots"]["franka"].get("controller", "moveit")
 
     # Same-host DDS discovery on this machine needs the localhost cyclonedds
     # config (loopback has no MULTICAST flag + multiple NICs), otherwise these
@@ -50,7 +58,7 @@ def generate_nodes(context, *args, **kwargs):
     )
 
     move_groups = []
-    for i in range(num_env):
+    for i in range(num_env if controller == "moveit" else 0):
         # The robot for scene i lives under this namespace; Isaac publishes its
         # joint states and subscribes its joint commands here.
         ns = f"/Sim_0/Scene_{i}/franka"
@@ -81,7 +89,7 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"block_bin_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}"],
+                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),

@@ -189,6 +189,10 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
   restricts to those cells.
 - Output: `<path>/dataset_<sim>_<scene>_<YYYY_MM_DD_HH_MM_SS>/`, a LeRobot v3.0 dataset plus
   `meta/guide_info.json` and `meta/guide_episodes.jsonl`. An empty `path` means `~/dataset`.
+- **Motion layer (S2b):** `robots.franka.controller` in `guide_tasks/block_bin/config/init.yaml` is
+  `moveit` (move_group + ros2_control) or `oscbf` (guide_motion's OSCBF controller in Isaac's physics
+  step; ROS2Robot streams `guide_msgs/MotionTarget` at 20 Hz). GUIDE and the block_bin bring-up both
+  read it: rebuild block_bin after changing it, then register the scene again.
 - **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
   base**: the prim named by `robots.<name>.base_name` in the task's `config/init.yaml`
   (`fr3_link0` for both FR3 tasks; the robot prim when unset), whatever the scene index.
