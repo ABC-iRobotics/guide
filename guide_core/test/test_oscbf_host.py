@@ -242,8 +242,9 @@ def test_a_gripper_width_outside_the_hand_is_clamped(host_module, monkeypatch):
 def test_tensor_view_io_uses_the_views_device(host_module, monkeypatch):
     writes = []
     fake_wp = SimpleNamespace(int32="int32", float32="float32",
-                              array=lambda data, dtype, device: ("index", device),
-                              from_numpy=lambda data, dtype, device: writes.append(device) or ("data", device))
+                              array=lambda data, dtype, device, copy=True: ("index" if dtype == "int32" else "host", device),
+                              zeros=lambda shape, dtype, device: ("data", device),
+                              copy=lambda dest, src: writes.append(("copy", dest, src)))
     monkeypatch.setattr(host_module, "wp", fake_wp)
     host, arm = make_host(host_module, monkeypatch)
     on_gpu = SimpleNamespace(shape=(1, 9), device="cuda:0", numpy=lambda: arm.get_dof_positions().numpy())
@@ -253,7 +254,8 @@ def test_tensor_view_io_uses_the_views_device(host_module, monkeypatch):
         set_dof_actuation_forces=lambda data, index: writes.append(("forces", data, index)),
     )
     run(host, 3)
-    assert writes[0] == "cuda:0" and writes[1] == ("forces", ("data", "cuda:0"), ("index", "cuda:0"))
+    assert writes[0] == ("copy", ("data", "cuda:0"), ("host", "cpu"))  # host buffer -> the view's device
+    assert writes[1] == ("forces", ("data", "cuda:0"), ("index", "cuda:0"))
     assert arm.efforts == []  # the API setter was not used
 
 
@@ -563,3 +565,27 @@ def test_joints_to_the_world_or_other_articulations_are_never_touched(host_modul
     joint.CreateExcludeFromArticulationAttr(True)
     assert host_module.include_attached_bodies(stage, "/Scene_0/fr3", Model.load(ROBOT).usd_to_urdf) == []
     assert excluded(stage, "/Scene_0/fr3/fr3_hand/joint")
+
+
+def test_tensor_view_writes_fill_one_preallocated_array(host_module, monkeypatch):
+    """RTF round 1: _write allocated a warp array every substep (0.10 of its 0.16 ms in Isaac). One
+    array per robot is made at attach and filled in place (CPU physics: it shares the numpy buffer)."""
+    real, allocations, sent = host_module.wp, [], []
+
+    def counted(name):
+        return lambda *args, **kwargs: allocations.append(name) or getattr(real, name)(*args, **kwargs)
+
+    monkeypatch.setattr(host_module, "wp", SimpleNamespace(int32=real.int32, float32=real.float32, copy=real.copy,
+                                                           array=counted("array"), zeros=counted("zeros"),
+                                                           from_numpy=counted("from_numpy")))
+    host, arm = make_host(host_module, monkeypatch)
+    arm._physics_articulation_view = SimpleNamespace(
+        get_dof_positions=lambda: SimpleNamespace(shape=(1, 9), device="cpu", numpy=lambda: arm.get_dof_positions().numpy()),
+        get_dof_velocities=arm.get_dof_velocities,
+        set_dof_actuation_forces=lambda data, index: sent.append((data, data.numpy().copy())),
+    )
+    run(host, 1)
+    at_attach = len(allocations)
+    run(host, 10)
+    assert len(allocations) == at_attach and all(data is sent[0][0] for data, _ in sent)
+    np.testing.assert_allclose(sent[-1][1][0, :7], 0.5)

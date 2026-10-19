@@ -262,8 +262,12 @@ class OscbfHost:
         self._switched = True
         if self._view is not None:
             sample = self._view.get_dof_positions()  # its device: "cpu", or the GPU with GPU physics
-            self._buffer, self._device = np.zeros(sample.shape, np.float32), sample.device
-            self._index = wp.array([0], dtype=wp.int32, device=self._device)
+            # one array per robot, filled in place: the per-write allocation was 0.10 of the 0.16 ms write
+            self._buffer = np.zeros(sample.shape, np.float32)
+            self._host = wp.array(self._buffer, dtype=wp.float32, device="cpu", copy=False)  # shares _buffer
+            on_cpu = str(sample.device) == "cpu"
+            self._data = self._host if on_cpu else wp.zeros(sample.shape, dtype=wp.float32, device=sample.device)
+            self._index = wp.array([0], dtype=wp.int32, device=sample.device)
         self._t, self._k, self._hold, self._width, self._homing = 0.0, 0, None, None, None  # the clock restarts
         self._attached = True
         damping = f", drive damping {np.round(self._damping, 3).tolist()}" if self.mode == "velocity" else ""
@@ -306,9 +310,10 @@ class OscbfHost:
             setter(np.asarray(u)[None], dof_indices=self._arm_dofs)
             return
         self._buffer[0, self._arm_dofs] = u
-        data = wp.from_numpy(self._buffer, dtype=wp.float32, device=self._device)
+        if self._data is not self._host:  # GPU physics: one host-to-device copy into the same array
+            wp.copy(self._data, self._host)
         setter = self._view.set_dof_actuation_forces if self.mode == "torque" else self._view.set_dof_velocity_targets
-        setter(data, self._index)
+        setter(self._data, self._index)
 
     def close(self) -> None:
         for uid in self._ids:
