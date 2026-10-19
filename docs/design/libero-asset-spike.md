@@ -8,9 +8,10 @@ Results: `spike_libero_convert.json`, `spike_libero_isaac.json` (`_findings`, `_
 `spike_libero_randomize.yaml`. Renders, not copied into the repo: `~/libero_assets/spike/renders/`.
 Program tracker: https://claude.ai/artifact/HC3YKe5CcfYdCf4wbTLVzE
 
-Question (roadmap S1): does `mujoco_usd_converter` on LIBERO's MJCF give Isaac-loadable USD with
-sane colliders, working articulation, acceptable visuals, placed from the BDDL regions with
-Replicator? Scope: the LIBERO-Spatial object set (two `akita_black_bowl`, `plate`,
+Question (roadmap S1): which route gives Isaac-loadable USD with sane colliders, working
+articulation, acceptable visuals, and a licence we can use? This spike probed `mujoco_usd_converter`
+on LIBERO's MJCF, with placement from the BDDL regions by Replicator. The licence criterion was not
+checked, so the adoption below is conditional on that check (still open). Scope: the LIBERO-Spatial object set (two `akita_black_bowl`, `plate`,
 `glazed_rim_porcelain_ramekin`, `cookies`, `wooden_cabinet`, `flat_stove`).
 
 **Verdict: adopt with fixes.** Details under "Recommendation".
@@ -63,7 +64,7 @@ instance fell through, and the final speed is 0 for all but the cabinet (0.0001)
 | wooden_cabinet_1 (fixture) | 0.256 x 0.222 x 0.217 | -0.0046 |
 | flat_stove_1 (fixture) | 0.295 x 0.190 x 0.074 | 0.020 |
 
-The small negative heights are bounding boxes over visual meshes, 1 to 2 mm below the colliders.
+The bowl (-0.0016) and ramekin (-0.0007) heights are bounding boxes over visual meshes sitting 1 to 2 mm below the colliders (Task 2 report). The cabinet's -0.0046 (4.6 mm) is not explained.
 
 | Joint | Type | Limits | Reached open / closed |
 |---|---|---|---|
@@ -79,7 +80,7 @@ Renders (pixel range 250 and 216, so neither is blank): `~/libero_assets/spike/r
 `isaac_cabinet_open.png`. Reference: `libero_agentview_next_to_plate_demo0_frame0.png` (LIBERO
 agentview, demo 0 frame 0, flipped upright).
 
-Textures (`_texture_check`): converted textures are byte-identical to the sources. Bowl: a 4096^2
+Textures (`_texture_check`, bowl, cookies and plate only; the cabinet and stove textures were not checked): the converted textures of those three are byte-identical to the sources. Bowl: a 4096^2
 UV atlas, 66.6 % unused black background; the islands are light ceramic with a black floral
 pattern, and both LIBERO and Isaac show light bowls with a dark pattern ("black" is the asset's
 name). Bowl/table luma is 0.98 in Isaac and 0.70 in LIBERO (lighting, not texture). Cookie label
@@ -129,10 +130,10 @@ As briefed (R5: write `place_prim`; movables `Geometry/Body`, fixtures the refer
   (drift 0.7218), the cabinet goes NaN and stays NaN, and the drawer re-check is null for every
   joint (`drawer_recheck.opens_and_closes` false). A tensor-API teleport (`set_world_poses`) lands on
   the sample every seed and snaps back every seed (stove drift 0.708 to 0.725 m, cabinet NaN).
-- **Fixtures with the timeline stopped work.** Stop, fire, reset per seed: 10/10 in region, yaw and
+- **Fixtures with the timeline stopped work.** Stop, fire, reset per seed: fixtures 10/10 in region, yaw and
   drift (PhysX = sample to 0.0001 m / 0.001 deg), and the drawers still reach -0.1599 / 0.0099
   after ten root writes with yaw. Cost: mean fire 202.7 ms (see Task 3 report) plus a full stop and
-  reset per layout. (Run in `spike_libero_place_preplay.json`, not committed.)
+  reset per layout. (Run in `spike_libero_place_preplay.json`, not committed.) That run did not compensate the movables' offset, so its 10/10 is the fixtures' result only (e.g. bowl_2 in region 8/10, drift < 1 cm 0/10).
 - **Not tried:** writing the weld's `physics:localPos0/localRot0` during play; kinematic fixtures
   without a weld.
 - **Unsupported init facts, all 10 Spatial BDDLs:** 12 of 71 are not `on <obj> main_table_<region>`
@@ -142,10 +143,10 @@ As briefed (R5: write `place_prim`; movables `Geometry/Body`, fixtures the refer
 ## What the spike settled
 
 - The route works: 6/6 assets convert once the `.msh` files are converted, geometry matches the
-  source (meshes, joints, byte-identical textures), articulation works (drawers and knob reach their
+  source (meshes, joints; textures byte-identical for bowl, cookies and plate only), articulation works (drawers and knob reach their
   limits), and the Replicator front-end places LIBERO movables from BDDL regions in one pass.
 - Three defects are properties of the converted asset, not of our scene (table above, rows 1, 2
-  and 4), and each is a small change in the patch step. Row 3 (fixtures) needs a placement rule.
+  and 4), and each is expected to be a small change in the patch step (an expectation: only `build_scene` workarounds exist, the converter-side fixes were never implemented). Row 3 (fixtures) needs a placement rule.
 - **Wrong turns.**
   - Ruling R5 (controller): place movables through `place_prim` = `Geometry/Body`. It failed. That
     body is the converter's colliderless outer body, 0.1 m off the bowl, so the bowls landed on the
@@ -154,14 +155,14 @@ As briefed (R5: write `place_prim`; movables `Geometry/Body`, fixtures the refer
     was necessary but not sufficient.
   - The bowl first looked wrongly black (mean RGB 60); it is a mostly-black atlas, not a bad
     conversion.
-  - The first stove binding used the wrong texture (a de-duplication ordering bug, fixed in review).
+  - The first stove binding used the wrong texture (a de-duplication ordering bug, fixed in the Task 1 review fix round, commit 247c653: task-1-report.md fix round 1 item 1, and the ledger).
 - **GUIDE defect found and fixed.** `replicator_guide.fire(seed)` did not restart Replicator's
   samplers for seed 0 on a fresh app, or for a seed repeated twice in a row: Replicator's
   `rng.set_global_seed` returns early when the seed equals the stored value (0 while unset). Seed-0
   samples for bowl_1 differed across three runs ([0.0065, 0.3191], [0.0028, 0.3098],
   [0.0092, 0.3142]). Fixed on branch `fix/replicator-reseed`, commit `eb6d160` (not on this branch).
   Verified in a headless Isaac run in two fresh processes: seed 0 first vs later, the same seed
-  twice, and seeds 0 and 5 across processes all draw identical samples (before: none did).
+  twice, and seeds 0 and 5 across processes all draw identical samples (before: none did). Controller-run verification; evidence in the tracker and the commit message of `eb6d160`.
 
 ## Gaps
 
@@ -188,14 +189,17 @@ As briefed (R5: write `place_prim`; movables `Geometry/Body`, fixtures the refer
 ## Recommendation for S1: adopt with fixes
 
 Adopt `mujoco_usd_converter` (plus the `.msh` to `.obj` patch step). The route gives exact
-geometry and joints, works in Isaac 6.0.1, and costs one patch script, which is cheaper than
+geometry and joints, works in Isaac 6.0.1, and is expected to cost one patch script, which we expect to be cheaper than
 tuning the Isaac MJCF importer per asset or depending on RobotLearningLab / Lightwheel assets
-(neither was tried; fallback if a fix below fails). Fixes, in order:
+(an expectation: none of the fallbacks was tried, and the converter-side fixes were never
+implemented; they are the fallbacks if a fix below fails). Adoption is conditional on the open
+licence check (fix 8). Fixes, in order:
 
 1. **Patch step: remove the colliderless outer body.** Merge it into the colliding body (MuJoCo
    semantics) or add a free joint on the inner body so that `Geometry/Body` is the object. Then
-   defect 1 (fallback mass, tipped bowls) goes away and the brief's region bounds are right as
-   they are (placement on the colliding body).
+   defect 1 (fallback mass, tipped bowls) goes away and the brief's region bounds are expected to be right as
+   they are (placement on the colliding body). This rests on the unchecked belief that LIBERO places
+   the inner `object` body (see Gaps, robosuite behaviour).
 2. **Patch step: drop the world weld for movables** (or give them a free joint). Keep it for
    fixtures only if the placement rule below needs it.
 3. **Patch step: map MJCF group-0 geoms to non-render** (`purpose = guide`, as `build_scene` does).

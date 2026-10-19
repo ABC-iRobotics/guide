@@ -121,8 +121,8 @@ User decision (2026-10-19): probe option **a** (`mujoco_usd_converter`) on branc
 
 **Result (2026-10-19): adopt with fixes.** All 6 Spatial asset types convert once LIBERO's `.msh`
 meshes are turned into `.obj`; they load in Isaac 6.0.1, rest on the table, the cabinet drawers and
-the stove knob reach their limits, textures are byte-identical, and a Replicator YAML generated
-from the BDDL regions places movables (in region 50/50 with the bowl offset compensated). Fixes
+the stove knob reach their limits, textures of the bowl, cookies and plate are byte-identical (cabinet and stove not checked), and a Replicator YAML generated
+from the BDDL regions places movables (in region 50/50 and drift < 1 cm in 47/50 with the bowl offset compensated; baseline without it: bowls drift < 1 cm 0/10). Fixes
 needed in the patch step: merge the colliderless outer body, drop the world weld for movables,
 hide group-0 geoms. Open: fixture placement during play (works only with the timeline stopped),
 overlap rejection, 12 of 71 init facts in the Spatial BDDLs use predicate shapes the generator
