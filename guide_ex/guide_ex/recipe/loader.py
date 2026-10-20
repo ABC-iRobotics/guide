@@ -5,6 +5,7 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+import yaml
 from omegaconf import OmegaConf
 from omegaconf.errors import OmegaConfBaseException
 
@@ -34,8 +35,7 @@ def load(
     """The tree a recipe describes. `values` are the roots its ${...} interpolations resolve
     against (plain data: str, numbers, bools, lists, mappings); `search_paths` add recipe
     templates (every *.yaml, by file stem) for this load only."""
-    reg = Registry()
-    reg._entries = dict((registry or load_defaults())._entries)
+    reg = (registry or load_defaults()).copy()
     for path in search_paths:
         reg.add_search_path(path)
     if isinstance(source, dict):
@@ -48,6 +48,30 @@ def load(
         raise RecipeError(f"{where}: the top node's `when` is false: nothing to load")
     _check(root, where)
     return root
+
+
+def recipes_dir(package: str, file: str) -> Path:
+    """A task package's config/recipes: beside the package (`file` is a module in it) in a source
+    tree, else in the installed share."""
+    source = Path(file).resolve().parents[1] / "config" / "recipes"
+    if source.is_dir():
+        return source
+    from ament_index_python.packages import get_package_share_directory
+
+    return Path(get_package_share_directory(package)) / "config" / "recipes"
+
+
+def robot_values(robot_cfg, init_yaml: os.PathLike, robot: str = "franka") -> dict:
+    """The `robot` roots the library recipes interpolate: ${robot.gripper_joint} and ${robot.home},
+    the arm's joints at the `default_joint_states` of init.yaml's `robots.<robot>` entry (the arm
+    comes first, then the fingers). `robot_cfg` is the robot's config: arm_joint_names,
+    gripper_joint_names."""
+    arm = robot_cfg.arm_joint_names
+    states = yaml.safe_load(Path(init_yaml).read_text())["robots"][robot]["default_joint_states"]
+    return {
+        "gripper_joint": robot_cfg.gripper_joint_names[0],
+        "home": {f"{joint}.pos": q for joint, q in zip(arm, states)},
+    }
 
 
 class _Loader:

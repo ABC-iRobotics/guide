@@ -43,6 +43,11 @@ class Registry:
     def __init__(self):
         self._entries: dict = {}  # name -> (class or RecipeTemplate, source)
 
+    def copy(self) -> "Registry":
+        other = Registry()
+        other._entries = dict(self._entries)
+        return other
+
     def _add(self, name: str, entry, source: str) -> None:
         if name in self._entries and self._entries[name][1] != source:
             raise RecipeError(f"'{name}' is registered twice: {self._entries[name][1]} and {source}")

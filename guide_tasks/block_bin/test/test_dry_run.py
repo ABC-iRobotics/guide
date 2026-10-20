@@ -30,7 +30,7 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, st
     robot = FakeRobot.__new__(FakeRobot)
     robot.node = SimpleNamespace(get_logger=lambda: logging.getLogger("dry"),
                                  get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=0)))
-    robot.config = SimpleNamespace(frame_id="fr3_link0", gripper_joint_names=["fr3_finger_joint1"],
+    robot.config = SimpleNamespace(frame_id="fr3_link0", arm_joint_names=[f"fr3_joint{i}" for i in range(1, 8)], gripper_joint_names=["fr3_finger_joint1"],
                                    arm_action_type=ActionType.CARTESIAN_POSE, gripper_action_type=ActionType.JOINT_POSITION)
     robot._reentrant_callback_group = None
     moves, asked, slept = [], [], []

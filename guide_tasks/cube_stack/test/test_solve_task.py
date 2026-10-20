@@ -133,7 +133,7 @@ def world(monkeypatch):
     return w
 
 
-ROBOT = SimpleNamespace(config=SimpleNamespace(gripper_joint_names=["fr3_finger_joint1"]))
+ROBOT = SimpleNamespace(config=SimpleNamespace(arm_joint_names=[f"fr3_joint{i}" for i in range(1, 8)], gripper_joint_names=["fr3_finger_joint1"]))
 
 
 def run(world):

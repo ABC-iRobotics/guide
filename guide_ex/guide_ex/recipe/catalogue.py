@@ -77,8 +77,10 @@ def entries() -> list[dict]:
         if isinstance(target, RecipeTemplate):
             if any(target.path.is_relative_to(folder) for folder in LIBRARY):
                 templates.append(target)
-        elif Path(inspect.getfile(target)).resolve().relative_to(PACKAGE).parts[0] in LEAF_PACKAGES:
-            leaves[name] = _leaf(name, target)
+        else:
+            file = Path(inspect.getfile(target)).resolve()
+            if file.is_relative_to(PACKAGE) and file.relative_to(PACKAGE).parts[0] in LEAF_PACKAGES:  # outside leaves skipped
+                leaves[name] = _leaf(name, target)
     nodes = dict(leaves)
     for template in sorted(templates, key=lambda t: t.spec.get("ref") is None):  # leaf presets first
         nodes[template.name] = _recipe(template, nodes)

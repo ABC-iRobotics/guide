@@ -10,14 +10,14 @@ children:
     dynamic_map: {robot: robot, target_pose: rest_pose}
     static_args: {speed: 1.0}
   - ref: TransformPose
-    alias: TransformUncluchPose
+    alias: TransformUnclutchPose
     dynamic_map: {r_pose: rest_pose}
     static_args:
       l_pose: {position: [0.0, 0.0, -0.1]}
-    output_map: {pose: uncluch_pose}
+    output_map: {pose: unclutch_pose}
   - ref: MoveToCartesianPose
-    alias: MoveToUncluch
-    dynamic_map: {robot: robot, target_pose: uncluch_pose}
+    alias: MoveToUnclutch
+    dynamic_map: {robot: robot, target_pose: unclutch_pose}
     static_args: {speed: 1.0}
   - ref: OpenGripper
   - ref: WaitForSeconds

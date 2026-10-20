@@ -3,7 +3,6 @@ import json
 import re
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -18,7 +17,7 @@ from guide_core.types.geometry import Pose as PoseType
 from guide_core.types.geometry import Rotation as RotationType
 from guide_core.types.randomization import zone_plan
 from guide_ex.core.states import DemoStatus
-from guide_ex.recipe import load
+from guide_ex.recipe import load, recipes_dir, robot_values
 from guide_msgs.srv import (
     CheckSuccess,
     Collision,
@@ -39,22 +38,12 @@ startup_padding = 0.0
 record_fps = 10.0
 
 
-def recipes_dir() -> Path:
-    """config/recipes: beside the package in a source tree, else in the installed share."""
-    source = Path(__file__).resolve().parents[1] / "config" / "recipes"
-    if source.is_dir():
-        return source
-    from ament_index_python.packages import get_package_share_directory
-
-    return Path(get_package_share_directory("block_bin")) / "config" / "recipes"
-
-
 def episode_tree(robot):
     """The episode's GUIDE-EX tree: config/recipes/Episode.yaml, for this robot's gripper and the
     camera transition's hold (WaitForCameras, only while it is on)."""
-    recipes = recipes_dir()
+    recipes = recipes_dir("block_bin", __file__)
     values = {
-        "robot": {"gripper_joint": robot.config.gripper_joint_names[0]},
+        "robot": robot_values(robot.config, recipes.parent / "init.yaml"),
         "episode": {"camera_hold": bool(startup_padding), "hold_seconds": startup_padding + 1.0 / record_fps},
     }
     return load(recipes / "Episode.yaml", values=values, search_paths=[recipes])
@@ -259,7 +248,7 @@ def main():
         description="block_bin demonstration generator."
     )
     argparser.add_argument("--namespace", type=str, default="")
-    argparser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
+    argparser.add_argument("--controller", choices=["moveit", "oscbf"], default="oscbf")
     argparser.add_argument("--startup-padding", type=float, default=0.0)
     argparser.add_argument("--fps", type=float, default=10.0)
     args = argparser.parse_known_args()

@@ -16,7 +16,7 @@ procedure is never a frame's task: after the last placement a closing TASK takes
              done -> Finish (TASK "Return home.")
                        AnnounceFinish (task + subtask)
                        GoHome (SUBTASK "Return home."): MoveHome, WaitForTower
-                       CheckSuccess, StopRecording (saved only on success)
+                       CheckSuccess, StopEpisode (saved only on success)
              else -> PutOn (TASK "Put the red cube on the blue cube.")
                        NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                        AnnounceTask, LocateCube (SEQUENCE)
@@ -32,9 +32,10 @@ Recovery routes, for the failures most likely in this task (most likely first):
 1. Grasp misses (fingers empty after the lift; block_bin's 5 failed attempts in 300
    were all this). Pick checks the fingers; on a miss PutOn's Regrasp opens, measures
    the cube again (the attempt may have nudged it) and grasps the other pair of faces.
-2. An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt
-   can only partly compute (~1% of block_bin's moves, most near the robot base).
-   MoveToCartesianPose refuses the last before moving -- executed, it stopped grasps
+2. An arm motion fails: no path or an aborted trajectory (under OSCBF, the default, only
+   these); under controller: moveit also a straight-line path MoveIt can only partly
+   compute (~1% of block_bin's moves, most near the robot base). MoveToCartesianPose
+   refuses that last one before moving -- executed, it stopped grasps
    short and left the arm in a self-collision nothing could plan out of. Every move has
    a detour through the home joints before it is tried again: from there a straight
    descent is feasible over the whole spawn region (mapped with MoveIt), whereas a
@@ -74,36 +75,20 @@ from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import zone_plan
 from guide_core.types.randomization.replicator_guide import zone_grid
 from guide_ex.core.states import DemoStatus
-from guide_ex.recipe import load
+from guide_ex.recipe import load, recipes_dir, robot_values
 from guide_msgs import srv
 
-# The FR3's home joints (init.yaml default_joint_states): gripper down over the scene
-# origin, every joint mid-range. A 7-DoF arm reaches a pose in many ways and each
-# Cartesian move keeps the current one, so moves drift towards joint limits; a pose goal
-# lets the planner pick any of them. Home, as joints, is the one well-posed start.
-HOME = {
-    f"fr3_joint{i}.pos": q
-    for i, q in enumerate([0.0, -0.785398, 0.0, -2.35619, 0.0, 1.5708, 0.785398], start=1)
-}
 REBUILDS = 3  # loop passes beyond one per layer, for placements that did not hold
 # Attempts at one episode before the run stops: past this something is stuck (e.g. an
 # arm MoveIt will not plan from), and every further attempt would fail the same way.
 MAX_ATTEMPTS = 8
 
 
-def recipes_dir() -> Path:
-    """config/recipes: beside the package in a source tree, else in the installed share."""
-    source = Path(__file__).resolve().parents[1] / "config" / "recipes"
-    if source.is_dir():
-        return source
-    return Path(get_package_share_directory("cube_stack")) / "config" / "recipes"
-
-
 def recipe_values(robot, plan) -> dict:
     """What config/recipes/ interpolate: the robot's gripper joint and home, the drawn plan's
     prompts, the loop's passes, and the tower geometry the scene's success check uses too."""
     return {
-        "robot": {"gripper_joint": robot.config.gripper_joint_names[0], "home": HOME},
+        "robot": robot_values(robot.config, recipes_dir("cube_stack", __file__).parent / "init.yaml"),
         "plan": plan,
         "tower": {"max_loops": len(plan["order"]) + REBUILDS},
         "cube": {"edge": CUBE, "stacked": list(STACKED)},
@@ -112,7 +97,7 @@ def recipe_values(robot, plan) -> dict:
 
 def load_recipe(name, robot, plan):
     """config/recipes/<name>.yaml as a GUIDE-EX tree, for this robot and plan."""
-    recipes = recipes_dir()
+    recipes = recipes_dir("cube_stack", __file__)
     return load(recipes / f"{name}.yaml", values=recipe_values(robot, plan), search_paths=[recipes])
 
 
@@ -229,7 +214,7 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
 def main():
     parser = argparse.ArgumentParser(description="cube_stack demonstration generator.")
     parser.add_argument("--namespace", type=str, default="")
-    parser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
+    parser.add_argument("--controller", choices=["moveit", "oscbf"], default="oscbf")
     args, _ = parser.parse_known_args()
     namespace = args.namespace  # e.g. /Sim_0/Scene_0
     sim_namespace = "/" + namespace.split("/")[1]
