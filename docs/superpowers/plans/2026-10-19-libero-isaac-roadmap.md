@@ -70,8 +70,8 @@ Round 1 is a 2 × 2 cross-domain test with the same model recipe:
 | S0 Workspace & tracking | in progress | `feat/libero` (guide), this file | 2026-10-19 |
 | S1 Asset route (spike) | spike done — adopt with fixes, conditional (licence check open) | `spike/libero-assets`, [findings](../../design/libero-asset-spike.md) | 2026-10-19 |
 | S2 Embodiments | not started | — | — |
-| S2b Native motion planning + OSC | later | `feat/libero-native-motion` | 2026-10-19 |
-| S3 BDDL → GUIDE compiler | not started | — | — |
+| S2b Native motion planning + OSC | done (Plans A–C), merged; OSC only from now on | `feat/libero` | 2026-10-20 |
+| S3 BDDL → GUIDE compiler | spec in review (FR3 replays, arrangements via Replicator) | [spec](../specs/2026-10-20-s3-bddl-guide-compiler-design.md) | 2026-10-20 |
 | S4 Success predicates | not started | — | — |
 | S5 Demonstrations (H1 replay, H2 solvers) | not started | — | — |
 | S6 Modalities (force/contact) | not started | — | — |
