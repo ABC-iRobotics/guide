@@ -118,7 +118,7 @@ class FakeController:
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
         self.q_rest = np.asarray(args[2] if len(args) > 2 and args[2] is not None else model.home, float)
-        self.obstacle_boxes, self.obstacles = (list(args[3]) if len(args) > 3 else []), []
+        self.obstacle_boxes, self.obstacles = (args[3] if len(args) > 3 else 0), []
         self.gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
         self.limit = model.max_velocity if mode == "velocity" else model.max_effort
         FakeController.made += 1
@@ -785,9 +785,11 @@ def test_obstacle_config_merges_the_scene_and_the_robot_lists(host_module):
                        {"path": "/shelf", "shape": "obb", "margin": 0.0, "kinematic": True}] and hz == 10.0
     assert host_module.obstacle_config(scene, {}) == ([entries[0]], 1.0)
     assert host_module.obstacle_config({}, {}) == ([], 0.0)
-    for bad in ({"path": "/bin_0", "colour": "red"}, {"path": "/bin_0", "shape": "mesh"}, {"path": "/bin_0", "margin": -0.01}):
-        with pytest.raises(ValueError, match="/bin_0"):
-            host_module.obstacle_config({"obstacles": [bad]}, {})
+    for bad, why in (({"colour": "red"}, "unknown keys .'colour'."), ({"shape": "mesh"}, "shape 'mesh', not collision"),
+                     ({"margin": -0.01}, "margin -0.01, not a distance"), ({"margin": "1 cm"}, "margin '1 cm', not a distance")):
+        with pytest.raises(ValueError, match=f"obstacles /bin_0: {why}"):
+            host_module.obstacle_config({"obstacles": [{"path": "/bin_0", **bad}]}, {})
+    assert host_module.obstacle_config({"obstacles": [{"path": "/bin_0", "margin": "0.02"}]}, {})[0][0]["margin"] == 0.02
     with pytest.raises(ValueError, match="no path"):
         host_module.obstacle_config({}, {"obstacles": [{"shape": "obb"}]})
 
@@ -806,6 +808,44 @@ def test_a_bad_obstacle_fails_the_registration_naming_the_prim(host_module, monk
     stage.DefinePrim("/Scene_0/bin_0/empty", "Xform")
     with pytest.raises(ValueError, match="/Scene_0/bin_0/empty: no collider gprims"):
         host_module.prim_boxes(stage, "/Scene_0/bin_0/empty", "collision")
+    stage.DefinePrim("/Scene_0/table", "Xform")  # static: nothing to make kinematic
+    with pytest.raises(ValueError, match="/Scene_0/table: kinematic, but no rigid body at or above it"):
+        host_module.prepare_obstacle(stage, "/Scene_0/table", kinematic=True)
+
+
+def test_kinematic_reaches_the_rigid_body_that_owns_the_listed_prim(host_module):
+    """REVIEW: kinematic on a part of a body (the bin's Collision Xform) made nothing kinematic, silently."""
+    from pxr import UsdPhysics
+
+    stage = klt(robot_stage())
+    host_module.prepare_obstacle(stage, "/Scene_0/bin_0/Collision", kinematic=True)
+    assert UsdPhysics.RigidBodyAPI(stage.GetPrimAtPath("/Scene_0/bin_0")).GetKinematicEnabledAttr().Get() is True
+
+
+def test_a_sheared_collider_fails_naming_it(host_module):
+    """REVIEW: a collider turned under a non-uniform scale is no box: it fails instead of giving a wrong one."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    stage = klt(robot_stage())
+    turned = UsdGeom.Cube.Define(stage, "/Scene_0/bin_0/Collision/turned")  # about z under (0.992, 0.992, 1.073): no shear
+    turned.AddRotateZOp().Set(30.0)
+    UsdPhysics.CollisionAPI.Apply(turned.GetPrim())
+    assert len(host_module.prim_boxes(stage, "/Scene_0/bin_0", "collision")[0]) == 4
+    sheared = UsdGeom.Xform.Define(stage, "/Scene_0/bin_0/squashed")
+    sheared.AddScaleOp().Set(Gf.Vec3d(1.0, 2.0, 1.0))
+    cube = UsdGeom.Cube.Define(stage, "/Scene_0/bin_0/squashed/cube")
+    cube.AddRotateZOp().Set(30.0)
+    UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+    with pytest.raises(ValueError, match="collider /Scene_0/bin_0/squashed/cube: sheared"):
+        host_module.prim_boxes(stage, "/Scene_0/bin_0", "collision")
+
+
+def test_a_refusal_names_the_obstacle_whose_barrier_q_rest_breaks(host_module, monkeypatch):
+    """REVIEW: "lowest barrier #45" said nothing; the obstacle boxes' rows (last) map to their prim."""
+    stage = klt(robot_stage())
+    monkeypatch.setattr(FakeController, "barrier_values", lambda self, q: np.r_[np.full(42, 0.3), 0.2, -0.01, 0.4])
+    host, arm = make_host(host_module, monkeypatch, stage=stage, obstacles=[{**host_module.OBSTACLE, "path": "/Scene_0/bin_0"}])
+    assert "lowest barrier #43 (obstacle /Scene_0/bin_0) = -0.01" in host.diagnostics["refused"]
 
 
 def test_listed_objects_are_barriers_placed_in_the_base_frame_and_refreshed(host_module, monkeypatch):
@@ -820,7 +860,7 @@ def test_listed_objects_are_barriers_placed_in_the_base_frame_and_refreshed(host
     entry = {**host_module.OBSTACLE, "path": "/Scene_0/bin_0", "margin": 0.02, "kinematic": True}
     host, arm = make_host(host_module, monkeypatch, stage=stage, obstacles=[entry], hz=30.0, rate=120.0)
     c = host._controller
-    assert c.obstacle_boxes == [3] and len(c.obstacles) == 1
+    assert c.obstacle_boxes == 3 and len(c.obstacles) == 1
     assert UsdPhysics.RigidBodyAPI(stage.GetPrimAtPath("/Scene_0/bin_0")).GetKinematicEnabledAttr().Get() is True
     poses, halves, margins = c.obstacles[0]
     floor = np.r_[0.5 - 0.1, 0.0, 0.1 - 0.067 * 1.073]  # world, from the base
@@ -830,13 +870,13 @@ def test_listed_objects_are_barriers_placed_in_the_base_frame_and_refreshed(host
     host.refresh_obstacles()
     np.testing.assert_allclose(c.obstacles[-1][0][0, :3, 3], [0.2, -floor[0], floor[2]], atol=1e-7)
     run(host, 120)  # 1 s: the attach (here it rebuilds the controller), then every 1/30 s
-    assert host._controller.obstacle_boxes == [3] and 1 + 29 <= len(host._controller.obstacles) <= 1 + 31
+    assert host._controller.obstacle_boxes == 3 and 1 + 29 <= len(host._controller.obstacles) <= 1 + 31
 
 
 def test_without_obstacles_the_controller_has_none(host_module, monkeypatch):
     host, arm = make_host(host_module, monkeypatch)
     run(host, 4)
-    assert host._controller.obstacle_boxes == [] and host._controller.obstacles == []
+    assert host._controller.obstacle_boxes == 0 and host._controller.obstacles == []
 
 
 def test_an_attached_body_gets_spheres_covering_its_colliders(host_module, monkeypatch):

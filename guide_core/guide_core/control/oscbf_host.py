@@ -39,19 +39,43 @@ def obstacle_config(scene: dict, oscbf: dict) -> tuple:
         for item in items or []:
             if not isinstance(item, dict) or not isinstance(item.get("path"), str):
                 raise ValueError(f"{where}: {item!r} has no path")
-            entry = {**OBSTACLE, **item}
-            if set(item) - set(OBSTACLE) or entry["shape"] not in ("collision", "obb") or not entry["margin"] >= 0.0:
-                raise ValueError(f"{where} {item['path']}: unknown keys {sorted(set(item) - set(OBSTACLE))}, or shape not "
-                                 f"collision | obb, or margin < 0: {item}")
+            entry, at = {**OBSTACLE, **item}, f"{where} {item['path']}"
+            if set(item) - set(OBSTACLE):
+                raise ValueError(f"{at}: unknown keys {sorted(set(item) - set(OBSTACLE))}, not in {sorted(OBSTACLE)}")
+            if entry["shape"] not in ("collision", "obb"):
+                raise ValueError(f"{at}: shape {entry['shape']!r}, not collision | obb")
+            try:
+                entry["margin"] = float(entry["margin"])
+            except (TypeError, ValueError):
+                entry["margin"] = float("nan")
+            if not entry["margin"] >= 0.0:
+                raise ValueError(f"{at}: margin {item['margin']!r}, not a distance >= 0 in m")
             entries.append(entry)
     return entries, float(oscbf.get("obstacle_update_hz", scene.get("obstacle_update_hz", 0.0)))
 
 
-def _rigid(matrix) -> np.ndarray:
+def _rotation(A, what):
+    """A 3x3 linear map as (rotation, per-axis scale). A sheared one (a rotation under a non-uniform scale) has no
+    box of that shape: it fails, `what` named."""
+    scale = np.linalg.norm(A, axis=0)
+    R = A / scale
+    if np.abs(R.T @ R - np.eye(3)).max() > 1e-6:
+        raise ValueError(f"{what}: sheared transform (a rotation under a non-uniform scale), no box fits it")
+    return R, scale
+
+
+def _rigid(matrix, what) -> np.ndarray:
     """A USD local-to-world matrix (row vectors) as a 4x4 pose (column vectors) without its scale."""
     T = np.array(matrix, float).T
-    T[:3, :3] /= np.linalg.norm(T[:3, :3], axis=0)  # ponytail: no shear, as in Isaac's assets; polar-decompose if one has it
+    T[:3, :3] = _rotation(T[:3, :3], what)[0]
     return T
+
+
+def _owner(prim, api):
+    """`prim` or its nearest ancestor with `api` applied; an invalid prim if none has."""
+    while prim.IsValid() and not prim.HasAPI(api):
+        prim = prim.GetParent()
+    return prim
 
 
 def prim_boxes(stage, path: str, shape: str):
@@ -64,7 +88,7 @@ def prim_boxes(stage, path: str, shape: str):
     parts = [prim] if shape == "obb" else [
         p for p in Usd.PrimRange(prim, Usd.TraverseInstanceProxies())
         if p.IsA(UsdGeom.Gprim) and p.HasAPI(UsdPhysics.CollisionAPI) and UsdPhysics.CollisionAPI(p).GetCollisionEnabledAttr().Get() is not False]
-    to_prim = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(prim)))
+    to_prim = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(prim), path))
     poses, halves = [], []
     for part in parts:
         if part.IsA(UsdGeom.Cube):
@@ -75,9 +99,8 @@ def prim_boxes(stage, path: str, shape: str):
                 continue
             centre, half = (np.array(box.GetMin()) + box.GetMax()) / 2.0, (np.array(box.GetMax()) - box.GetMin()) / 2.0
         M = to_prim @ np.array(xforms.GetLocalToWorldTransform(part), float).T
-        scale = np.linalg.norm(M[:3, :3], axis=0)
         T = np.eye(4)
-        T[:3, :3], T[:3, 3] = M[:3, :3] / scale, M[:3, :3] @ centre + M[:3, 3]
+        (T[:3, :3], scale), T[:3, 3] = _rotation(M[:3, :3], f"obstacle {path}: collider {part.GetPath()}"), M[:3, :3] @ centre + M[:3, 3]
         poses.append(T)
         halves.append(half * scale)
     if not poses:
@@ -86,23 +109,24 @@ def prim_boxes(stage, path: str, shape: str):
 
 
 def prepare_obstacle(stage, path: str, kinematic: bool):
-    """The obstacle's prim, its rigid body made kinematic if asked (before play). A rigid body below it would move
-    apart from its boxes, and an articulation cannot be kinematic: either fails the registration, the prim named."""
+    """The obstacle's prim, the rigid body it is (or is part of) made kinematic if asked (before play). A rigid body
+    below it would move apart from its boxes; an articulation cannot be kinematic, nor a prim no rigid body owns
+    (it is static already): each fails the registration, the prim named."""
     prim = stage.GetPrimAtPath(path)
     if not prim.IsValid():
         raise ValueError(f"obstacle {path}: no such prim")
+    below = [p for p in Usd.PrimRange(prim) if p != prim and p.HasAPI(UsdPhysics.RigidBodyAPI)]
+    if below:
+        raise ValueError(f"obstacle {path}: rigid body {below[0].GetPath()} under it moves on its own; list it instead")
     if kinematic:
-        owner = prim
-        while owner.IsValid() and not owner.HasAPI(UsdPhysics.ArticulationRootAPI):
-            owner = owner.GetParent()
+        articulation = _owner(prim, UsdPhysics.ArticulationRootAPI)
         inside = [p for p in Usd.PrimRange(prim) if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
-        if owner.IsValid() or inside:
-            raise ValueError(f"obstacle {path}: kinematic, but {(owner if owner.IsValid() else inside[0]).GetPath()} is an articulation")
-    bodies = [p for p in Usd.PrimRange(prim) if p.HasAPI(UsdPhysics.RigidBodyAPI)]
-    if any(b != prim for b in bodies):
-        raise ValueError(f"obstacle {path}: rigid body {next(b for b in bodies if b != prim).GetPath()} under it moves on its own; list it instead")
-    if kinematic and bodies:
-        UsdPhysics.RigidBodyAPI(prim).CreateKinematicEnabledAttr(True)
+        if articulation.IsValid() or inside:
+            raise ValueError(f"obstacle {path}: kinematic, but {(articulation if articulation.IsValid() else inside[0]).GetPath()} is an articulation")
+        body = _owner(prim, UsdPhysics.RigidBodyAPI)
+        if not body.IsValid():
+            raise ValueError(f"obstacle {path}: kinematic, but no rigid body at or above it: it is static already")
+        UsdPhysics.RigidBodyAPI(body).CreateKinematicEnabledAttr(True)
     return prim
 
 
@@ -132,8 +156,8 @@ def attached_spheres(stage, changed, links) -> list:
         step = np.eye(3)[axis] * size[axis] / n
         centres = lo + np.where(np.arange(3) == axis, 0.0, size / 2.0) + (np.arange(n)[:, None] + 0.5) * step
         radius = 0.5 * np.linalg.norm(np.where(np.arange(3) == axis, size[axis] / n, size))
-        T = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(link)))) @ _rigid(
-            xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(body)))
+        T = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(link)), link)) @ _rigid(
+            xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(body)), body)
         out.append((link.rsplit("/", 1)[1], body, centres @ T[:3, :3].T + T[:3, 3], np.full(n, radius)))
     return out
 
@@ -196,9 +220,7 @@ def include_attached_bodies(stage, articulation_root: str, links) -> list:
             if other in tied:
                 continue
             body = stage.GetPrimAtPath(other)
-            owner = body
-            while owner.IsValid() and not owner.HasAPI(UsdPhysics.ArticulationRootAPI):
-                owner = owner.GetParent()
+            owner = _owner(body, UsdPhysics.ArticulationRootAPI)
             if not body.HasAPI(UsdPhysics.RigidBodyAPI) or owner.GetPath() != root.GetPath():  # outside, or another articulation
                 continue
             joint.GetExcludeFromArticulationAttr().Set(False)
@@ -242,7 +264,8 @@ class OscbfHost:
         if self._obstacles and self._base is None:
             raise ValueError(f"obstacles: no {self.model.base_link} under {articulation_root} to place them from")
         self._obstacle_dt = 1.0 / obstacle_update_hz if obstacle_update_hz > 0 else 0.0
-        self._settings = (mode, gains, barriers, q_rest, [len(half) for _, _, half, _ in self._obstacles])
+        self._box_owners = [str(prim.GetPath()) for prim, _, half, _ in self._obstacles for _ in half]  # one barrier row each
+        self._settings = (mode, gains, barriers, q_rest, len(self._box_owners))
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
@@ -279,8 +302,8 @@ class OscbfHost:
         if not self._obstacles:
             return
         xforms = UsdGeom.XformCache()
-        to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4)) @ np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(self._base)))
-        poses = [to_base @ _rigid(xforms.GetLocalToWorldTransform(prim)) @ boxes for prim, boxes, _, _ in self._obstacles]
+        to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4)) @ np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(self._base), self._base))
+        poses = [to_base @ _rigid(xforms.GetLocalToWorldTransform(prim), prim) @ boxes for prim, boxes, _, _ in self._obstacles]
         halves = [half for _, _, half, _ in self._obstacles]
         margins = [np.full(len(half), margin) for _, _, half, margin in self._obstacles]
         self._controller.set_obstacles(np.concatenate(poses), np.concatenate(halves), np.concatenate(margins))
@@ -289,7 +312,9 @@ class OscbfHost:
         """What puts q outside the controller's barriers: joints outside their limits, and the lowest barrier."""
         h = np.asarray(self._controller.barrier_values(q))
         outside = [j for j, x, lo, hi in zip(self.model.arm_joints, q, self.model.lower, self.model.upper) if not lo <= x <= hi]
-        return (f"joints outside their limits: {outside}; " if outside else "") + f"lowest barrier #{int(np.argmin(h))} = {h.min():.4g}"
+        i, first = int(np.argmin(h)), len(h) - len(self._box_owners)  # the obstacle boxes' rows come last
+        obstacle = f" (obstacle {self._box_owners[i - first]})" if i >= first else ""
+        return (f"joints outside their limits: {outside}; " if outside else "") + f"lowest barrier #{i}{obstacle} = {h.min():.4g}"
 
     def _log(self, level, message):
         if self._logger is not None:
