@@ -354,7 +354,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 static_args={"speed": 1.0},
             ),
             # Wait for scene to settle
-            WaitForSeconds(alias="WaitAfterTask", dynamic_map={"timer": "robot"}, static_args={"seconds": 5.0}),
+            WaitForSeconds(alias="WaitAfterTask", dynamic_map={"timer": "robot"}, static_args={"seconds": 1.0}),  # the stationary end of "go home"
         ],
     )
 
