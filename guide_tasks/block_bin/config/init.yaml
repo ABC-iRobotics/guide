@@ -58,9 +58,11 @@ robots:
 # A bad entry, or a path with no prim, fails the registration. The poses are read at registration, on play,
 # and after every Randomize and Reset; obstacle_update_hz > 0 also reads them that often while playing
 # (2 bins: 0.25-0.29 ms a read in Isaac, S2b obstacles report).
+# margin 0.03: driven into a bin's inner corner at 0.01 the arm still shoved the bin 12 mm (geometry the FR3's
+# collision spheres do not cover, 1-3 cm out); at 0.03, 0 mm (S2b obstacles review, Isaac push test).
 obstacles:
-  - {path: '/bin_0', shape: collision}
-  - {path: '/bin_1', shape: collision}
+  - {path: '/bin_0', shape: collision, margin: 0.03}
+  - {path: '/bin_1', shape: collision, margin: 0.03}
 # obstacle_update_hz: 0
 
 # `rgb`, `depth` and `instance` are independent streams off one render product (no
