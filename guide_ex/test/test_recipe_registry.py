@@ -76,3 +76,10 @@ def test_a_light_leaf_does_not_import_the_others():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
 
     assert out.split() == ["False", "False"]
+
+
+def test_malformed_yaml_is_a_recipe_error_naming_the_file(tmp_path):
+    (tmp_path / "Broken.yaml").write_text("ref: [WaitForSeconds\nstatic_args: {seconds: 1.0\n")
+
+    with pytest.raises(RecipeError, match=r"Broken\.yaml: "):
+        Registry().add_search_path(tmp_path)

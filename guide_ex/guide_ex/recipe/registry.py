@@ -29,7 +29,10 @@ class RecipeTemplate:
 
 def read_spec(path: Path) -> dict:
     """A recipe file's node as plain data, its ${...} interpolations left for load() to resolve."""
-    spec = OmegaConf.to_container(OmegaConf.load(path))
+    try:
+        spec = OmegaConf.to_container(OmegaConf.load(path))
+    except Exception as e:  # malformed YAML: a yaml.YAMLError or an OmegaConf error
+        raise RecipeError(f"{path}: {e}") from None
     if not isinstance(spec, dict):
         raise RecipeError(f"{path}: a recipe file holds one node, a mapping")
     return spec
@@ -86,9 +89,9 @@ def load_defaults() -> Registry:
     every ROS-heavy one."""
     global _loaded
     if not _loaded:
-        _loaded = True
         for package in LEAF_PACKAGES:
             for file in sorted((PACKAGE / package).rglob("*.py")):
                 importlib.import_module(".".join(file.relative_to(PACKAGE.parent).with_suffix("").parts))
         default_registry.add_search_path(LIBRARY)
+        _loaded = True  # only once everything imported: a failed import must not leave half a registry
     return default_registry

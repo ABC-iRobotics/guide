@@ -217,3 +217,16 @@ def test_two_tasks_recipes_never_meet(tmp_path):
 
     assert (a.children[0].static_args, b.children[0].static_args) == ({"seconds": 1.0}, {"seconds": 2.0})
     assert not {"Hold", "Episode"} & set(default_registry.names())
+
+
+def test_a_loop_node_takes_max_loops():
+    tree = load(seq(wait("A"), mode="loop", max_loops=3, condition_expr="done"))
+
+    assert tree.mode.value == "loop" and tree.max_loops == 3
+
+
+def test_a_condition_node_takes_a_true_branch():
+    tree = load(seq(wait("A"), mode="condition", condition_expr="ok",
+                    true_branch=wait("Yes"), false_branch={"ref": "NodeException", "alias": "No"}))
+
+    assert tree.true_branch.name == "Yes" and tree.false_branch.name == "No"
