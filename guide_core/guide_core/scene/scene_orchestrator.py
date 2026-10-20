@@ -200,6 +200,8 @@ class SceneOrchestrator(ABC):
 
     #: dataset.camera_transition, checked (scene_recorder.camera_transition); None: off.
     camera_transition: Optional[dict] = None
+    #: config/scene.yaml where the task has one (set by __init__; None for scenes built without it).
+    scene_recipe: Optional[Path] = None
     #: The transition under way: the cameras it moves, their mounts, the step of frame 0.
     _transition: Optional[dict] = None
 

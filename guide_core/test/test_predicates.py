@@ -21,6 +21,7 @@ def test_on_is_the_origin_test_with_a_strict_3_cm_gate():
     assert not p.on([0.03, 0.0, 0.05], [0.0, 0.0, 0.0])["success"]  # strict
     assert not p.on([0.0, 0.0, -0.001], [0.0, 0.0, 0.0])["success"]  # the support above the object
     assert "0.0310" in p.on([0.031, 0.0, 0.05], [0.0, 0.0, 0.0])["reason"]
+    assert p.on([0, 0, 0.05], [0, 0, 0], label="on(/p, /m)")["reason"].startswith("on(/p, /m): xy")
 
 
 def test_in_box_is_libero_in_with_its_lower_margin():
@@ -61,6 +62,8 @@ def test_the_commands_read_the_scene_and_apply_the_predicates():
         "__joint_position": lambda joint: -0.12,
     })
     assert cp._cmd_on(host, "/Scene_0/plate", "/Scene_0/mark")["success"]
+    assert cp._cmd_on(host, "/Scene_0/plate", "/Scene_0/mark")["reason"].startswith("on(/Scene_0/plate, /Scene_0/mark): ")
+    assert cp._cmd_in_region(host, "/Scene_0/plate", "/Scene_0/region")["reason"].startswith("in_region(/Scene_0/plate, /Scene_0/region): ")
     assert cp._cmd_in_region(host, "/Scene_0/plate", "/Scene_0/region")["success"]
     assert cp._cmd_joint_below(host, "/Scene_0/drawer", -0.10)["success"]
     assert not cp._cmd_joint_above(host, "/Scene_0/drawer", 0.0)["success"]

@@ -20,12 +20,12 @@ def __pose(self, path: str):
 
 
 def __region_box(self, region: str):
-    """World (centre, half-extent vector) of ``region``'s own bound: the box it stands for."""
+    """World (centre, half-extent vector) of ``region``'s own bound: the box it stands for (visible or not)."""
     from pxr import Usd, UsdGeom
 
     position, orientation, scale = self.__pose(region)
     purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide]
-    box = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes).ComputeUntransformedBound(
+    box = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes, False, True).ComputeUntransformedBound(
         self._stage.GetPrimAtPath(region)).ComputeAlignedRange()
     if box.IsEmpty():
         raise ValueError(f"success predicate: region {region} has no extent")
@@ -51,11 +51,11 @@ def __joint_position(self, joint: str) -> float:
 
 
 def _cmd_on(self, a: str, b: str, xy_tol: float = predicates.XY_TOL) -> dict:
-    return predicates.on(self.__pose(a)[0], self.__pose(b)[0], xy_tol)
+    return predicates.on(self.__pose(a)[0], self.__pose(b)[0], xy_tol, f"on({a}, {b})")
 
 
 def _cmd_in_region(self, obj: str, region: str) -> dict:
-    return predicates.in_box(self.__pose(obj)[0], *self.__region_box(region))
+    return predicates.in_box(self.__pose(obj)[0], *self.__region_box(region), label=f"in_region({obj}, {region})")
 
 
 def _cmd_joint_above(self, joint: str, value: float) -> dict:

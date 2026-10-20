@@ -208,6 +208,7 @@ def Xform "World"
             double size = 1
             float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
             uniform token purpose = "guide"
+            token visibility = "invisible"  # a region need not draw: its extent still counts
             double3 xformOp:translate = (0.05, 0.2, 0.03)
             float3 xformOp:scale = (0.06, 0.06, 0.06)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]

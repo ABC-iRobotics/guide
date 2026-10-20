@@ -14,14 +14,14 @@ IN_Z_MARGIN = 0.01  # In(obj, region): the box's lower z face drops by this much
 PREDICATE_PATHS = {"on": ("a", "b"), "in_region": ("obj", "region"), "joint_above": ("joint",), "joint_below": ("joint",)}
 
 
-def on(a, b, xy_tol: float = XY_TOL) -> dict:
+def on(a, b, xy_tol: float = XY_TOL, label: str = "on") -> dict:
     """``a`` rests on ``b`` (LIBERO's ObjectState.check_ontop): b's origin no higher than a's, origins
     within ``xy_tol`` in xy (strict).
     ponytail: no contact test (LIBERO also asks that the two touch); S4 adds it with a contact report."""
     a, b = np.asarray(a, float), np.asarray(b, float)
     xy, dz = float(np.hypot(*(a[:2] - b[:2]))), float(a[2] - b[2])
     return {"success": bool(dz >= 0.0 and xy < xy_tol),
-            "reason": f"on: xy {xy:.4f} m (< {xy_tol}), a {dz:+.4f} m above b (>= 0)"}
+            "reason": f"{label}: xy {xy:.4f} m (< {xy_tol}), a {dz:+.4f} m above b (>= 0)"}
 
 
 def obb_world(local_min, local_max, position, quat_wxyz, scale):
@@ -33,15 +33,16 @@ def obb_world(local_min, local_max, position, quat_wxyz, scale):
     return np.asarray(position, float) + rotation.apply(s * (lo + hi) / 2), rotation.apply(s * (hi - lo) / 2)
 
 
-def in_box(point, center, half_vec, z_margin: float = IN_Z_MARGIN) -> dict:
-    """LIBERO's In (SiteObject.in_box): half = |half_vec| (axis-aligned after the abs), the lower z
-    face dropped by ``z_margin``, the point strictly inside."""
+def in_box(point, center, half_vec, z_margin: float = IN_Z_MARGIN, label: str = "in_region") -> dict:
+    """LIBERO's In (SiteObject.in_box), reproduced deliberately: the region's world-axis box of |R| . half
+    (half = |half_vec|, the abs of the rotated half-extent vector), so exact only for a region rotated by
+    0 or 90 degree multiples; the lower z face dropped by ``z_margin``, the point strictly inside."""
     p, c = np.asarray(point, float), np.asarray(center, float)
     half = np.abs(np.asarray(half_vec, float))
     lower, upper = c - half, c + half
     lower[2] -= z_margin
     inside = bool(np.all(p > lower) and np.all(p < upper))
-    return {"success": inside, "reason": f"in_region: {np.round(p, 4).tolist()} {'inside' if inside else 'outside'} "
+    return {"success": inside, "reason": f"{label}: {np.round(p, 4).tolist()} {'inside' if inside else 'outside'} "
                                          f"{np.round(lower, 4).tolist()}..{np.round(upper, 4).tolist()}"}
 
 
