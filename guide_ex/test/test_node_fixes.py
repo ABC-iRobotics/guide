@@ -51,19 +51,64 @@ def test_a_cartesian_velocity_command_that_went_through_is_sent_once():
     assert result.status == DemoStatus.PERFECT and len(sent) == 1
 
 
-def test_set_gripper_state_sends_every_joint_and_settles_on_sim_time():
-    sent, slept = [], []
+def gripper_on_sim_time(finger, sent):
+    """A robot on sim time: only sleep advances its clock; finger(t) is fr3_finger_joint1's position at t s."""
+    clock = SimpleNamespace(ns=0)
+    clock.now = lambda: SimpleNamespace(nanoseconds=clock.ns)
     robot = fake_robot(
-        config=SimpleNamespace(gripper_action_type=ActionType.JOINT_POSITION),
+        config=SimpleNamespace(gripper_action_type=ActionType.JOINT_POSITION, gripper_joint_names=["fr3_finger_joint1"]),
         send_action=lambda action, **kwargs: sent.append(action) or True,
-        sleep=slept.append,  # ROS2Robot.sleep: the node's (sim) clock
+        sleep=lambda seconds: setattr(clock, "ns", clock.ns + round(seconds * 1e9)),
+        get_observation=lambda: {"fr3_finger_joint1.pos": finger(clock.ns / 1e9), "fr3_joint1.pos": 0.0},
     )
+    robot.node.get_clock = lambda: clock
+    return robot, lambda: clock.ns / 1e9
+
+
+def test_set_gripper_state_returns_once_the_fingers_stop_and_the_residual_is_over(caplog):
+    sent = []
+    robot, now = gripper_on_sim_time(lambda t: 0.04 * min(t / 0.6, 1.0), sent)  # opens, still from 0.6 s
 
     result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.04, "fr3_finger_joint2": 0.04})
 
     assert result.status == DemoStatus.PERFECT
     assert sent == [{"fr3_finger_joint1.pos": 0.04, "fr3_finger_joint2.pos": 0.04}]
-    assert slept == [SetGripperState.SETTLE_SECONDS]
+    assert 0.6 + 0.15 + 0.2 <= now() < 0.6 + 0.15 + 0.2 + 0.05  # still at 0.6, 3 still polls, the residual
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+def test_set_gripper_state_counts_a_stall_on_the_cube_as_settled(caplog):
+    # commanded 0.01; the cube stops the fingers at 0.0205, where contact jitters them by 0.1 mm
+    def finger(t):
+        return max(0.04 - 0.05 * t, 0.0205 + 1e-4 * (round(t / 0.05) % 2))
+
+    robot, now = gripper_on_sim_time(finger, [])
+
+    result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.01})
+
+    assert result.status == DemoStatus.PERFECT
+    assert 0.39 + 0.15 + 0.2 <= now() < 0.39 + 0.15 + 0.2 + 0.05  # stalled at 0.39 s
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+def test_set_gripper_state_gives_up_on_fingers_that_never_stop_with_one_warning(caplog):
+    robot, now = gripper_on_sim_time(lambda t: 0.04 - 0.01 * t, [])  # creeping 0.5 mm a poll, forever
+
+    result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.01})
+
+    warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert result.status == DemoStatus.PERFECT
+    assert 2.0 <= now() <= 2.0 + 0.2  # the timeout, plus the residual at most
+    assert len(warnings) == 1 and "fr3_finger_joint1" in warnings[0].getMessage()
+
+
+def test_set_gripper_state_on_another_robot_only_sends_the_goal():
+    sent = []
+    robot = SimpleNamespace(send_action=sent.append)  # no sleep, no observation: nothing else may be called
+
+    result = SetGripperState().run(robot, {"gripper": 0.04})
+
+    assert result.status == DemoStatus.PERFECT and sent == [{"gripper": 0.04}]
 
 
 def test_get_prim_pose_asks_for_the_robots_own_frame():
