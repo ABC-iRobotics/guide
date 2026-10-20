@@ -242,3 +242,15 @@ def test_robot_values_name_the_gripper_and_the_arm_home(tmp_path):
     cfg = SimpleNamespace(arm_joint_names=["j1", "j2"], gripper_joint_names=["f1"])
 
     assert robot_values(cfg, init) == {"gripper_joint": "f1", "home": {"j1.pos": 0.5, "j2.pos": -1.0}}
+
+
+def test_robot_values_of_a_profile_robot_take_the_profiles_home(tmp_path):
+    from types import SimpleNamespace
+
+    from guide_ex.recipe import robot_values
+
+    init = tmp_path / "init.yaml"
+    init.write_text("robots:\n  franka:\n    profile: panda\n    mount: {position: [-0.66, 0.0, 0.012]}\n")
+    cfg = SimpleNamespace(arm_joint_names=["j1", "j2"], gripper_joint_names=["f1"])
+
+    assert robot_values(cfg, init)["home"] == {"j1.pos": 0.0, "j2.pos": -0.785398}

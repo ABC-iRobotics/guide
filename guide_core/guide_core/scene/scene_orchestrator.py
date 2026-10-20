@@ -13,6 +13,7 @@ import yaml
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
+from guide_core.scene import robot_profile
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import replicator_guide
@@ -240,6 +241,11 @@ class SceneOrchestrator(ABC):
 
         with config_file.open("r") as f:
             self._config = yaml.safe_load(f)
+
+        # robots.<name>.profile / mount: the robot comes from guide_motion's profile (robot_profile); an
+        # entry with neither is a robot inside the scene USD and stays as written.
+        if self._config.get("robots"):
+            self._config["robots"] = {name: robot_profile.resolve(entry) for name, entry in self._config["robots"].items()}
         # dataset.camera_transition, checked here: a bad section fails the registration.
         self.camera_transition = camera_transition(self._config)
         # dataset.segmentation, the same: an unknown table, name or label, or a bad RGB.
@@ -704,6 +710,25 @@ class SceneOrchestrator(ABC):
         )
         self._episode_index += 1
         return self._last_context
+
+    def build_stage(self) -> None:
+        """At registration, once the scene USD is referenced and placed: each profile robot at its
+        mount with its wrist camera (robot_profile.mount). Waits for what that references to load."""
+        profiled = [r for r in (self._config.get("robots") or {}).values() if "profile" in r]
+        if not profiled:  # ponytail: plan C's scene recipe joins this check; no omni import for legacy tasks
+            return
+        import omni.kit.app
+        import omni.usd
+        from isaacsim.core.utils.stage import is_stage_loading
+
+        stage = omni.usd.get_context().get_stage()
+        prefix = f"/Scene_{self._scene_id}"
+        for robot in profiled:
+            robot_profile.mount(stage, prefix, robot)
+        app = omni.kit.app.get_app()
+        app.update()
+        while is_stage_loading():
+            app.update()
 
     def build_replicator(self) -> None:
         """Parse every Replicator-dialect file once the scene's USD is on the stage."""

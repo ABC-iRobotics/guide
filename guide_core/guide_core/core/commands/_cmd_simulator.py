@@ -123,6 +123,9 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
     self._cmd_set_world_poses(prim_path=scene_path, pose=pose)
 
     scene = simulator._scene_manager._scenes[id]
+    # Profile robots and the scene recipe go onto the stage before anything looks for them: the
+    # camera transition check, the robot and camera graphs, randomize.yaml.
+    scene.build_stage()
     # Now that its USD is on the stage: a camera the transition cannot move fails the
     # registration here, not the physics step that opens the first episode.
     if getattr(scene, "camera_transition", None):

@@ -67,7 +67,9 @@ def robot_values(robot_cfg, init_yaml: os.PathLike, robot: str = "franka") -> di
     comes first, then the fingers). `robot_cfg` is the robot's config: arm_joint_names,
     gripper_joint_names."""
     arm = robot_cfg.arm_joint_names
-    states = yaml.safe_load(Path(init_yaml).read_text())["robots"][robot]["default_joint_states"]
+    from guide_core.scene.robot_profile import resolve  # a profile robot's default_joint_states are the profile's
+
+    states = resolve(yaml.safe_load(Path(init_yaml).read_text())["robots"][robot])["default_joint_states"]
     return {
         "gripper_joint": robot_cfg.gripper_joint_names[0],
         "home": {f"{joint}.pos": q for joint, q in zip(arm, states)},

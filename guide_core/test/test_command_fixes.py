@@ -172,7 +172,7 @@ def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_modu
                "oscbf": {"robot": "fr3", "mode": "velocity", "rate": 60}}]
     manager = SimpleNamespace(
         get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: robots,
-        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None, _config=config)],
+        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None, _config=config, build_stage=lambda: None)],
     )
     controls = []
     runtime = host(
@@ -483,3 +483,22 @@ def test_an_arrangement_goes_from_the_service_to_the_scene(isaac_import, command
     runtime = host(_simulator=SimpleNamespace(_scene_manager=manager), _execute_instructions_directly=lambda i: [])
     module._cmd_randomize_scene(runtime, 0, arrangement="demo_3")
     assert seen[0]["arrangement"] == "demo_3"
+
+def test_registration_builds_the_stage_before_anything_reads_it(command_module):
+    """Profile robots and the scene recipe (build_stage) exist before the robot graphs, the cameras
+    and randomize.yaml look for them."""
+    module = command_module("_cmd_simulator")
+    calls = []
+    scene = SimpleNamespace(replicator_files=None, build_stage=lambda: calls.append("build_stage"))
+    manager = SimpleNamespace(get_scene_usd_path=lambda i: None,
+                              get_scene_robot_graphs=lambda i: calls.append("robots") or [],
+                              get_scene_camera_graphs=lambda i: calls.append("cameras") or [], _scenes=[scene])
+    runtime = host(
+        _simulator=SimpleNamespace(_add_scene_to_manager=lambda p: (0, (0, 0, 0), {}), _scene_manager=manager, _sim_path="/Sim_0"),
+        _cmd_add_scene=lambda **kwargs: calls.append("add_scene"),
+        _cmd_set_world_poses=lambda **kwargs: calls.append("place"),
+    )
+
+    module._cmd_register_scene(runtime, "task")
+
+    assert calls == ["add_scene", "place", "build_stage", "robots", "cameras"]
