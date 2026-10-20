@@ -21,6 +21,7 @@ overrides:
       r_pose: {orientation: {euler: ['z', -1.5707963267948966]}}
     output_map: {pose: cube_pose}
   # The grasp's finger axis (yaw, or +90 deg) with more room to the other blocks, as a finger on a
-  # neighbouring block stalled the hand over it. Only the first attempt: PickRecovery keeps the
-  # library's GetTargetPose and turns it.
+  # neighbouring block stalled the hand over it. PickRecovery measures the same way, so its -90 deg turn
+  # lands on the other finger axis whichever one the first attempt used.
   GetTargetPose: {ref: ClearanceTargetPose}
+  PickRecovery.GetTargetPose: {ref: ClearanceTargetPose}
