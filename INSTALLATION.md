@@ -25,29 +25,41 @@ Requirements: Ubuntu 24.04, ROS 2 Jazzy with MoveIt 2, an NVIDIA GPU with a rece
 ```bash
 mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
 git clone -b dev https://github.com/ABC-iRobotics/guide.git
-git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_ros2.git franka_ros2
 git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git franka_description
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
-mkdir -p guide/modules && cd guide/modules
-git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+# GUIDE's own dependencies, at the commits it pins (no --recursive: see Why)
+git -C guide submodule update --init
 ```
 
 | Repository | Gives GUIDE |
 |---|---|
 | `guide` | `guide_msgs`, `guide_core`, `guide_ex`, the tasks `block_bin` and `cube_stack` |
-| `irob_franka_ros2` (`jazzy`) | `franka_fr3_moveit_config/launch/guide_moveit.launch.py`, the FR3 MoveIt bring-up a task launch includes under `controller: moveit` |
+| `modules/irob_franka_ros2` (submodule, `jazzy`) | `franka_fr3_moveit_config/launch/guide_moveit.launch.py`, the FR3 MoveIt bring-up a task launch includes under `controller: moveit` |
 | `irob_franka_description` (`jazzy`) | the FR3 URDF/xacro |
 | `topic_based_ros2_control` | ros2_control over the joint topics Isaac publishes |
-| `modules/pymoveit2`, `modules/irob_lerobot_ros` | MoveIt from Python; the LeRobot robot (`ROS2Robot`) the solvers drive |
+| `modules/pymoveit2`, `modules/irob_lerobot_ros` (submodules) | MoveIt from Python (irob_lerobot_ros imports it at load); the LeRobot robot (`ROS2Robot`) the solvers drive |
+| `modules/lerobot`, `guide_motion/external/oscbf` (submodules) | lerobot 0.6.1, rebuilt in section 2; OSCBF for `guide_motion` |
 
-**Why:** `modules/` is git-ignored. Of the submodules `.gitmodules` lists there, only
-`modules/lerobot` has a committed gitlink (section 2 initialises it); the two modules above are
-cloned by hand. GUIDE needs `irob_lerobot_ros` at 2eecb29 or later (its `main` since 2026-10-20):
-`send_action(speed=, min_fraction=)`, the `controller` field and the sim-time `sleep` that GUIDE-EX
-and block_bin call; an older checkout fails every move with a `TypeError`. That `main` includes the bump of its own nested lerobot submodule from 0b067df (v0.4.3)
-to v0.6.1. Do not initialise that submodule: `.venv` uses the rebuilt `modules/lerobot` (section 2)
-either way.
+**Why:** every repository GUIDE's code imports or launches from is a submodule, pinned to
+the commit GUIDE was tested with (since 2026-10-20; before that `irob_lerobot_ros`,
+`irob_franka_ros2` and `pymoveit2` were cloned by hand and only their branch was documented).
+`modules/` stays git-ignored for local files there; the gitlinks are tracked regardless. An older
+checkout of `irob_lerobot_ros` fails every move with a `TypeError` (`send_action(speed=,
+min_fraction=)`, the `controller` field, the sim-time `sleep`), which a pinned commit rules out.
+- Use `--init` **without** `--recursive`: `irob_lerobot_ros` carries its own nested lerobot
+  submodule, which must stay uninitialised. `.venv` uses the rebuilt `modules/lerobot`
+  (section 2).
+- To move a pin, check out the commit in the submodule, then `git add modules/<name>` in guide.
+- An older workspace with hand clones:
+  - `git submodule update --init` adopts a clone that is already at `modules/<name>`.
+  - A `~/ros2_ws/src/franka_ros2` from the old instructions must be moved to
+    `guide/modules/irob_franka_ros2` (or deleted). Otherwise colcon finds every franka package
+    twice and refuses to build.
+- `franka_spine_examples`, which comes with `irob_franka_ros2` and is unused by GUIDE, needs
+  `ament_cmake_clang_format` when tests are built. Either install
+  `ros-jazzy-ament-cmake-clang-format`, or build it with `--cmake-args
+  -DPython3_EXECUTABLE=/usr/bin/python3 -DBUILD_TESTING=OFF` (command-line cmake args replace the
+  defaults in §4.1), or skip it with `--packages-skip franka_spine_examples`.
 
 ### 2. Python environment
 
@@ -298,6 +310,9 @@ git clone --recurse-submodules https://github.com/ABC-iRobotics/guide.git
 
 **Why:** the workspace root (`~/ros2_ws`) also holds the Isaac venv, so packages go
 under `src/` and colcon is pointed there (see §4).
+
+> **Superseded (2026-10-20):** these repositories are submodules now. See section 1 of the
+> current setup at the top of this file. The block below is kept as the Isaac 5.1 porting log.
 
 The `.gitmodules` lists submodules but **no gitlinks were ever committed**, so
 `--recurse-submodules` pulls nothing. Clone them manually:

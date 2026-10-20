@@ -86,17 +86,16 @@ The short version; [INSTALLATION.md](INSTALLATION.md) has the reasons behind eac
 ```bash
 mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
 git clone -b dev https://github.com/ABC-iRobotics/guide.git
-git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_ros2.git
 git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git franka_description
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 ```
 
-**2. Clone GUIDE's vendored modules.** Of the `.gitmodules` entries under `modules/` only
-`modules/lerobot` has a committed gitlink (step 3 initialises it); clone the other two explicitly:
+**2. Fetch GUIDE's submodules** at the commits it pins: `irob_lerobot_ros`, `irob_franka_ros2`,
+`pymoveit2`, `lerobot` (under `modules/`) and `oscbf` (under `guide_motion/external/`). Don't use
+`--recursive`: `irob_lerobot_ros`'s own nested lerobot must stay uninitialised
+([INSTALLATION.md](INSTALLATION.md) §1):
 ```bash
-mkdir -p ~/ros2_ws/src/guide/modules && cd ~/ros2_ws/src/guide/modules
-git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+git -C ~/ros2_ws/src/guide submodule update --init
 ```
 
 **3. Create the Python 3.12 environment and install Isaac Sim 6.0.1 + dependencies:**

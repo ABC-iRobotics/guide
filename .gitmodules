@@ -5,10 +5,13 @@
 [submodule "modules/lerobot"]
 	path = modules/lerobot
 	url = https://github.com/huggingface/lerobot.git
-[submodule "modules/rclpy"]
-	path = modules/rclpy
-	url = https://github.com/ros2/rclpy.git
-	branch = humble
 [submodule "guide_motion/external/oscbf"]
 	path = guide_motion/external/oscbf
 	url = https://github.com/StanfordASL/oscbf.git
+[submodule "modules/irob_franka_ros2"]
+	path = modules/irob_franka_ros2
+	url = https://github.com/ABC-iRobotics/irob_franka_ros2.git
+	branch = jazzy
+[submodule "modules/irob_lerobot_ros"]
+	path = modules/irob_lerobot_ros
+	url = https://github.com/ABC-iRobotics/irob_lerobot_ros.git
