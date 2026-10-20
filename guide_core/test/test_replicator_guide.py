@@ -57,9 +57,9 @@ def test_event_name_and_scene_suffix():
            "b": {"trigger.on_custom_event": {"event_name": "guide_reset"}}}
     out = rg.prefixed(doc, "/Scene_2")
     assert out["a"]["trigger.on_custom_event"]["event_name"] == "guide_reset_Scene_2"
-    assert rg._event_name(out) == "guide_reset_Scene_2"
+    assert rg.events(out) == ("guide_reset_Scene_2", None)
     with pytest.raises(ValueError):
-        rg._event_name({"x": {"get.prims": {}}})
+        rg.events({"x": {"get.prims": {}}})
 
 
 def test_zone_grid_reads_either_dialect(tmp_path):
@@ -88,3 +88,56 @@ def test_zone_grid_reads_either_dialect(tmp_path):
     assert rg.zone_grid(tmp_path / "rep.yaml").num_zones == 20
     assert rg.zone_grid(tmp_path / "old.yaml").num_zones == 20
     assert rg.zone_grid(tmp_path / "free.yaml") is None
+
+
+from types import SimpleNamespace  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+
+class Node:
+    """An OmniGraph node: its attribute values and its type name."""
+
+    def __init__(self, attrs, kind=rg.UNIFORM):
+        self.attrs, self.kind = dict(attrs), kind
+
+    def get_type_name(self):
+        return self.kind
+
+
+@pytest.fixture
+def og(monkeypatch):
+    monkeypatch.setattr(rg, "_get", lambda node, attr: node.attrs[attr])
+
+
+def test_events_split_the_pose_event_from_the_joint_event():
+    doc = rg.prefixed({"e": {"trigger.on_custom_event": {"event_name": "guide_randomize"}},
+                       "j": {"trigger.on_custom_event": {"event_name": "guide_randomize_joints"}}}, "/Scene_1")
+    assert rg.events(doc) == ("guide_randomize_Scene_1", "guide_randomize_joints_Scene_1")
+    with pytest.raises(ValueError):  # a joint event alone has no pose event to follow
+        rg.events({"j": {"trigger.on_custom_event": {"event_name": "guide_randomize_joints"}}})
+
+
+@pytest.mark.parametrize("physics_hz, render_hz, updates", [(120, 60, 2), (60, 60, 3), (240, 60, 1)])
+def test_the_joint_event_waits_three_physics_frames(physics_hz, render_hz, updates):
+    assert rg.joint_delay_updates(1 / physics_hz, 1 / render_hz) == updates
+
+
+def test_a_guide_argument_is_its_distributions_sample_or_the_constant(og):
+    vector = SimpleNamespace(node=Node({"inputs:lower": [0.0, -0.3, 0.005], "inputs:upper": [0.04, -0.26, 0.005],
+                                        "outputs:samples": [[0.01, -0.29, 0.005]]}))
+    scalar = SimpleNamespace(node=Node({"inputs:lower": [-0.16], "inputs:upper": [0.0], "outputs:samples": [-0.12]}))
+    assert rg.drawn(vector).tolist() == [0.01, -0.29, 0.005]
+    assert rg.midpoint(vector).tolist() == pytest.approx([0.02, -0.28, 0.005])
+    assert float(np.ravel(rg.drawn(scalar))[0]) == -0.12
+    assert rg.drawn([0, 0, 154]).tolist() == [0, 0, 154] and float(rg.midpoint(-0.12)) == -0.12
+    assert rg.attribute_type(scalar.node) == "float" and rg.attribute_type(vector.node) == "float3"
+
+
+def test_guide_nodes_take_uniform_distributions_only(og):
+    normal = SimpleNamespace(node=Node({"inputs:mean": [0.0]}, kind="omni.replicator.core.OgnSampleNormal"))
+    with pytest.raises(ValueError, match="distribution.uniform"):
+        rg.midpoint(normal)
+    two = Node({"inputs:lower": [0.0, 0.0], "inputs:upper": [1.0, 1.0]})
+    with pytest.raises(ValueError, match="one or three"):
+        rg.attribute_type(two)

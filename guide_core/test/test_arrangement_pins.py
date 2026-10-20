@@ -74,3 +74,46 @@ def test_the_zone_redraw_bounds():
     assert low.tolist() == high.tolist() == [0.05, 0.2, 0.042]
     assert [b.tolist() for b in rg.zone_bounds(g, 4, None)] == [b.tolist() for b in g.cell_bounds(4)]
     assert [b.tolist() for b in rg.zone_bounds(g, None, None)] == [g.low.tolist(), g.high.tolist()]
+
+
+
+def test_a_failure_on_the_second_node_restores_the_first(monkeypatch):
+    nodes = named()
+    before = {name: dict(node.attrs) for name, node in nodes.items()}
+    monkeypatch.setattr(rg, "_get", lambda node, attr: node.attrs[attr])
+
+    def write(node, attr, value):
+        if node is nodes["cabinet_top_state"] and value == [-0.12]:
+            raise RuntimeError("write failed")
+        node.attrs[attr] = value
+
+    monkeypatch.setattr(rg, "_set", write)
+    with pytest.raises(RuntimeError, match="write failed"):
+        with rg.pinning(nodes, {"plate_position": [0.05, 0.2, 0.0033], "cabinet_top_state": -0.12}):
+            pytest.fail("the block must not run")
+    assert {name: node.attrs for name, node in nodes.items()} == before
+
+
+def test_pinning_restores_when_the_block_raises(og):
+    nodes = named()
+    before = {name: dict(node.attrs) for name, node in nodes.items()}
+    with pytest.raises(KeyError):
+        with rg.pinning(nodes, {"plate_position": [0.0, 0.2, 0.0033]}):
+            assert nodes["plate_position"].attrs["inputs:lower"] == [0.0, 0.2, 0.0033]
+            raise KeyError("the fire failed")
+    assert {name: node.attrs for name, node in nodes.items()} == before
+
+
+def test_unpin_goes_on_past_a_failing_node_and_raises_the_first_error(monkeypatch):
+    nodes = named()
+    pins = [(nodes["plate_position"], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]), (nodes["cabinet_top_state"], [-1.0], [1.0])]
+
+    def write(node, attr, value):
+        if node is nodes["plate_position"]:
+            raise RuntimeError("first")
+        node.attrs[attr] = value
+
+    monkeypatch.setattr(rg, "_set", write)
+    with pytest.raises(RuntimeError, match="first"):
+        rg._unpin(pins)
+    assert nodes["cabinet_top_state"].attrs == {"inputs:lower": [-1.0], "inputs:upper": [1.0]}

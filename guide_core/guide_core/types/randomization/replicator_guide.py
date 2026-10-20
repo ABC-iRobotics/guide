@@ -7,14 +7,18 @@ as ``rep.guide`` so a task can name ``guide.zone`` and ``guide.axis_angle``.
 
 Per episode the orchestrator seeds Replicator, points the zone randomizer at the scene's
 zone target, fires the trigger event, runs two app updates and reads the named
-distributions' samples back into the ``RandomizationRecord``.
+distributions' samples back into the ``RandomizationRecord``. ``guide.fixture_pose`` places a
+fixture by its world weld and ``guide.joint_state`` sets a drawer or knob (spikes K and J); fire()
+writes both after the trigger, the joints JOINT_DELAY_FRAMES physics frames after the poses.
 
 Nothing here imports Isaac at module level, so the pure parts are testable.
 """
 from __future__ import annotations
 
+import math
 import re
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +31,8 @@ from guide_core.types.randomization.grid import Grid, grid_from_yaml
 
 _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the scene
 UNIFORM = "omni.replicator.core.OgnSampleUniform"  # the only node type an arrangement can pin
+JOINT_EVENT = "guide_randomize_joints"  # the trigger guide.joint_state goes under
+JOINT_DELAY_FRAMES = 3  # physics frames between the pose event and the joint event (welds pull, spike K)
 
 
 # --------------------------------------------------------------------------- #
@@ -143,6 +149,108 @@ def axis_angle(axis, angle):
     return rep.distribution.uniform(lower=lower, upper=upper)
 
 
+def fixture_pose(path_pattern: str, position, rotation):
+    """Place the one fixture ``path_pattern`` matches by its world weld (spike K). ``position`` (scene
+    frame, m) and ``rotation`` (Euler XYZ, degrees, as modify.pose) are the pose of the fixture's
+    articulation root link, the weld's body1: a distribution.uniform or a constant each.
+
+    At build (registration): body0 released, so PhysX reads the anchor as a world pose at parse time
+    as it does at run time, and the anchor written at the middle of the distributions, so the first
+    draw is a small move. Per fire, after the trigger: localPos0/localRot0 = scene origin * pose *
+    the weld's body1 frame (fire). The distributions are wired into the trigger through a
+    guide:fixture* attribute on the fixture, so the graph draws them every fire."""
+    import omni.usd
+
+    from guide_core.types.randomization import fixtures
+
+    stage = omni.usd.get_context().get_stage()
+    root = fixtures.only(stage, path_pattern, "guide.fixture_pose")
+    weld = fixtures.world_weld(root)
+    fixtures.release_body0(weld)
+    frame = fixtures.local1(weld)
+    fixtures.write_weld(weld, *fixtures.weld_world_pose(
+        fixtures.scene_matrix(stage, _registered["prefix"]), midpoint(position), midpoint(rotation), *frame))
+    prims = _sampled(path_pattern, {"guide:fixturePosition": position, "guide:fixtureRotation": rotation})
+    _registered.setdefault("fixtures", []).append({"weld": weld, "position": position, "rotation": rotation, "local1": frame})
+    return prims
+
+
+def joint_state(path_pattern: str, distribution):
+    """Set the one prismatic or revolute joint ``path_pattern`` matches to ``distribution`` (SI: m or
+    rad; a distribution.uniform or a constant) through PhysX's JointStateAPI, velocity zeroed (spike J).
+    Goes under the guide_randomize_joints trigger, which fire() sends JOINT_DELAY_FRAMES physics frames
+    after the pose event. At build: JointStateAPI applied, any holding drive's stiffness zeroed."""
+    import omni.usd
+
+    from guide_core.types.randomization import fixtures
+
+    joint = fixtures.only(omni.usd.get_context().get_stage(), path_pattern, "guide.joint_state")
+    kind = fixtures.prepare_joint(joint)
+    prims = _sampled(path_pattern, {"guide:jointState": distribution})
+    _registered.setdefault("joints", []).append({"joint": joint, "kind": kind, "value": distribution})
+    return prims
+
+
+def _sampled(path_pattern: str, attributes: dict):
+    """Wire each distribution among ``attributes`` into the trigger being parsed: a write to a guide:*
+    attribute of the matched prim, so the graph draws it every fire (a distribution nothing consumes
+    never evaluates). fire() reads the samples, not the attribute."""
+    import omni.replicator.core as rep
+
+    prims = rep.get.prims(path_pattern=path_pattern, cache_result=False)
+    with prims:
+        for name, value in attributes.items():
+            node = getattr(value, "node", None)
+            if node is not None:
+                rep.modify.attribute(name, value, attribute_type=attribute_type(node))
+    return prims
+
+
+def _require_uniform(node) -> None:
+    if node.get_type_name() != UNIFORM:
+        raise ValueError(f"guide.fixture_pose and guide.joint_state take a distribution.uniform or a constant; "
+                         f"got a {node.get_type_name()}")
+
+
+def attribute_type(node) -> str:
+    """The guide:* attribute a node's distribution is written into: float for one value, float3 for three."""
+    _require_uniform(node)
+    size = len(np.atleast_1d(_get(node, "inputs:lower")))
+    if size not in (1, 3):
+        raise ValueError(f"guide.* distributions draw one or three values; this one draws {size}")
+    return "float" if size == 1 else "float3"
+
+
+def midpoint(value) -> np.ndarray:
+    """A guide.* argument's middle: (lower + upper) / 2 of a distribution.uniform, else the constant."""
+    node = getattr(value, "node", None)
+    if node is None:
+        return np.asarray(value, float)
+    _require_uniform(node)
+    return (np.asarray(_get(node, "inputs:lower"), float) + np.asarray(_get(node, "inputs:upper"), float)) / 2
+
+
+def drawn(value) -> np.ndarray:
+    """A guide.* argument as this fire drew it: the distribution's (one prim's) sample, else the constant."""
+    node = getattr(value, "node", None)
+    if node is None:
+        return np.asarray(value, float)
+    return np.asarray(_get(node, "outputs:samples"), float)[0]
+
+
+def joint_delay_updates(physics_dt: float, rendering_dt: float, frames: int = JOINT_DELAY_FRAMES) -> int:
+    """App updates that run at least ``frames`` physics frames (an update steps rendering_dt / physics_dt)."""
+    return max(1, math.ceil(frames * physics_dt / rendering_dt - 1e-9))
+
+
+def _dts() -> tuple[float, float]:
+    """(physics dt, rendering dt) of GUIDE's World."""
+    from isaacsim.core.api import SimulationContext
+
+    context = SimulationContext.instance()
+    return context.get_physics_dt(), context.get_rendering_dt()
+
+
 def attach() -> None:
     import omni.replicator.core as rep
     import sys
@@ -161,6 +269,7 @@ def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
 
     attach()
     _registered.clear()
+    _registered["prefix"] = scene_prefix  # guide.fixture_pose reads the scene origin
     _stop_orchestrator()  # a running orchestrator must not have its graph edited
     doc = prefixed(yaml.safe_load(yaml_path.read_text()), scene_prefix)
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
@@ -170,18 +279,25 @@ def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
     parse(yaml_path=tmp, root_dir=str(yaml_path.parent))
 
     state = dict(_registered)
-    state["event"] = _event_name(doc)
+    state["event"], state["joint_event"] = events(doc)
+    if state.get("joints") and not state["joint_event"]:
+        raise ValueError(f"{yaml_path}: guide.joint_state needs a group with "
+                         f"trigger.on_custom_event: {{event_name: {JOINT_EVENT}}}")
     # this scene's named distributions (the registry is global; names repeat across scenes)
     state["named"] = {k: v for k, v in NamedNodes._named_nodes.items() if before.get(k) is not v}
     return state
 
 
-def _event_name(doc: dict) -> str:
-    """The (already scene-suffixed) event name of the file's custom-event trigger."""
-    for group in doc.values():
-        if isinstance(group, dict) and "trigger.on_custom_event" in group:
-            return group["trigger.on_custom_event"]["event_name"]
-    raise ValueError("randomize.yaml needs a trigger.on_custom_event group")
+def events(doc: dict) -> tuple[str, str | None]:
+    """The file's (already scene-suffixed) custom-event names: the pose event and, if the file has
+    one, the guide_randomize_joints event."""
+    names = [g["trigger.on_custom_event"]["event_name"] for g in doc.values()
+             if isinstance(g, dict) and "trigger.on_custom_event" in g]
+    main = [n for n in names if not n.startswith(JOINT_EVENT)]
+    joint = [n for n in names if n.startswith(JOINT_EVENT)]
+    if not main:
+        raise ValueError("randomize.yaml needs a trigger.on_custom_event group")
+    return main[0], (joint[0] if joint else None)
 
 
 def _stop_orchestrator() -> None:
@@ -210,9 +326,11 @@ def _get(node, attr: str):
     return og.AttributeValueHelper(node.get_attribute(attr)).get()
 
 
-def _pin(named: dict, values: dict) -> list:
+def _pin(named: dict, values: dict, pins: list | None = None) -> list:
     """Pin each named uniform distribution an arrangement lists: lower = upper = value. Every name,
-    node type and value length is checked before any node is touched. Returns what _unpin restores."""
+    node type and value length is checked before any node is touched. Returns ``pins`` (a new list unless
+    given), what _unpin restores: each node is listed right before its own write, so a failure part
+    way leaves every node already touched in it."""
     unknown = sorted(set(values) - set(named))
     if unknown:
         raise ValueError(f"arrangement: {unknown} name no distribution of this recipe (it has {sorted(named)})")
@@ -227,16 +345,36 @@ def _pin(named: dict, values: dict) -> list:
         if len(pinned) != len(lower):
             raise ValueError(f"arrangement: {name} takes {len(lower)} value(s), got {value!r}")
         plan.append((node, pinned, lower, upper))
-    for node, pinned, _, _ in plan:
+    pins = [] if pins is None else pins
+    for node, pinned, lower, upper in plan:
+        pins.append((node, lower, upper))
         _set(node, "inputs:lower", pinned)
         _set(node, "inputs:upper", pinned)
-    return [(node, lower, upper) for node, _, lower, upper in plan]
+    return pins
 
 
 def _unpin(pins: list) -> None:
+    """Restore every pinned node; one that fails does not stop the rest, the first error is re-raised."""
+    first = None
     for node, lower, upper in pins:
-        _set(node, "inputs:lower", lower)
-        _set(node, "inputs:upper", upper)
+        try:
+            _set(node, "inputs:lower", lower)
+            _set(node, "inputs:upper", upper)
+        except Exception as error:
+            first = first or error
+    if first:
+        raise first
+
+
+@contextmanager
+def pinning(named: dict, values: dict):
+    """_pin for the duration of a with-block, restored on the way out (an error included)."""
+    pins: list = []
+    try:
+        _pin(named, values, pins)
+        yield
+    finally:
+        _unpin(pins)
 
 
 def zone_pin(state: dict, values: dict, zone_target) -> list | None:
@@ -277,7 +415,9 @@ def fire(
     values: dict | None = None,
 ) -> dict:
     """Seed (if given), pin an arrangement's ``values`` (if given), aim the zone randomizer, fire the
-    file's trigger, let it run; return the named samples. Used for randomize (seeded, zoned,
+    file's trigger and let it run; then place the guide.fixture_pose fixtures by their welds and,
+    JOINT_DELAY_FRAMES physics frames later, fire guide_randomize_joints and write the
+    guide.joint_state joints. Returns the named samples. Used for randomize (seeded, zoned,
     arranged) and reset (none). ``values`` = {named distribution: value}, pinned to lower = upper =
     value for this fire only (restored after, on error too); a bad name, node or value raises before
     anything is sent."""
@@ -286,19 +426,22 @@ def fire(
     import carb.settings
     import omni.kit.app
     import omni.replicator.core as rep
+    import omni.usd
     from omni.replicator.core.utils import rng
 
+    from guide_core.types.randomization import fixtures
+
+    app = omni.kit.app.get_app()
     values = values or {}
     pinned_zone = zone_pin(state, values, zone_target)
-    pins = _pin(state["named"], values)
-    try:
+    with pinning(state["named"], values):
         t0 = time.perf_counter()
         if seed is not None:
             # A global-seed *change* resets every sampler from (seed, node id) -- through a
             # settings subscription that runs on the next app update, so pump one before firing.
             current = carb.settings.get_settings().get_as_int("/omni/replicator/globalSeed")
             _reseed(rng, int(seed) % (2**31 - 1), current)  # the graph's seed slot is 32-bit
-            omni.kit.app.get_app().update()
+            app.update()
         t1 = time.perf_counter()
 
         g: Grid | None = state.get("grid")
@@ -319,9 +462,24 @@ def fire(
         # from the tree; read it at commit 6f8adb5).
         # orchestrator.step() would do the same but stalls ~6 s every other call.
         for _ in range(2):
-            omni.kit.app.get_app().update()
+            app.update()
+
+        stage = omni.usd.get_context().get_stage()
+        for fixture in state.get("fixtures", []):
+            fixtures.write_weld(fixture["weld"], *fixtures.weld_world_pose(
+                fixtures.scene_matrix(stage, state["prefix"]), drawn(fixture["position"]),
+                drawn(fixture["rotation"]), *fixture["local1"]))
+        if state.get("joint_event"):
+            # The welds pull, they do not teleport (spike K): set the joints once the bases have landed.
+            for _ in range(joint_delay_updates(*_dts())):
+                app.update()
+            rep.utils.send_og_event(state["joint_event"])
+            for _ in range(2):
+                app.update()
+            for joint in state.get("joints", []):
+                fixtures.write_joint_state(joint["joint"], joint["kind"], float(np.ravel(drawn(joint["value"]))[0]))
         t2 = time.perf_counter()
-        print(f"[replicator_guide] {state['event']}: seed {t1 - t0:.3f}s  event+2 updates {t2 - t1:.3f}s", flush=True)
+        print(f"[replicator_guide] {state['event']}: seed {t1 - t0:.3f}s  events+updates {t2 - t1:.3f}s", flush=True)
 
         samples = {}
         for name, node in state["named"].items():
@@ -330,5 +488,3 @@ def fire(
             except Exception:  # a named node without samples
                 pass
         return samples
-    finally:
-        _unpin(pins)

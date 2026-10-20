@@ -43,7 +43,10 @@ def world_weld(root):
     stage = root.GetStage()
 
     def rigid(targets):
-        return bool(targets) and stage.GetPrimAtPath(targets[0]).HasAPI(UsdPhysics.RigidBodyAPI)
+        if not targets:
+            return False
+        prim = stage.GetPrimAtPath(targets[0])  # a dangling target is no rigid body
+        return prim.IsValid() and prim.HasAPI(UsdPhysics.RigidBodyAPI)
 
     welds = [str(p.GetPath()) for p in Usd.PrimRange(root) if p.IsA(UsdPhysics.FixedJoint)
              and rigid(UsdPhysics.Joint(p).GetBody1Rel().GetTargets())

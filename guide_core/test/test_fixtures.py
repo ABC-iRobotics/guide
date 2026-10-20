@@ -135,3 +135,13 @@ def test_a_joint_finds_its_articulation_root():
     _, drawer = cabinet(stage)
     assert str(fixtures.articulation_root(drawer).GetPath()) == "/Scene_0/objects/cab/Geometry/Body"
     assert fixtures.articulation_root(UsdPhysics.RevoluteJoint.Define(stage, "/loose").GetPrim()) is None
+
+
+def test_a_weld_to_a_dangling_body0_target_counts_as_a_world_weld():
+    stage = Usd.Stage.CreateInMemory()
+    weld, _ = cabinet(stage)
+    UsdPhysics.Joint(weld).GetBody0Rel().SetTargets(["/gone"])
+    assert fixtures.world_weld(stage.GetPrimAtPath("/Scene_0/objects/cab")).GetPath() == weld.GetPath()
+    UsdPhysics.Joint(weld).GetBody1Rel().SetTargets(["/gone"])  # body1 must be a real rigid body
+    with pytest.raises(ValueError, match="0 world welds"):
+        fixtures.world_weld(stage.GetPrimAtPath("/Scene_0/objects/cab"))
