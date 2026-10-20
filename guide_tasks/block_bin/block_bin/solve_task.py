@@ -421,7 +421,10 @@ def solveTask(scene_id, robot, zone=None, path=""):
                         dynamic_map={"l_pose": "cube_pose"},
                         static_args={
                             "r_pose": PoseType(
-                                orientation=RotationType(R.from_euler("z", np.pi / 2))
+                                # -90 deg, not +90: the same pair of faces with the hand turned 180 deg. From the
+                                # FR3's home wrist (q7 = +45 deg) the +90 turn pushed joint 7 into its limit for
+                                # left-of-centre cubes (offline sweep: 25/25 reached at -90 vs 19/25 at +90).
+                                orientation=RotationType(R.from_euler("z", -np.pi / 2))
                             )
                         },
                         output_map={"pose": "cube_pose"},
