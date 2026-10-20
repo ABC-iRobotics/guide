@@ -16,7 +16,6 @@ from scipy.spatial.transform import Rotation
 APERTURE = 20.955  # mm, USD's default; square, so fovy = fovx on a square (512 x 512) image
 #: LIBERO's robot0_eye_in_hand in the hand frame (robosuite's right_hand: the USD <p>_hand, approach +z)
 WRIST_CAMERA = {"position": (0.05, 0.0, 0.0), "orientation_wxyz": (0.0, 0.707107, 0.707107, 0.0), "fovy": 75.0}
-TCP_Z = 0.1034  # franka_description's hand -> TCP, the frame guide_motion's TCP is (description.TCP_Z)
 DEFAULT_KEYS = ("joint_names", "gripper_joint", "end_effector_name", "base_name")
 
 PROFILES = {
@@ -94,7 +93,7 @@ def mount(stage, scene_prefix: str, entry: dict, usd: str | None = None) -> str:
     """Reference the profile robot (a resolve()d entry) at ``scene_prefix + path``, place it at its mount,
     add its wrist camera and, where the asset lacks one, its TCP frame. Returns the robot prim path.
     ``usd`` replaces guide_motion's robots/<p>/<p>.usda (tests)."""
-    from guide_motion.description import ROBOTS_DIR
+    from guide_motion.description import ROBOTS_DIR, TCP_Z
     from pxr import Gf, UsdGeom
 
     name = entry["profile"]

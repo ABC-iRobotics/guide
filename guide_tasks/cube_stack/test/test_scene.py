@@ -1,3 +1,4 @@
+import pytest
 from cube_stack.scene import Scene, plan, separated
 
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
@@ -68,3 +69,8 @@ def test_success_is_one_tower_in_the_drawn_order():
     assert scene.is_success_postprocess(tower)
     assert not scene.is_success_postprocess(slid)
     assert not scene.is_success_postprocess(tower[::-1])
+
+
+def test_cube_stack_refuses_an_arrangement():
+    with pytest.raises(ValueError, match="does not support arrangements"):
+        Scene.__new__(Scene).randomize(arrangement="x")

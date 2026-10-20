@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation as R
 
 from guide_core.scene import robot_profile as rp
 from guide_core.scene.scene_manager import SceneManager
+from guide_motion.description import TCP_Z
 
 TASKS = Path(__file__).resolve().parents[2] / "guide_tasks"
 DUMMY = Path(__file__).resolve().parents[1] / "dummy_scene"
@@ -106,9 +107,12 @@ def test_mount_references_the_robot_at_its_mount_with_its_wrist_camera(tmp_path,
     assert camera.GetHorizontalApertureAttr().Get() == camera.GetVerticalApertureAttr().Get()
     assert math.isclose(camera.GetFocalLengthAttr().Get(), rp.focal_length(75.0), rel_tol=1e-6)
     assert camera.GetPrim().GetAttribute("xformOp:translate").Get() == Gf.Vec3d(0.05, 0, 0)
-    assert camera.GetPrim().GetAttribute("xformOp:orient")  # what a camera transition moves
+    orient = camera.GetPrim().GetAttribute("xformOp:orient").Get()  # what a camera transition moves
+    assert np.allclose([orient.GetReal(), *orient.GetImaginary()], rp.WRIST_CAMERA["orientation_wxyz"])
     tcp = stage.GetPrimAtPath(f"{path}/{robot}_hand/{robot}_hand_tcp")
     assert tcp.IsValid() == (robot == "panda")  # Isaac's FR3 asset has its own fr3_hand_tcp
+    if robot == "panda":
+        assert tcp.GetAttribute("xformOp:translate").Get() == Gf.Vec3d(0, 0, TCP_Z)
 
 
 def test_mount_refuses_a_path_the_scene_usd_already_has(tmp_path):
@@ -156,3 +160,11 @@ def test_build_stage_mounts_the_profile_robots_only(tmp_path, monkeypatch):
     monkeypatch.setattr(rp, "mount", lambda s, prefix, entry: mounted.append((s, prefix, entry["path"])))
     scene.build_stage()
     assert mounted == [(stage, "/Scene_0", "/fr3")]
+
+
+def test_a_legacy_robot_without_a_scene_recipe_never_imports_omni(tmp_path, monkeypatch):
+    """PF3: build_stage returns before any omni import (None in sys.modules makes `import omni` raise)."""
+    monkeypatch.setitem(sys.modules, "omni", None)
+    scene, _ = registered(tmp_path, {"legacy": {"path": "/ur", "default_joint_states": [0.0] * 6}})
+    assert scene.scene_recipe is None
+    scene.build_stage()
