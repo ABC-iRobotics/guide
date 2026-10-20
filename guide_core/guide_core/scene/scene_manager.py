@@ -397,9 +397,9 @@ class SceneManager:
                     if state == SceneState.PREPARATION and getattr(scene, "transition_due", False):
                         scene.transition_due = False
                         scene.begin_camera_transition()
-                    elif state == SceneState.RECORDING:
+                    elif state in (SceneState.PREPARATION, SceneState.RECORDING):
                         scene.step_camera_transition(current_step, f_sim)
-                    elif state != SceneState.PREPARATION:
+                    else:
                         scene.end_camera_transition()
 
                 if state == SceneState.PREPARATION:

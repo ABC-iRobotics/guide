@@ -1084,7 +1084,7 @@ class SceneOrchestrator(ABC):
         Its own pose (its authored local transform, under its parent as the parent stands)
         stays the target; the authored translate/orient values are kept and put back as
         they were at the end. Until the episode's first frame, which is t = 0, the cameras
-        hold here (step_camera_transition)."""
+        stay on ``from`` (step_camera_transition)."""
         import omni.usd
         from pxr import UsdGeom
 
@@ -1114,10 +1114,14 @@ class SceneOrchestrator(ABC):
         )
 
     def step_camera_transition(self, step: int, hz: float) -> None:
-        """Each physics step of a recording: the cameras ``(step - frame 0's step) / hz`` s
-        into the transition, or back on their mounts once ``duration`` has passed."""
+        """Each physics step of a recording and its warm-up: the cameras on ``from`` until
+        the episode's first frame, then ``(step - frame 0's step) / hz`` s into the transition,
+        and back on their mounts once ``duration`` has passed."""
         transition = self._transition
-        if transition is None or transition["start"] is None:
+        if transition is None:
+            return
+        if transition["start"] is None:  # under their parents as they stand: the arm may drift
+            self._place_cameras(0.0)
             return
         t = (step - transition["start"]) / hz
         if t >= self.camera_transition["duration"]:

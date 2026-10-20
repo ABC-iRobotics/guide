@@ -222,6 +222,16 @@ def test_start_recording_eases_every_camera_from_base_onto_its_mount_under_start
     assert {name: ops(run.stage, name) for name in CAMERAS} == authored
 
 
+def test_until_frame_0_every_camera_holds_on_base_under_its_parent_as_it_stands(episode):
+    run = episode(ON)
+    run.step(1)
+    body = UsdGeom.Xformable(run.stage.GetPrimAtPath("/Scene_0/fr3/rsd455/RSD455"))
+    body.GetOrderedXformOps()[0].Set(Gf.Vec3d(0.001, -0.002, 0.003))  # the arm's stale hold drifts
+    poses = run.step(2 * 12)
+
+    assert all(same_pose(poses[0][name], poses[0]["base"]) for name in CAMERAS)
+
+
 def test_without_the_section_no_camera_moves_and_no_frame_is_labelled(episode):
     run = episode(None)
     authored = {name: ops(run.stage, name) for name in CAMERAS}
