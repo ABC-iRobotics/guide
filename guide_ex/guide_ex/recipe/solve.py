@@ -63,13 +63,18 @@ def recipe_values(entry: dict, init: dict) -> dict:
                         "hold_seconds": float(transition.get("duration", 0.0)) + 1.0 / dataset.get("fps", 10) if hold else 0.0}}
 
 
+def dataset_path(task: Path, given: str) -> str:
+    """--dataset, defaulting to ~/dataset/<task dir name> (the generate-locally rule)."""
+    return str(Path(given or f"~/dataset/{task.name}").expanduser())
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--task", type=Path, required=True)
     ap.add_argument("--namespace", default="/Sim_0/Scene_0")
     ap.add_argument("--episodes", type=int, default=1, help="successful episodes wanted")
     ap.add_argument("--attempts", type=int, default=0, help="attempts allowed (default: 3 x episodes)")
-    ap.add_argument("--dataset", default="", help="dataset directory, ~/dataset/<task>")
+    ap.add_argument("--dataset", default="", help="dataset directory (default: ~/dataset/<task dir name>)")
     ap.add_argument("--arrangement", default="", help="config/arrangements/<id> to start from (default: a free draw)")
     args = ap.parse_args(argv)
 
@@ -99,8 +104,8 @@ def main(argv=None) -> int:
                                                       callback_group=robot._reentrant_callback_group))
     recipes = task / "config" / "recipes"
     values = recipe_values(entry, init)
-    dataset = str(Path(args.dataset).expanduser()) if args.dataset else ""
-    scene_id = int(re.search(r"(\d+)$", args.namespace.rstrip("/")).group(1))
+    dataset = dataset_path(task, args.dataset)
+    scene_id = context(args.namespace, robot, entry, dataset, "")["scene_id"]  # the one parse of the namespace
     done = attempts = 0
     try:
         while done < args.episodes and attempts < (args.attempts or 3 * args.episodes):
@@ -119,10 +124,17 @@ def main(argv=None) -> int:
             done += ok
             robot.node.get_logger().info(f"[solve] attempt {attempts}: {'SUCCESS' if ok else f'FAILURE {why}'}")
             # an attempt that broke off leaves its episode open: drop it (a no-op when nothing is open)
-            robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False), timeout_sec=300.0)
+            try:  # a stalled recorder costs this attempt, not the run (block_bin's solver)
+                robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False), timeout_sec=300.0)
+            except Exception as e:
+                robot.node.get_logger().error(f"Cleanup stop_recording failed: {e}")
     finally:
-        robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=300.0)
-        robot.disconnect()
+        try:  # saved episodes stay unreadable until finalized
+            robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=300.0)
+        except Exception as e:
+            robot.node.get_logger().error(f"Finalize failed: {e}")
+        finally:
+            robot.disconnect()
     print(f"[solve] {done}/{args.episodes} episodes in {attempts} attempts", flush=True)
     return 0 if done == args.episodes else 1
 

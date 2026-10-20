@@ -1,8 +1,9 @@
 import json
+from pathlib import Path
 
 import numpy as np
 
-from guide_ex.recipe.solve import context, recipe_values
+from guide_ex.recipe.solve import context, dataset_path, recipe_values
 
 REPLY = json.dumps({"task": "put the bowl on the plate", "target": "/objects/b", "goal": [{"on": ["/objects/b", "/objects/p"]}],
                     "subtasks": ["Pick up the bowl.", "Place it on the plate."]})
@@ -22,6 +23,12 @@ def test_context_feeds_the_library_from_a_recipe_scene_reply():
 def test_a_reply_that_is_not_json_leaves_the_goal_keys_empty():
     ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", "Randomized.")
     assert (ctx["scene_id"], ctx["target"], ctx["support"], ctx["pick"], ctx["place"]) == (0, None, None, "", "")
+
+
+def test_dataset_defaults_to_home_dataset_task_dir_name():
+    home = Path("~").expanduser()
+    assert dataset_path(Path("/x/tasks/put_bowl"), "") == str(home / "dataset/put_bowl")
+    assert dataset_path(Path("/x/tasks/put_bowl"), "~/d") == str(home / "d")
 
 
 def test_recipe_values_from_a_profile_entry():
