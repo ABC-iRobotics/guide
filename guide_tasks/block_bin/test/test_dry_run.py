@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import block_bin.solve_task as st  # noqa: E402
@@ -23,7 +25,8 @@ class FakeRobot(ROS2Robot):
         pass
 
 
-def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
+@pytest.mark.parametrize("startup", [0.0, 2.0])  # dataset.camera_transition off, and on for 2 s
+def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, startup):
     robot = FakeRobot.__new__(FakeRobot)
     robot.node = SimpleNamespace(get_logger=lambda: logging.getLogger("dry"),
                                  get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=0)))
@@ -31,7 +34,7 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
                                    arm_action_type=ActionType.CARTESIAN_POSE, gripper_action_type=ActionType.JOINT_POSITION)
     robot._reentrant_callback_group = None
     moves, asked, slept = [], [], []
-    robot.sleep = slept.append
+    robot.sleep = lambda seconds: slept.append((seconds, len(moves)))
     robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[0.04])
 
     def send_action(action, **kwargs):
@@ -55,6 +58,7 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
     robot.callService = call
     monkeypatch.setattr(st.time, "sleep", lambda seconds: None)  # a wall-clock wait would show by its absence in `slept`
     monkeypatch.setattr(st, "namespace_base", "/Sim_0/Scene_0", raising=False)
+    monkeypatch.setattr(st, "startup_padding", startup)
 
     assert st.solveTask(0, robot)
 
@@ -64,4 +68,8 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
     assert xyz == [(0.3, 0.0, 0.5), (0.3, 0.0, 0.4), (0.5, 0.1, 0.112), (0.5, 0.1, 0.022), (0.5, 0.1, 0.292),
                    (0.45, -0.25, 0.137), (0.3, 0.0, 0.5)]
     settle = [SetGripperState.POLL] * SetGripperState.STILL_SAMPLES + [SetGripperState.RESIDUAL]
-    assert slept == [5, *settle, 0.5, *settle, 0.5, *settle, 0.5, 1.0]  # the post-Randomize pause, settles and WaitForSeconds
+    # the post-Randomize pause, settles and WaitForSeconds; with the camera transition, its wait right
+    # after StartRecording, before any move but Unclutch's (rest, unclutch, open the hand)
+    padding = [startup] if startup else []
+    assert [s for s, _ in slept] == [5, *settle, 0.5, *padding, *settle, 0.5, *settle, 0.5, 1.0]
+    assert [m for s, m in slept if s == startup] == ([3] if startup else [])

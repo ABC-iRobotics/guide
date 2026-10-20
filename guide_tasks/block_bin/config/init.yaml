@@ -112,6 +112,14 @@ dataset:
   # the LeRobot dataset metadata. 10 is what this task has always actually recorded at;
   # the metadata said 30 only because the key was never set.
   fps: 10
+  # Every episode opens with every camera on one viewpoint: they start on `from`'s pose and
+  # ease (smoothstep; lerp + slerp) onto their own mounts, each with its own resolution and
+  # streams. The solver (launch/bringup.launch.py reads `duration`) holds the arm still meanwhile.
+  camera_transition:
+    enabled: true      # false: episodes start with every camera already at its own viewpoint (today's behaviour)
+    duration: 2.0      # s of sim time at the start of every recorded episode; the robot holds still
+    from: base         # key under `cameras:` whose pose every other camera starts from
+    label: Startup     # language label of the padding frames (searchable, removable later)
   images:
     - top: top
     - base: base

@@ -39,6 +39,9 @@ from guide_msgs.srv import (
 )
 
 namespace_base = ""
+# dataset.camera_transition's duration in config/init.yaml (the launch passes it): s of sim time
+# the arm holds still right after StartRecording while the cameras move onto their mounts. 0: off.
+startup_padding = 0.0
 
 
 def solveTask(scene_id, robot, zone=None, path=""):
@@ -377,6 +380,12 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 static_args={"timeout_sec": 240.0},
             ),
             get_target_pose_sequence,
+            *(
+                [WaitForSeconds(alias="WaitForCameras", dynamic_map={"timer": "robot"},
+                                static_args={"seconds": startup_padding})]
+                if startup_padding
+                else []
+            ),
             pick_subtask,
             place_subtask,
             return_subtask,
@@ -601,9 +610,11 @@ def main():
     )
     argparser.add_argument("--namespace", type=str, default="")
     argparser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
+    argparser.add_argument("--startup-padding", type=float, default=0.0)
     args = argparser.parse_known_args()
-    global namespace_base
+    global namespace_base, startup_padding
     namespace_base = args[0].namespace if args[0].namespace else ""
+    startup_padding = args[0].startup_padding
 
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
     scene_id = int(match.group()) if match else 0

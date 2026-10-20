@@ -22,7 +22,12 @@ def generate_nodes(context, *args, **kwargs):
     # reads when it registers the scene (S2b). oscbf drives the arm from Isaac's physics step, so
     # no move_group or ros2_control is started for it.
     with open(os.path.join(get_package_share_directory("block_bin"), "config", "init.yaml")) as f:
-        controller = yaml.safe_load(f)["robots"]["franka"].get("controller", "moveit")
+        config = yaml.safe_load(f)
+    controller = config["robots"]["franka"].get("controller", "moveit")
+    # dataset.camera_transition: GUIDE moves the cameras onto their mounts for `duration` s at the
+    # start of every episode, and the solver holds the arm still for as long (GUIDE validates it).
+    transition = (config.get("dataset") or {}).get("camera_transition") or {}
+    startup_padding = transition.get("duration", 0.0) if transition.get("enabled") is True else 0.0
 
     # Same-host DDS discovery on this machine needs the localhost cyclonedds
     # config (loopback has no MULTICAST flag + multiple NICs), otherwise these
@@ -89,7 +94,8 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"block_bin_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller],
+                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller,
+                           "--startup-padding", str(startup_padding)],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),
