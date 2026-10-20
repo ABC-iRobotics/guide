@@ -95,6 +95,7 @@ def main(argv=None) -> int:
     config = FR3RobotConfig(namespace=f"{args.namespace}/{name}", controller=entry.get("controller", "oscbf"),
                             gripper_action_type=ActionType.JOINT_POSITION)
     config.arm_action_type = ActionType.CARTESIAN_POSE
+    config.cameras = {}  # ROS2Robot reads config.cameras; the recorder takes its images inside GUIDE (init.yaml cameras, publish_camera_topics: false)
     robot = ROS2Robot(config=config)
     robot.connect()
     time.sleep(5)  # block_bin's wait for the connections
