@@ -26,6 +26,7 @@ from guide_core.types.randomization.grid import Grid, grid_from_yaml
 
 
 _registered: dict[str, Any] = {}  # side channel from guide.* calls back to the scene
+UNIFORM = "omni.replicator.core.OgnSampleUniform"  # the only node type an arrangement can pin
 
 
 # --------------------------------------------------------------------------- #
@@ -125,7 +126,7 @@ def zone(distribution: str, path_pattern: str, resolution: float = 0.1):
     with prims:
         position = rep.distribution.uniform(lower=g.low.tolist(), upper=g.high.tolist())
         rep.modify.pose(position=position, write_to_usd=True)
-    _registered.update(grid=g, zone_prims=prims.node, zone_position=position.node)
+    _registered.update(grid=g, zone_prims=prims.node, zone_position=position.node, zone_distribution=distribution)
     return prims
 
 
@@ -209,6 +210,56 @@ def _get(node, attr: str):
     return og.AttributeValueHelper(node.get_attribute(attr)).get()
 
 
+def _pin(named: dict, values: dict) -> list:
+    """Pin each named uniform distribution an arrangement lists: lower = upper = value. Every name,
+    node type and value length is checked before any node is touched. Returns what _unpin restores."""
+    unknown = sorted(set(values) - set(named))
+    if unknown:
+        raise ValueError(f"arrangement: {unknown} name no distribution of this recipe (it has {sorted(named)})")
+    plan = []
+    for name, value in values.items():
+        node = named[name]
+        if node.get_type_name() != UNIFORM:
+            raise ValueError(f"arrangement: {name} is a {node.get_type_name()}; only distribution.uniform can be pinned")
+        lower = np.asarray(_get(node, "inputs:lower"), float).tolist()
+        upper = np.asarray(_get(node, "inputs:upper"), float).tolist()
+        pinned = np.atleast_1d(np.asarray(value, float)).tolist()
+        if len(pinned) != len(lower):
+            raise ValueError(f"arrangement: {name} takes {len(lower)} value(s), got {value!r}")
+        plan.append((node, pinned, lower, upper))
+    for node, pinned, _, _ in plan:
+        _set(node, "inputs:lower", pinned)
+        _set(node, "inputs:upper", pinned)
+    return [(node, lower, upper) for node, _, lower, upper in plan]
+
+
+def _unpin(pins: list) -> None:
+    for node, lower, upper in pins:
+        _set(node, "inputs:lower", lower)
+        _set(node, "inputs:upper", upper)
+
+
+def zone_pin(state: dict, values: dict, zone_target) -> list | None:
+    """The zone redraw's pinned position under an arrangement: the arrangement's value of the zone's
+    distribution (it must name it, or the redraw would move the target), or None (no arrangement, no zone)."""
+    if not values or state.get("grid") is None or not zone_target:
+        return None
+    name = state.get("zone_distribution")
+    if name not in values:
+        raise ValueError(f"arrangement: this scene re-draws its zone target from {name}; the arrangement must pin it")
+    return values[name]
+
+
+def zone_bounds(g: Grid, zone: int | None, pinned) -> tuple[np.ndarray, np.ndarray]:
+    """(low, high) of the zone redraw: the pinned position, the zone's cell, or the whole region."""
+    if pinned is not None:
+        p = np.asarray(pinned, float)
+        return p, p
+    if zone is not None and zone >= 0:
+        return g.cell_bounds(int(zone))
+    return g.low, g.high
+
+
 def _reseed(rng, seed: int, current: int) -> None:
     """Restart every sampler from ``seed``. Replicator's set_global_seed() ignores a seed equal to
     the current setting (an unset one reads 0), so seed 0 on a fresh app or a repeated seed would
@@ -223,9 +274,13 @@ def fire(
     seed: int | None = None,
     zone: int | None = None,
     zone_target: str | None = None,
+    values: dict | None = None,
 ) -> dict:
-    """Seed (if given), aim the zone randomizer, fire the file's trigger, let it run; return
-    the named samples. Used for randomize (seeded, zoned) and reset (neither)."""
+    """Seed (if given), pin an arrangement's ``values`` (if given), aim the zone randomizer, fire the
+    file's trigger, let it run; return the named samples. Used for randomize (seeded, zoned,
+    arranged) and reset (none). ``values`` = {named distribution: value}, pinned to lower = upper =
+    value for this fire only (restored after, on error too); a bad name, node or value raises before
+    anything is sent."""
     import time
 
     import carb.settings
@@ -233,42 +288,47 @@ def fire(
     import omni.replicator.core as rep
     from omni.replicator.core.utils import rng
 
-    t0 = time.perf_counter()
-    if seed is not None:
-        # A global-seed *change* resets every sampler from (seed, node id) -- through a
-        # settings subscription that runs on the next app update, so pump one before firing.
-        current = carb.settings.get_settings().get_as_int("/omni/replicator/globalSeed")
-        _reseed(rng, int(seed) % (2**31 - 1), current)  # the graph's seed slot is 32-bit
-        omni.kit.app.get_app().update()
-    t1 = time.perf_counter()
+    values = values or {}
+    pinned_zone = zone_pin(state, values, zone_target)
+    pins = _pin(state["named"], values)
+    try:
+        t0 = time.perf_counter()
+        if seed is not None:
+            # A global-seed *change* resets every sampler from (seed, node id) -- through a
+            # settings subscription that runs on the next app update, so pump one before firing.
+            current = carb.settings.get_settings().get_as_int("/omni/replicator/globalSeed")
+            _reseed(rng, int(seed) % (2**31 - 1), current)  # the graph's seed slot is 32-bit
+            omni.kit.app.get_app().update()
+        t1 = time.perf_counter()
 
-    g: Grid | None = state.get("grid")
-    if g is not None and zone_target:
-        zoned = zone is not None and zone >= 0
-        low, high = g.cell_bounds(int(zone)) if zoned else (g.low, g.high)
-        _set(state["zone_prims"], "inputs:pathPattern", re.escape(zone_target) + "$")
-        _set(state["zone_position"], "inputs:lower", low.tolist())
-        _set(state["zone_position"], "inputs:upper", high.tolist())
+        g: Grid | None = state.get("grid")
+        if g is not None and zone_target:
+            low, high = zone_bounds(g, zone, pinned_zone)
+            _set(state["zone_prims"], "inputs:pathPattern", re.escape(zone_target) + "$")
+            _set(state["zone_position"], "inputs:lower", np.asarray(low, float).tolist())
+            _set(state["zone_position"], "inputs:upper", np.asarray(high, float).tolist())
 
-    # Started once and kept running: a stopped orchestrator re-initialises on every step()
-    # and evaluates every trigger, which fires the other scenes too and burns RNG state.
-    if not rep.orchestrator.get_is_started():
-        rep.orchestrator.run()
-    rep.utils.send_og_event(state["event"])
-    # With the orchestrator running, the graph evaluates on every app update. The event is
-    # queued and consumed on the *next* evaluation: one update delivers it, the second runs
-    # the randomizers it triggered (verified with guide_core/scripts/spike_diag.py, removed
-    # from the tree; read it at commit 6f8adb5).
-    # orchestrator.step() would do the same but stalls ~6 s every other call.
-    for _ in range(2):
-        omni.kit.app.get_app().update()
-    t2 = time.perf_counter()
-    print(f"[replicator_guide] {state['event']}: seed {t1 - t0:.3f}s  event+2 updates {t2 - t1:.3f}s", flush=True)
+        # Started once and kept running: a stopped orchestrator re-initialises on every step()
+        # and evaluates every trigger, which fires the other scenes too and burns RNG state.
+        if not rep.orchestrator.get_is_started():
+            rep.orchestrator.run()
+        rep.utils.send_og_event(state["event"])
+        # With the orchestrator running, the graph evaluates on every app update. The event is
+        # queued and consumed on the *next* evaluation: one update delivers it, the second runs
+        # the randomizers it triggered (verified with guide_core/scripts/spike_diag.py, removed
+        # from the tree; read it at commit 6f8adb5).
+        # orchestrator.step() would do the same but stalls ~6 s every other call.
+        for _ in range(2):
+            omni.kit.app.get_app().update()
+        t2 = time.perf_counter()
+        print(f"[replicator_guide] {state['event']}: seed {t1 - t0:.3f}s  event+2 updates {t2 - t1:.3f}s", flush=True)
 
-    samples = {}
-    for name, node in state["named"].items():
-        try:
-            samples[name] = np.asarray(_get(node, "outputs:samples")).tolist()
-        except Exception:  # a named node without samples
-            pass
-    return samples
+        samples = {}
+        for name, node in state["named"].items():
+            try:
+                samples[name] = np.asarray(_get(node, "outputs:samples")).tolist()
+            except Exception:  # a named node without samples
+                pass
+        return samples
+    finally:
+        _unpin(pins)
