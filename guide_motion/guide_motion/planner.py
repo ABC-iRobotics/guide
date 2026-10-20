@@ -9,6 +9,7 @@ goal itself once d is below one 50 ms step.
 """
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pink
@@ -76,13 +77,15 @@ def _sigma(model, length: float, delta, v_max: float) -> np.ndarray:
 
 
 def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
-    """Targets 50 ms apart from the configuration q to `goal`, the last one the goal itself.
+    """Targets 50 ms apart from the configuration q to `goal`, the last one the goal's pose.
 
     speed: GUIDE-EX's speed (0..1]. POSE goals follow a straight line (slerp for the
     orientation), each waypoint tracked by Pink IK under the URDF joint limits, so every target
-    is reachable. JOINTS goals are interpolated in joint space. Both follow the module's speed
-    profile, capped by the joint velocity and acceleration limits; a goal within one cruise step
-    is sent as is. TWIST goals pass through unchanged.
+    is reachable. Each POSE target carries its IK configuration in `joints` (q itself for a goal
+    within one cruise step, which is sent as is otherwise): the controller's posture, which keeps
+    the arm on the planner's branch. JOINTS goals are interpolated in joint space. Both follow
+    the module's speed profile, capped by the joint velocity and acceleration limits. TWIST goals
+    pass through unchanged.
     """
     if not speed > 0:
         raise ValueError(f"speed must be > 0, got {speed}")
@@ -111,7 +114,7 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     J = pin.computeFrameJacobian(model.pin_model, model.pin_data, q, tool, pin.LOCAL_WORLD_ALIGNED)
     sigma = _sigma(model, length, np.linalg.pinv(J) @ np.r_[goal.position - p0, turn], v_max)
     if len(sigma) == 1:
-        return [goal]
+        return [replace(goal, joints=q)]
     slerp = Slerp([0.0, 1.0], Rotation.from_matrix([R0, goal.rotation]))
     configuration = pink.Configuration(model.pin_model, model.pin_model.createData(), q.copy())
     task = FrameTask(model.tool_frame, position_cost=1.0, orientation_cost=1.0)
@@ -125,8 +128,8 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
             configuration.integrate_inplace(velocity, DT)
         T = configuration.get_transform_frame_to_world(model.tool_frame)
         if s < 1.0:
-            targets.append(Target(POSE, T.translation.copy(), T.rotation.copy(), gripper_width=width))
+            targets.append(Target(POSE, T.translation.copy(), T.rotation.copy(), joints=configuration.q.copy(), gripper_width=width))
         elif (np.linalg.norm(T.translation - goal.position) < POS_TOL
               and Rotation.from_matrix(T.rotation @ goal.rotation.T).magnitude() < ROT_TOL):
-            return targets + [goal]
+            return targets + [replace(goal, joints=configuration.q.copy())]
     raise PlanningError(f"IK did not reach the goal within {EXTRA_STEPS} steps (reach or joint limits)")

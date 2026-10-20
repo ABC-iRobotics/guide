@@ -73,6 +73,11 @@ class Controller:
         else:
             # float64 like every other input: a float32 pose would recompile the step (~4 s)
             position, rotation = np.asarray(target.position, float), np.asarray(target.rotation, float)
+            # The planner's IK configuration, when given, is the posture: with q_rest instead, the
+            # null space drifts off the planned branch where joints 1 and 3 line up (q2 ~ 0) and
+            # carried q1 into its limit on block_bin's place moves.
+            if len(target.joints) == len(des_q):
+                des_q = np.asarray(target.joints, float)
         u, violation = self._fn(q, qd, position, rotation, twist[:3], twist[3:], des_q)
         u = np.asarray(u)
         if not np.all(np.isfinite(u)) or float(violation) > INFEASIBLE_TOL:

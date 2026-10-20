@@ -24,7 +24,7 @@ class Target:
     position: np.ndarray = field(default_factory=lambda: np.zeros(3))  # m
     rotation: np.ndarray = field(default_factory=lambda: np.eye(3))
     twist: np.ndarray = field(default_factory=lambda: np.zeros(6))  # [v m/s, w rad/s]
-    joints: np.ndarray = field(default_factory=lambda: np.zeros(0))  # rad, arm joints
+    joints: np.ndarray = field(default_factory=lambda: np.zeros(0))  # rad, arm joints; POSE: optional posture
     gripper_width: float = float("nan")  # m, absolute; NaN leaves the gripper as it is
 
 

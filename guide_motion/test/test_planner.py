@@ -5,21 +5,24 @@ import pytest
 from scipy.spatial.transform import Rotation
 
 from fr3_fixture import HOME
-from guide_motion.planner import DT, JOINT_SPEED, MAX_SPEED, OMEGA, SPEED, V_FLOOR, PlanningError, _path_limit, plan, profile
+from guide_motion.planner import DT, JOINT_SPEED, MAX_SPEED, OMEGA, POS_TOL, SPEED, V_FLOOR, PlanningError, _path_limit, plan, profile
 from guide_motion.targets import JOINTS, POSE, Target
 
 
-def test_one_step_goal_is_sent_as_is(fr3_model):
+def test_one_step_goal_is_sent_as_is_holding_this_posture(fr3_model):
     p, R = fr3_model.ee_pose(HOME)
     goal = Target(position=p + [0.002, 0, 0], rotation=R, gripper_width=0.08)
-    assert plan(fr3_model, goal, HOME) == [goal]
+    (target,) = plan(fr3_model, goal, HOME)
+    assert target.position is goal.position and target.rotation is goal.rotation and target.gripper_width == 0.08
+    assert np.array_equal(target.joints, HOME)
 
 
 def test_pose_goal_is_a_reachable_line_ending_at_the_goal(fr3_model):
     p, R = fr3_model.ee_pose(HOME)
     goal = Target(position=p + [0.1, 0.15, -0.2], rotation=Rotation.from_euler("z", 0.6).as_matrix() @ R, gripper_width=0.03)
     targets = plan(fr3_model, goal, HOME)
-    assert targets[-1] is goal and all(t.mode == POSE and t.gripper_width == 0.03 for t in targets)
+    assert targets[-1].position is goal.position and targets[-1].rotation is goal.rotation
+    assert all(t.mode == POSE and t.gripper_width == 0.03 for t in targets)
     steps = np.linalg.norm(np.diff([t.position for t in targets], axis=0), axis=1)
     assert steps.max() < 1.2 * SPEED * DT
     assert len(targets) >= np.linalg.norm(goal.position - p) / (SPEED * DT)
@@ -70,7 +73,17 @@ def test_a_half_turn_of_the_hand_is_planned(fr3_model):
     p, R = fr3_model.ee_pose(HOME)
     goal = Target(position=p, rotation=Rotation.from_euler("z", np.radians(179)).as_matrix() @ R)
     targets = plan(fr3_model, goal, HOME)
-    assert targets[-1] is goal and all(np.all(np.isfinite(t.rotation)) for t in targets)
+    assert targets[-1].rotation is goal.rotation and all(np.all(np.isfinite(t.rotation)) for t in targets)
+
+
+def test_pose_targets_carry_the_ik_configuration_that_reaches_them(fr3_model):
+    # the controller's posture: without it the arm left the planned branch (q1 into its limit)
+    p, R = fr3_model.ee_pose(HOME)
+    goal = Target(position=p + [0.1, 0.15, -0.2], rotation=R)
+    targets = plan(fr3_model, goal, HOME)
+    for t in targets[:-1]:
+        np.testing.assert_allclose(fr3_model.ee_pose(t.joints)[0], t.position, atol=1e-9)
+    assert np.linalg.norm(fr3_model.ee_pose(targets[-1].joints)[0] - goal.position) < POS_TOL
 
 
 def test_guide_ex_speed_sets_the_cruise_speed(fr3_model):

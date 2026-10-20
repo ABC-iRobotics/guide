@@ -52,6 +52,16 @@ def test_a_target_ahead_pulls_the_tool_forward(controller):
     assert (J @ u)[0] > 0 and abs((J @ u)[0]) > 5 * np.abs((J @ u)[1:]).max()
 
 
+def test_a_pose_targets_joints_are_its_posture(controller):
+    # at the target's pose and joints, at rest: nothing to do but hold (no pull back towards q_rest)
+    q = HOME + np.array([0.3, 0.2, -0.3, 0.1, 0.0, 0.0, 0.0])
+    p, R = controller.model.ee_pose(q)
+    held = controller.step(Target(position=p, rotation=R, joints=q), q, np.zeros(7))
+    pulled = controller.step(Target(position=p, rotation=R), q, np.zeros(7))
+    rest = np.asarray(controller.model.manipulator.gravity_vector(q)) if controller.mode == "torque" else np.zeros(7)
+    assert np.abs(held - rest).max() < 0.05 < np.abs(pulled - rest).max()
+
+
 def test_twist_and_joint_targets(controller):
     u = controller.step(Target(mode=TWIST, twist=np.r_[0.05, 0, 0, 0, 0, 0]), HOME, np.zeros(7))
     assert np.all(np.isfinite(u))
