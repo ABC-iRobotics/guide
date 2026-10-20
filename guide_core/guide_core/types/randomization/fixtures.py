@@ -97,8 +97,11 @@ def place_root(root, position, rotation_deg) -> None:
     """Give the fixture's root prim the build pose (scene frame, Euler XYZ degrees), so the weld's
     anchor and body1 start together and PhysX does not snap the body onto the anchor at parse time."""
     api = UsdGeom.XformCommonAPI(root)
-    api.SetTranslate(Gf.Vec3d(*(float(v) for v in position)))
-    api.SetRotate(Gf.Vec3f(*(float(v) for v in rotation_deg)), UsdGeom.XformCommonAPI.RotationOrderXYZ)
+    ok = api.SetTranslate(Gf.Vec3d(*(float(v) for v in position)))
+    ok = api.SetRotate(Gf.Vec3f(*(float(v) for v in rotation_deg)), UsdGeom.XformCommonAPI.RotationOrderXYZ) and ok
+    if not ok:  # the common API refuses a root whose xform ops are not translate/rotate/scale
+        raise ValueError(f"{root.GetPath()} has xform ops XformCommonAPI cannot pose "
+                         f"({[op.GetOpName() for op in UsdGeom.Xformable(root).GetOrderedXformOps()]})")
 
 
 def write_weld(weld, position, quat_wxyz) -> None:

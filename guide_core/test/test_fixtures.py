@@ -155,3 +155,12 @@ def test_a_weld_to_a_dangling_body0_target_counts_as_a_world_weld():
     UsdPhysics.Joint(weld).GetBody1Rel().SetTargets(["/gone"])  # body1 must be a real rigid body
     with pytest.raises(ValueError, match="0 world welds"):
         fixtures.world_weld(stage.GetPrimAtPath("/Scene_0/objects/cab"))
+
+
+def test_place_root_names_a_root_whose_xform_ops_it_cannot_pose():
+    stage = Usd.Stage.CreateInMemory()
+    cabinet(stage)
+    root = stage.GetPrimAtPath("/Scene_0/objects/cab")
+    UsdGeom.Xformable(root).AddTransformOp().Set(Gf.Matrix4d(1.0))  # a matrix op: not translate/rotate/scale
+    with pytest.raises(ValueError, match="/Scene_0/objects/cab"):
+        fixtures.place_root(root, [0, 0, 0], [0, 0, 0])
