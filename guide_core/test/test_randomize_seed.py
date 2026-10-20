@@ -88,3 +88,9 @@ def test_pairing_does_not_survive_a_new_master_seed():
     assert SeedTree.create(master=1).generator(5)[0].random() != (
         SeedTree.create(master=2).generator(5)[0].random()
     )
+
+
+def test_an_arrangement_reaches_the_runtime(simulator):
+    simulator.randomize_scene(0, arrangement="demo_3")
+
+    assert simulator._runtime.calls[0][1]["arrangement"] == "demo_3"

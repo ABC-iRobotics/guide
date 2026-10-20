@@ -464,3 +464,22 @@ def test_a_pose_request_says_what_it_cannot_answer_in(isaac_import):
     scenes[0] = SimpleNamespace(_config={"robots": {"franka": {"path": "/fr3", "base_name": "fr3_link0"}}})
     assert ask("/Scene_0/blocks/red_block").message == "Scene_0 has no prim /Scene_0/fr3/fr3_link0"
     assert ask("/World/light").message == "PoseRequest path must be under /Scene_<i>/, got '/World/light'"
+
+
+def test_an_arrangement_goes_from_the_service_to_the_scene(isaac_import, command_module):
+    from guide_msgs.srv import Randomize
+
+    ros = isaac_import("guide_core.ros.guide_ros").GUIDEROS2Interface
+    backend = SimpleNamespace(randomize_scene=MagicMock(return_value="{}"))
+    me = SimpleNamespace(_backend=backend, _logger=MagicMock())
+    ros._randomize_callback(me, Randomize.Request(id=0, arrangement="demo_3"), None)
+    ros._randomize_callback(me, Randomize.Request(id=0), None)
+    assert [c.kwargs["arrangement"] for c in backend.randomize_scene.call_args_list] == ["demo_3", None]
+
+    module = command_module("_cmd_simulator")
+    seen = []
+    manager = SimpleNamespace(randomize_preprocess=lambda i, **kwargs: seen.append(kwargs) or [],
+                              randomize_postprocess=lambda i, results: "{}")
+    runtime = host(_simulator=SimpleNamespace(_scene_manager=manager), _execute_instructions_directly=lambda i: [])
+    module._cmd_randomize_scene(runtime, 0, arrangement="demo_3")
+    assert seen[0]["arrangement"] == "demo_3"

@@ -22,6 +22,7 @@ class SceneContext:
     episode_index: int = 0
     record: Optional[RandomizationRecord] = None
     zone: Optional[int] = None
+    arrangement: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -29,6 +30,7 @@ class SceneContext:
             "episode_index": int(self.episode_index),
             "record": self.record.to_dict() if self.record is not None else None,
             "zone": None if self.zone is None else int(self.zone),
+            "arrangement": self.arrangement,
         }
 
     def to_json(self) -> str:
@@ -43,6 +45,7 @@ class SceneContext:
             episode_index=int(data.get("episode_index", 0)),
             record=RandomizationRecord.from_dict(rec) if rec else None,
             zone=None if zone is None else int(zone),
+            arrangement=data.get("arrangement"),
         )
 
     @classmethod

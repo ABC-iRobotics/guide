@@ -271,3 +271,9 @@ def test_scene_limits_matrix_becomes_bounding_box():
     scene = SimpleNamespace(_config={"limits": [[-1.0, 2.0], [-3.0, 4.0], [-0.5, 0.5]]})
     SceneOrchestrator._get_limits(scene)
     assert scene.bounding_box == {"xp": 2.0, "xn": 1.0, "yp": 4.0, "yn": 3.0, "zp": 0.5, "zn": 0.5}
+
+
+def test_scene_context_carries_the_arrangement():
+    ctx = SceneContext(scene_id=0, arrangement="demo_7")
+    assert SceneContext.from_json(ctx.to_json()).arrangement == "demo_7"
+    assert SceneContext.from_json(SceneContext(1).to_json()).arrangement is None

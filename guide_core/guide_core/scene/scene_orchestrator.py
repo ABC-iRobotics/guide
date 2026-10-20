@@ -633,7 +633,20 @@ class SceneOrchestrator(ABC):
         """
         return None
 
-    def randomize(self, *, seed=None, inject=None, zone=None) -> SceneContext:
+    def arrangement_values(self, arrangement: str) -> dict:
+        """The values ``config/arrangements/<arrangement>.yaml`` pins: {named distribution: value}.
+        A task may override this to compute an arrangement instead of reading one."""
+        if not arrangement or Path(arrangement).name != arrangement:
+            raise ValueError(f"arrangement {arrangement!r} must be a file stem under config/arrangements/")
+        path = Path(str(self._path)) / "config" / "arrangements" / f"{arrangement}.yaml"
+        if not path.is_file():
+            raise FileNotFoundError(f"no arrangement {arrangement!r}: {path} does not exist")
+        values = yaml.safe_load(path.read_text())
+        if not isinstance(values, dict) or not values:
+            raise ValueError(f"{path} must be a non-empty mapping {{named distribution: value}}")
+        return values
+
+    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None) -> SceneContext:
         """Draw this episode's randomization deterministically and capture it.
 
         Order: the scene's discrete/selection draws (``randomize_preprocess``) run
@@ -643,9 +656,18 @@ class SceneOrchestrator(ABC):
         restricts the ``zone_target`` prim to that grid cell; everything else is
         free. Each draw ``inject`` names takes its recorded value instead of the RNG's.
         A Replicator-dialect randomize file fires last, seeded with the same seed; its
-        named samples are recorded as ``replicator/<name>`` and ``inject`` does not
-        replay them.
+        named samples are recorded as ``replicator/<name>``. ``inject`` does not replay
+        them; ``arrangement`` (arrangement_values) pins them instead, a fixed start.
         """
+        values = None
+        if arrangement:
+            if zone is not None:
+                raise ValueError(f"arrangement {arrangement!r} fixes the layout; a zone cannot be asked for too")
+            if "randomize" not in self.replicator:
+                raise ValueError("arrangements pin Replicator distributions; this task's randomize.yaml "
+                                 "is not Replicator YAML")
+            values = self.arrangement_values(arrangement)
+
         if seed is not None:
             rng, used = self._seed_tree.generator(int(seed))
         else:
@@ -670,7 +692,7 @@ class SceneOrchestrator(ABC):
         )
 
         if "randomize" in self.replicator:
-            samples = replicator_guide.fire(self.replicator["randomize"], used, zone, self.zone_target())
+            samples = replicator_guide.fire(self.replicator["randomize"], used, zone, self.zone_target(), values=values)
             record.values.update({f"replicator/{k}": v for k, v in samples.items()})
 
         self._last_context = SceneContext(
@@ -678,6 +700,7 @@ class SceneOrchestrator(ABC):
             episode_index=self._episode_index,
             record=record,
             zone=zone,
+            arrangement=arrangement or None,
         )
         self._episode_index += 1
         return self._last_context

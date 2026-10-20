@@ -256,12 +256,14 @@ class SceneManager:
         except NotImplementedError:
             return True
 
-    def randomize_preprocess(self, scene_id: int, seed=None, inject=None, zone=None):
+    def randomize_preprocess(self, scene_id: int, seed=None, inject=None, zone=None, arrangement=None):
         # Drawing now happens inside the scene's randomize() lifecycle (seeded +
         # captured). It mutates randomize_instructions in place with concrete,
         # drawn poses and records every value; we just return the instructions.
-        # `zone` (>=0) places the scene's zone target in that grid cell.
-        self._scenes[scene_id].randomize(seed=seed, inject=inject, zone=zone)
+        # `zone` (>=0) places the scene's zone target in that grid cell; `arrangement` names a
+        # fixed start, passed only when asked: cube_stack's randomize() override predates it.
+        extra = {"arrangement": arrangement} if arrangement else {}
+        self._scenes[scene_id].randomize(seed=seed, inject=inject, zone=zone, **extra)
         return self._scenes[scene_id].randomize_instructions
 
     def randomize_postprocess(self, scene_id: int, result):
@@ -292,6 +294,8 @@ class SceneManager:
             ctx = getattr(scene, "_last_context", None)
             if ctx is not None:
                 meta["draw_index"] = int(ctx.episode_index)
+                if getattr(ctx, "arrangement", None):
+                    meta["arrangement"] = ctx.arrangement
                 if ctx.record is not None:
                     meta["seed"] = int(ctx.record.seed)
                     meta["values"] = ctx.record.to_dict().get("values", {})

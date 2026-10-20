@@ -190,6 +190,7 @@ class GUIDEROS2Interface(Node):
                 use_zone=request.use_zone,
                 zone=request.zone,
                 seed=request.seed if request.use_seed else None,
+                arrangement=request.arrangement or None,
             )
 
             response.message = output if isinstance(output, str) else ""

@@ -8,6 +8,9 @@ int32 zone
 # registration unless it was injected.
 bool use_seed
 int32 seed
+# Load a fixed start: <task>/config/arrangements/<arrangement>.yaml pins each named Replicator
+# distribution it lists to its value for this draw (S3 v2). Empty: a free draw. Not with use_zone.
+string arrangement
 ---
 string message
 bool success

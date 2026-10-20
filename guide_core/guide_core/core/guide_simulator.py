@@ -73,13 +73,16 @@ class GUIDESimulator:
         return self.call("reset_scene", scene_id=scene_id)
 
     def randomize_scene(
-        self, scene_id: int, use_zone: bool = False, zone: int = 0, seed: int | None = None
+        self, scene_id: int, use_zone: bool = False, zone: int = 0, seed: int | None = None,
+        arrangement: str | None = None,
     ) -> bool:
         # seed=None keeps the scene's own (scene_id, episode_index) stream, which is what
         # demonstration generation wants: every episode a fresh layout. A caller that
-        # passes one is asking for a REPEATABLE layout -- see Randomize.srv.
+        # passes one is asking for a REPEATABLE layout -- see Randomize.srv. An arrangement
+        # names a fixed start (config/arrangements/<arrangement>.yaml).
         return self.call(
-            "randomize_scene", scene_id=scene_id, use_zone=use_zone, zone=zone, seed=seed
+            "randomize_scene", scene_id=scene_id, use_zone=use_zone, zone=zone, seed=seed,
+            arrangement=arrangement,
         )
 
     def is_success(self, scene_id: int) -> bool:
