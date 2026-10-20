@@ -10,7 +10,7 @@ setup(
     version="2.0.0",
     packages=find_namespace_packages(include=[package_name, f"{package_name}.*"]),
     # The recipe library, beside the modules that load it.
-    package_data={package_name: ["recipes/*/*.yaml"]},
+    package_data={package_name: ["recipes/*/*.yaml", "recipes/CATALOGUE.md", "recipes/catalogue.json"]},
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),

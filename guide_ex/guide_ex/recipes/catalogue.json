@@ -1,0 +1,685 @@
+{
+  "nodes": [
+    {
+      "doc": "Put the target into the goal container as one recorded episode: unclutch, record, locate the target, [hold for the camera transition], pick (PickRecovery on a failure), place, go home, judge, save or drop.",
+      "inputs": [
+        "dataset_path",
+        "goal",
+        "rest_pose",
+        "robot",
+        "robot_prim",
+        "scene_id",
+        "scene_namespace",
+        "sim_namespace",
+        "target"
+      ],
+      "kind": "recipe",
+      "level": "TASK",
+      "name": "PickAndPlace",
+      "outputs": [],
+      "source": "recipes/task/PickAndPlace.yaml",
+      "used_by": []
+    },
+    {
+      "doc": "Pick the target up from above (cube_pose): approach 10 cm over it, grasp 1 cm above its centre, close, lift 20 cm, and fail (NoGrasp) unless the fingers hold it.",
+      "inputs": [
+        "cube_pose",
+        "rest_pose",
+        "robot",
+        "robot_prim",
+        "scene_namespace",
+        "sim_namespace",
+        "target"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Pick",
+      "outputs": [
+        "grasp_success"
+      ],
+      "source": "recipes/subtask/Pick.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "A failed Pick's recovery (the paper's Fig. 3): measure the target again, open, and turn the grasp 90 deg about z to try the other pair of faces; its parent then resumes at Pick.",
+      "inputs": [
+        "robot",
+        "scene_namespace",
+        "sim_namespace",
+        "target"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "PickRecovery",
+      "outputs": [
+        "cube_pose"
+      ],
+      "source": "recipes/subtask/PickRecovery.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Drop what is held into the goal container (goal): 15 cm over its centre, straight down, minimal wrist turn, then open.",
+      "inputs": [
+        "goal",
+        "robot",
+        "scene_namespace",
+        "sim_namespace"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Place",
+      "outputs": [],
+      "source": "recipes/subtask/Place.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Place what is held on a support (support): announce the subtask (place), carry it over, release it.",
+      "inputs": [
+        "place",
+        "robot",
+        "robot_prim",
+        "scene_id",
+        "scene_namespace",
+        "scene_pose_inv",
+        "sim_namespace",
+        "support",
+        "top"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "PlaceOn",
+      "outputs": [],
+      "source": "recipes/subtask/PlaceOn.yaml",
+      "used_by": []
+    },
+    {
+      "doc": "Go back to the rest pose and stay still for 1 s, the stationary end of going home.",
+      "inputs": [
+        "rest_pose",
+        "robot"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Return",
+      "outputs": [],
+      "source": "recipes/subtask/Return.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it already was at rest), open.",
+      "inputs": [
+        "rest_pose",
+        "robot"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Unclutch",
+      "outputs": [],
+      "source": "recipes/subtask/Unclutch.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Carry what is held (top) over the support: measure the support now (it may have been nudged), go 10 cm over where the cube will rest, and fail (DroppedInTransit) unless it is still in the fingers. A failed move detours through the home joints first.",
+      "inputs": [
+        "robot",
+        "robot_prim",
+        "scene_namespace",
+        "scene_pose_inv",
+        "sim_namespace",
+        "support",
+        "top"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "CarryToSupport",
+      "outputs": [],
+      "source": "recipes/sequence/CarryToSupport.yaml",
+      "used_by": [
+        "PlaceOn"
+      ]
+    },
+    {
+      "doc": "The target's pose as a top-down grasp (cube_pose): measured, its tilt dropped, its yaw reduced by the cube's 4 identical sides, the gripper turned to face down.",
+      "inputs": [
+        "robot",
+        "scene_namespace",
+        "sim_namespace",
+        "target"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "GetTargetPose",
+      "outputs": [
+        "cube_pose"
+      ],
+      "source": "recipes/sequence/GetTargetPose.yaml",
+      "used_by": [
+        "PickAndPlace",
+        "PickRecovery"
+      ]
+    },
+    {
+      "doc": "Set what is held down on the support and let go: lower slowly to the release height (0.0665 m over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), open, and rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.",
+      "inputs": [
+        "over_support_pose",
+        "robot",
+        "support_pose"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "Release",
+      "outputs": [],
+      "source": "recipes/sequence/Release.yaml",
+      "used_by": [
+        "PlaceOn"
+      ]
+    },
+    {
+      "doc": "Pick's fallback when the straight lift cannot run: up through the (high) rest pose instead, then resume at the grasp check, so the arm never sweeps across at grasp height.",
+      "inputs": [
+        "rest_pose",
+        "robot"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "RetreatViaRest",
+      "outputs": [],
+      "source": "recipes/sequence/RetreatViaRest.yaml",
+      "used_by": [
+        "Pick"
+      ]
+    },
+    {
+      "doc": "Ask the scene whether the task is done: task_success (StopEpisode saves on it) and task_reason.",
+      "inputs": [
+        "robot",
+        "scene_id",
+        "sim_namespace"
+      ],
+      "kind": "recipe",
+      "level": "STEP",
+      "name": "CheckSuccess",
+      "outputs": [
+        "task_reason",
+        "task_success"
+      ],
+      "source": "recipes/step/CheckSuccess.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Close onto a ~5 cm cube: 0.01 m per finger lies past its faces, so the stalled fingers keep squeezing (the gripper controller holds the stalled position; a target at the faces held no force).",
+      "inputs": [
+        "robot",
+        "${robot.gripper_joint}"
+      ],
+      "kind": "recipe",
+      "level": "STEP",
+      "name": "CloseGripper",
+      "outputs": [],
+      "source": "recipes/step/CloseGripper.yaml",
+      "used_by": [
+        "Pick"
+      ]
+    },
+    {
+      "doc": "Retrieves the current pose of the specified primitive in the robot's frame_id (Ruling 4: its base link; GUIDE converts from the scene).",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_namespace",
+        "prim_path"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "GetPrimPose",
+      "outputs": [
+        "pose"
+      ],
+      "source": "steps/simulation/isaac/prim.py",
+      "used_by": [
+        "CarryToSupport",
+        "GetTargetPose",
+        "Place"
+      ]
+    },
+    {
+      "doc": "Retrieves the current poses of several primitives, in the given order, each in the robot's frame_id (GetPrimPose's).",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_namespace",
+        "prim_paths"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "GetPrimPoses",
+      "outputs": [
+        "poses"
+      ],
+      "source": "steps/simulation/isaac/prim.py",
+      "used_by": []
+    },
+    {
+      "doc": "Checks whether two primitives are clashing (the simulator compares their bounding boxes).",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_namespace",
+        "prim1_path",
+        "prim2_path"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "IsPrimClashing",
+      "outputs": [
+        "has_collided"
+      ],
+      "source": "steps/simulation/isaac/prim.py",
+      "used_by": [
+        "CarryToSupport",
+        "Pick"
+      ]
+    },
+    {
+      "doc": "Asks the scene whether its success criterion holds right now.",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_id"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "IsTaskSuccessful",
+      "outputs": [
+        "reason",
+        "success"
+      ],
+      "source": "steps/simulation/success.py",
+      "used_by": [
+        "CheckSuccess"
+      ]
+    },
+    {
+      "doc": "Move the arm to its home joints (${robot.home}): the one well-posed start for a 7-DoF arm, which a Cartesian move keeps in whatever posture it is in and a pose goal may leave in any.",
+      "inputs": [
+        "robot",
+        "${robot.home}"
+      ],
+      "kind": "recipe",
+      "level": "STEP",
+      "name": "MoveHome",
+      "outputs": [],
+      "source": "recipes/step/MoveHome.yaml",
+      "used_by": [
+        "CarryToSupport",
+        "Release"
+      ]
+    },
+    {
+      "doc": "Executes a Cartesian move to the specified target pose at the given speed.",
+      "inputs": [
+        "robot",
+        "target_pose",
+        "speed=1.0",
+        "cartesian=False",
+        "min_fraction=0.95"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "MoveToCartesianPose",
+      "outputs": [],
+      "source": "steps/manipulation/cartesian_move.py",
+      "used_by": [
+        "CarryToSupport",
+        "Pick",
+        "Place",
+        "Release",
+        "RetreatViaRest",
+        "Return",
+        "Unclutch"
+      ]
+    },
+    {
+      "doc": "Executes a joint move to the specified target configuration at the given speed.",
+      "inputs": [
+        "robot",
+        "target_configuration",
+        "speed=1.0"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "MoveToJointConfiguration",
+      "outputs": [],
+      "source": "steps/manipulation/joint_move.py",
+      "used_by": [
+        "MoveHome"
+      ]
+    },
+    {
+      "doc": "Sends one Cartesian velocity command; the node neither times nor stops it.",
+      "inputs": [
+        "robot",
+        "velocity_command"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "MoveWithCartesianVelocity",
+      "outputs": [],
+      "source": "steps/manipulation/cartesian_move.py",
+      "used_by": []
+    },
+    {
+      "doc": "Open the gripper fully: 0.04 m per finger, the Franka hand's (FR3 and Panda) widest.",
+      "inputs": [
+        "robot",
+        "${robot.gripper_joint}"
+      ],
+      "kind": "recipe",
+      "level": "STEP",
+      "name": "OpenGripper",
+      "outputs": [],
+      "source": "recipes/step/OpenGripper.yaml",
+      "used_by": [
+        "PickRecovery",
+        "Place",
+        "Release",
+        "Unclutch"
+      ]
+    },
+    {
+      "doc": "Executes a gripper control action to the specified target position.",
+      "inputs": [
+        "robot",
+        "gripper_goal_pos"
+      ],
+      "kind": "leaf",
+      "level": "STEP",
+      "name": "SetGripperState",
+      "outputs": [],
+      "source": "steps/end_effector/gripper_control.py",
+      "used_by": [
+        "CloseGripper",
+        "OpenGripper"
+      ]
+    },
+    {
+      "doc": "Hold the arm still while dataset.camera_transition moves the cameras onto their mounts; only with the transition on (${episode.camera_hold}), for its duration plus one frame period (${episode.hold_seconds}).",
+      "inputs": [
+        "robot",
+        "${episode.camera_hold}",
+        "${episode.hold_seconds}"
+      ],
+      "kind": "recipe",
+      "level": "UTILITY",
+      "name": "CameraHold",
+      "outputs": [],
+      "source": "recipes/utility/CameraHold.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "How many of `poses`, from the first, follow one another at a fixed offset.",
+      "inputs": [
+        "poses",
+        "offset",
+        "tolerance=(0.02, 0.02, 0.01)"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "ChainLength",
+      "outputs": [
+        "complete",
+        "length"
+      ],
+      "source": "utility/pose.py",
+      "used_by": []
+    },
+    {
+      "doc": "``items[index + shift]``: pick from a list by an index another node computed.",
+      "inputs": [
+        "items",
+        "index",
+        "shift=0"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "GetItem",
+      "outputs": [
+        "item"
+      ],
+      "source": "utility/collection.py",
+      "used_by": []
+    },
+    {
+      "doc": "Inverts the given pose or transform.",
+      "inputs": [
+        "pose"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "InvertPose",
+      "outputs": [
+        "pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": []
+    },
+    {
+      "doc": "",
+      "inputs": [
+        "**kwargs"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "NodeException",
+      "outputs": [],
+      "source": "utility/exception.py",
+      "used_by": [
+        "CarryToSupport",
+        "Pick"
+      ]
+    },
+    {
+      "doc": "Pauses the recording; the episode stays open and StartRecording resumes it.",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_id",
+        "timeout_sec=60.0"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "PauseRecording",
+      "outputs": [],
+      "source": "utility/recording.py",
+      "used_by": []
+    },
+    {
+      "doc": "Project an object's full 3D orientation onto the pure Z-rotation of the base frame, assuming the object is meant to be reached from straight above.",
+      "inputs": [
+        "pose",
+        "heading_axis='x'"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "ProjectRotationToBaseZ",
+      "outputs": [
+        "pose",
+        "yaw"
+      ],
+      "source": "utility/rotation.py",
+      "used_by": [
+        "CarryToSupport",
+        "GetTargetPose",
+        "Place"
+      ]
+    },
+    {
+      "doc": "Collapse a Z rotation to the smallest-magnitude equivalent one under an assumed n-fold polygonal symmetry.",
+      "inputs": [
+        "pose",
+        "symmetry=1",
+        "heading_axis='x'"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "ReduceRotationToSymmetry",
+      "outputs": [
+        "pose",
+        "yaw"
+      ],
+      "source": "utility/rotation.py",
+      "used_by": [
+        "CarryToSupport",
+        "GetTargetPose",
+        "Place"
+      ]
+    },
+    {
+      "doc": "Tells the scene what the robot works on from now on, at the GUIDE-EX layers.",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_id",
+        "task=''",
+        "subtask=''",
+        "timeout_sec=30.0"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "SetPrompt",
+      "outputs": [],
+      "source": "utility/recording.py",
+      "used_by": [
+        "PlaceOn"
+      ]
+    },
+    {
+      "doc": "Start recording the episode into dataset_path (a busy recorder has held start_recording for ~3 min).",
+      "inputs": [
+        "dataset_path",
+        "robot",
+        "scene_id",
+        "sim_namespace"
+      ],
+      "kind": "recipe",
+      "level": "UTILITY",
+      "name": "StartEpisode",
+      "outputs": [],
+      "source": "recipes/utility/StartEpisode.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Starts recording a LeRobot episode in the scene, or resumes a paused one.",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_id",
+        "path=''",
+        "timeout_sec=60.0"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "StartRecording",
+      "outputs": [],
+      "source": "utility/recording.py",
+      "used_by": [
+        "StartEpisode"
+      ]
+    },
+    {
+      "doc": "Stop recording: save the episode if task_success, else discard it (saving encodes every camera first).",
+      "inputs": [
+        "robot",
+        "scene_id",
+        "sim_namespace",
+        "task_success"
+      ],
+      "kind": "recipe",
+      "level": "UTILITY",
+      "name": "StopEpisode",
+      "outputs": [],
+      "source": "recipes/utility/StopEpisode.yaml",
+      "used_by": [
+        "PickAndPlace"
+      ]
+    },
+    {
+      "doc": "Stops recording and saves or discards the episode.",
+      "inputs": [
+        "robot",
+        "sim_namespace",
+        "scene_id",
+        "save_episode=True",
+        "timeout_sec=60.0"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "StopRecording",
+      "outputs": [],
+      "source": "utility/recording.py",
+      "used_by": [
+        "StopEpisode"
+      ]
+    },
+    {
+      "doc": "Composes two poses or transforms: ``l_pose * r_pose``.",
+      "inputs": [
+        "l_pose",
+        "r_pose"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "TransformPose",
+      "outputs": [
+        "pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": [
+        "CarryToSupport",
+        "GetTargetPose",
+        "Pick",
+        "PickRecovery",
+        "Place",
+        "Release",
+        "Unclutch"
+      ]
+    },
+    {
+      "doc": "Executes a wait action for the specified number of seconds.",
+      "inputs": [
+        "seconds",
+        "timer=<module 'time' (built-in)>"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "WaitForSeconds",
+      "outputs": [],
+      "source": "utility/wait.py",
+      "used_by": [
+        "CameraHold",
+        "Pick",
+        "PickRecovery",
+        "Place",
+        "Release",
+        "Return",
+        "Unclutch"
+      ]
+    }
+  ]
+}
