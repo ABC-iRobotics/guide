@@ -22,6 +22,9 @@ from . import _quat
 from .distributions import PoseDist, UniformVec
 
 
+_CELL_TOL = 1e-4  # of a cell: float32 noise, never a real partial edge cell
+
+
 @dataclass(frozen=True, slots=True)
 class Grid:
     """A 2D grid of zones over a position region ``[low, high]``."""
@@ -41,13 +44,16 @@ class Grid:
         object.__setattr__(self, "high", high)
         object.__setattr__(self, "resolution", float(self.resolution))
 
+    # Cell counts tolerate float32 bounds: Isaac reads the region back from an OmniGraph node,
+    # where 0.15 is 0.15000000596, and a plain ceil there added a zero-width column the YAML's
+    # float64 grid does not have -- every zone id from that row on named another cell.
     @property
     def ncols(self) -> int:
-        return max(1, math.ceil((self.high[0] - self.low[0]) / self.resolution))
+        return max(1, math.ceil((self.high[0] - self.low[0]) / self.resolution - _CELL_TOL))
 
     @property
     def nrows(self) -> int:
-        return max(1, math.ceil((self.high[1] - self.low[1]) / self.resolution))
+        return max(1, math.ceil((self.high[1] - self.low[1]) / self.resolution - _CELL_TOL))
 
     @property
     def num_zones(self) -> int:

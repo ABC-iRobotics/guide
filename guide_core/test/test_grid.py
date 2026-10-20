@@ -28,6 +28,16 @@ def test_grid_shape_and_num_zones():
     assert g.num_zones == 6
 
 
+def test_float32_bounds_give_the_float64_grid():
+    # Isaac reads the region back from an OmniGraph node in float32; the solver reads the YAML
+    for low, high in (([-0.15, 0.0, 0.042], [0.15, 0.4, 0.042]), ([-0.25, 0.0, 0.042], [0.25, 0.4, 0.042])):
+        f64 = Grid(low, high, 0.1)
+        f32 = Grid(np.float32(low).astype(float), np.float32(high).astype(float), 0.1)
+        assert (f32.ncols, f32.nrows) == (f64.ncols, f64.nrows)
+        for z in range(f64.num_zones):
+            np.testing.assert_allclose(f32.cell_bounds(z), f64.cell_bounds(z), atol=1e-6)
+
+
 def test_grid_partial_edge_cells_use_ceil_and_clamp():
     g = Grid([0.0, 0.0, 0.0], [0.25, 0.15, 0.0], 0.1)  # not a multiple of 0.1
     assert g.ncols == 3 and g.nrows == 2  # ceil
