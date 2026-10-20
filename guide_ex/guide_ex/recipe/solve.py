@@ -80,6 +80,16 @@ def episodes_saved(dataset: str) -> int:
     return total
 
 
+def draw(robot, request, timeout_sec: float = 600.0) -> tuple[str, str]:
+    """Call Randomize: (reply message, why). ``why`` is empty on success, else the failure message
+    or the exception (a timeout), so the caller counts a failed attempt instead of ending the run."""
+    try:
+        reply = robot.callService(robot.randomize, request, timeout_sec=timeout_sec)
+    except Exception as e:
+        return "", f"Randomize failed: {e!r}"
+    return reply.message, "" if reply.success else f"Randomize failed: {reply.message}"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--task", type=Path, required=True)
@@ -124,10 +134,12 @@ def main(argv=None) -> int:
         while done < args.episodes and attempts < (args.attempts or 3 * args.episodes):
             attempts += 1
             # 600 s: a Randomize on a recipe scene runs Replicator draws and settles the physics
-            reply = robot.callService(robot.randomize, srv.Randomize.Request(id=scene_id, arrangement=args.arrangement),
-                                      timeout_sec=600.0)
+            reply, why = draw(robot, srv.Randomize.Request(id=scene_id, arrangement=args.arrangement))
+            if why:
+                robot.node.get_logger().info(f"[solve] attempt {attempts}: FAILURE {why}")
+                continue
             robot.sleep(SETTLE_S)
-            ctx = context(args.namespace, robot, entry, dataset, reply.message)
+            ctx = context(args.namespace, robot, entry, dataset, reply)
             saved = episodes_saved(dataset)
             try:
                 result = load(recipes / "Episode.yaml", values=values, search_paths=[recipes]).execute(ctx)

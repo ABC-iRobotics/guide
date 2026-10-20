@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from guide_ex.recipe.solve import context, dataset_path, episodes_saved, recipe_values
+from guide_ex.recipe.solve import context, dataset_path, draw, episodes_saved, recipe_values
 
 REPLY = json.dumps({"task": "put the bowl on the plate", "target": "/objects/b", "goal": [{"on": ["/objects/b", "/objects/p"]}],
                     "subtasks": ["Pick up the bowl.", "Place it on the plate."]})
@@ -50,3 +50,34 @@ def test_episodes_saved_counts_what_the_recorder_wrote(tmp_path):
     (tmp_path / "dataset_0_0_c/meta").mkdir(parents=True)
     (tmp_path / "dataset_0_0_c/meta/info.json").write_text("{")  # unreadable: skipped
     assert episodes_saved(str(tmp_path)) == 3
+
+
+class Reply:
+    def __init__(self, success, message):
+        self.success, self.message = success, message
+
+
+class DrawRobot:
+    randomize = "client"
+
+    def __init__(self, reply=None, error=None):
+        self.reply, self.error = reply, error
+
+    def callService(self, client, request, timeout_sec):
+        if self.error:
+            raise self.error
+        return self.reply
+
+
+def test_draw_passes_a_successful_reply_through():
+    assert draw(DrawRobot(Reply(True, REPLY)), None) == (REPLY, "")
+
+
+def test_a_failed_draw_is_a_failed_attempt_with_its_message():
+    message, why = draw(DrawRobot(Reply(False, "no free spot")), None)
+    assert "no free spot" in why
+
+
+def test_a_randomize_timeout_is_a_failed_attempt_not_a_crash():
+    _, why = draw(DrawRobot(error=TimeoutError("timed out after 600s")), None)
+    assert "timed out" in why
