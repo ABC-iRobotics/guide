@@ -513,6 +513,9 @@ class SceneRecorder(Thread):
                 "config": self._curate_config(self.config),
                 "provenance": self._collect_provenance(),
             }
+            if self._run_meta.get("segmentation") is not None:
+                # dataset.segmentation's legend: per tracked object its path, colour source, RGB.
+                info["segmentation"] = self._run_meta["segmentation"]
             (meta_dir / "guide_info.json").write_text(json.dumps(info, indent=2, sort_keys=True))
             self._info_written = True
             self._logger.info(f"Wrote GUIDE run info to {meta_dir / 'guide_info.json'}")

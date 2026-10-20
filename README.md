@@ -260,7 +260,7 @@ guide_tasks/block_bin/
 | `usd_path` | The scene's USD, relative to the task's installed package, or `package://<pkg>/<path>` to reuse another package's (as `cube_stack` reuses `block_bin`'s) |
 | `robots` | Per robot: its prim, the end effector and the base its pose is recorded in, and the home joint positions |
 | `cameras` | Per camera: its prim, resolution, ROS topic, and which streams to record (`rgb`, `depth`, `instance`) |
-| `dataset` | What a recording holds: fps, the recorded cameras, the tracked objects of the instance masks, and the joint state and command columns |
+| `dataset` | What a recording holds: fps, the recorded cameras, the tracked objects of the instance masks and their colours (`segmentation`: an `[r, g, b]` or a `<table>:<name>` looked up in a CSV such as `guide_core/config/segmentation_colors/ade20k.csv`; tab10 without it), and the joint state and command columns |
 | `publish_camera_topics` | Whether the cameras are also published as ROS image topics (off while generating; needed by a live policy) |
 | `camera_encoding` | The format of those topics: raw `rgb` or `rgb_h264` |
 | `limits` | The scene's extent, `[[x_min, x_max], [y_min, y_max], [z_min, z_max]]`, used to place several scenes side by side |
@@ -395,7 +395,8 @@ frame["task"]                           # "Put the yellow block in the right bin
 ```
 
 Instance masks are stored lossily: map each pixel to the nearest colour of the legend in
-`meta/guide_info.json` (`instance_colors`).
+`meta/guide_info.json` (`instance_colors`; with `dataset.segmentation`, `segmentation` also
+gives each tracked object's path and colour source).
 
 ### Dataset metadata
 

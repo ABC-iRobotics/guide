@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -58,6 +59,121 @@ def eased_pose(p0, q0, p1, q1, u: float) -> tuple[np.ndarray, np.ndarray]:
     p = (1.0 - s) * np.asarray(p0, float) + s * np.asarray(p1, float)
     q = Slerp([0.0, 1.0], R.from_quat([q0, q1], scalar_first=True))(s).as_quat(scalar_first=True)
     return p, q
+
+
+#: dataset.segmentation's keys. Without the section the instance stream is tab10 on black.
+SEGMENTATION_KEYS = ("tables", "colors", "background")
+
+
+def as_rgb(value, where: str) -> tuple:
+    """``value`` as an (r, g, b) tuple of three ints in 0..255; a ValueError naming ``where``
+    otherwise."""
+    if not (
+        isinstance(value, (list, tuple))
+        and len(value) == 3
+        and all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255 for v in value)
+    ):
+        raise ValueError(f"{where} must be [r, g, b], three ints in 0..255; got {value!r}")
+    return tuple(value)
+
+
+def load_color_table(path) -> list[dict]:
+    """A colour table CSV -> one {idx, name, tokens, rgb} per row. Its ``Name`` column holds
+    ';'-joined synonyms, its ``Color_Code (R,G,B)`` column a colour written "(0, 255, 20)" --
+    the layout of the ADE20K sheet in guide_core/config/segmentation_colors."""
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        missing = {"Name", "Color_Code (R,G,B)"} - set(reader.fieldnames or ())
+        if missing:
+            raise ValueError(f"{path} has no {' or '.join(sorted(missing))} column")
+        return [
+            {
+                "idx": row.get("Idx") or str(i),
+                "name": row["Name"].strip(),
+                "tokens": [t.strip() for t in row["Name"].split(";")],
+                "rgb": as_rgb(
+                    [int(v) for v in row["Color_Code (R,G,B)"].strip("() ").split(",")],
+                    f"{path} row {i}",
+                ),
+            }
+            for i, row in enumerate(reader, 1)
+        ]
+
+
+def lookup_color(table: list[dict], name: str) -> tuple:
+    """``name``'s colour in a load_color_table table. The first rule any row meets decides:
+    the whole Name cell is ``name``, its first ';' token is, any of its tokens is. Several
+    rows under the deciding rule, or none under any, is a ValueError."""
+    for rule, hit in (
+        ("as the whole Name cell", lambda row: row["name"] == name),
+        ("on the first ';' token", lambda row: row["tokens"][0] == name),
+        ("on any ';' token", lambda row: name in row["tokens"]),
+    ):
+        rows = [row for row in table if hit(row)]
+        if len(rows) == 1:
+            return rows[0]["rgb"]
+        if rows:
+            candidates = "; ".join(f"{row['idx']} {row['name']!r}" for row in rows)
+            raise ValueError(f"{name!r} matches several rows {rule}: {candidates}")
+    raise ValueError(f"no row names {name!r}")
+
+
+def segmentation_colors(config: dict, task_dir) -> dict | None:
+    """``dataset.segmentation`` of a task config, checked: {background, colors: {label:
+    {source, rgb}}}, or None without the section.
+
+    Each ``colors`` key is a ``dataset.tracked_objects`` label, its value an ``[r, g, b]`` or
+    ``<table>:<name>``, the name looked up (lookup_color) in that CSV of ``tables``. A table
+    given by bare name is guide_core's ``config/segmentation_colors/<name>.csv``; a path is
+    absolute or relative to the task directory. Raises ValueError on anything else, so a bad
+    section fails the scene's registration.
+    """
+    dataset = config.get("dataset") or {}
+    section = dataset.get("segmentation")
+    if section is None:
+        return None
+    where = "dataset.segmentation"
+    if not isinstance(section, dict) or set(section) - set(SEGMENTATION_KEYS):
+        raise ValueError(f"{where} takes {', '.join(SEGMENTATION_KEYS)}; got {section!r}")
+
+    tables = {}
+    for table, ref in (section.get("tables") or {}).items():
+        ref = str(ref)
+        if "/" in ref or Path(ref).suffix:
+            path = Path(str(task_dir)) / ref  # an absolute ref replaces task_dir
+        else:
+            from ament_index_python.packages import get_package_share_directory
+
+            share = Path(get_package_share_directory("guide_core"))
+            path = share / "config" / "segmentation_colors" / f"{ref}.csv"
+        if not path.is_file():
+            raise ValueError(f"{where}.tables.{table}: no file {path}")
+        tables[table] = load_color_table(path)
+
+    tracked = dataset.get("tracked_objects") or {}
+    colors = {}
+    for label, source in (section.get("colors") or {}).items():
+        at = f"{where}.colors.{label}"
+        if label not in tracked:
+            raise ValueError(f"{at}: {label!r} is not a dataset.tracked_objects label "
+                             f"({', '.join(tracked) or 'none'})")
+        if isinstance(source, str) and ":" in source:
+            table, _, name = source.partition(":")
+            if table not in tables:
+                raise ValueError(f"{at}: unknown table {table!r} "
+                                 f"(dataset.segmentation.tables: {', '.join(tables) or 'none'})")
+            try:
+                color = lookup_color(tables[table], name)
+            except ValueError as e:
+                raise ValueError(f"{at}: {table} {e}") from None
+        elif isinstance(source, str):
+            raise ValueError(f"{at} must be [r, g, b] or '<table>:<name>'; got {source!r}")
+        else:
+            color = as_rgb(source, at)
+        colors[label] = {"source": source, "rgb": list(color)}
+
+    background = as_rgb(section.get("background", [0, 0, 0]), f"{where}.background")
+    return {"background": list(background), "colors": colors}
 
 
 def _pose(matrix) -> tuple[np.ndarray, np.ndarray]:
@@ -126,6 +242,8 @@ class SceneOrchestrator(ABC):
             self._config = yaml.safe_load(f)
         # dataset.camera_transition, checked here: a bad section fails the registration.
         self.camera_transition = camera_transition(self._config)
+        # dataset.segmentation, the same: an unknown table, name or label, or a bad RGB.
+        self.segmentation = segmentation_colors(self._config, self._path)
 
         self._get_usd_params(package_name)
 
@@ -201,6 +319,8 @@ class SceneOrchestrator(ABC):
                         "num_zones": g.num_zones,
                     }
                 run_meta["instance_colors"] = {k: list(v) for k, v in self.instance_colors.items()}
+                if self.segmentation is not None:
+                    run_meta["segmentation"] = self.instance_legend
                 self.recorder.set_run_meta(run_meta)
             except Exception as e:
                 self._logger.debug(f"Could not set run meta on recorder: {e}")
@@ -323,7 +443,8 @@ class SceneOrchestrator(ABC):
     #: Same, for a camera's instance-segmentation stream.
     INSTANCE_SUFFIX = "_instance"
     #: Colour of each tracked object in the instance stream, in ``dataset.tracked_objects``
-    #: order (tab10); everything untracked is black. The legend goes into guide_info.json.
+    #: order (tab10), unless ``dataset.segmentation`` gives it one; everything untracked is
+    #: black (or the section's ``background``). The legend goes into guide_info.json.
     INSTANCE_PALETTE = [
         (31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40), (148, 103, 189),
         (140, 86, 75), (227, 119, 194), (127, 127, 127), (188, 189, 34), (23, 190, 207),
@@ -729,14 +850,39 @@ class SceneOrchestrator(ABC):
 
     @property
     def instance_colors(self) -> Dict[str, tuple]:
-        """Tracked-object label -> RGB in the instance stream, in config order."""
+        """Tracked-object label -> RGB in the instance stream: tab10 in config order, except
+        where ``dataset.segmentation.colors`` gives the label its own colour."""
         labels = list(self.resolve_semantics())
         palette = self.INSTANCE_PALETTE
-        return {label: palette[i % len(palette)] for i, label in enumerate(labels)}
+        colors = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
+        for label, entry in (self.segmentation or {"colors": {}})["colors"].items():
+            colors[label] = tuple(entry["rgb"])
+        return colors
+
+    @property
+    def instance_legend(self) -> Optional[dict]:
+        """guide_info.json's record of ``dataset.segmentation`` (None without it): the
+        background and, per tracked object, its prim path, colour source (``<table>:<name>``,
+        the ``[r, g, b]`` given, or ``tab10`` for a label the section leaves out) and RGB."""
+        if self.segmentation is None:
+            return None
+        tracked = self._config["dataset"].get("tracked_objects") or {}
+        given = self.segmentation["colors"]
+        return {
+            "background": self.segmentation["background"],
+            "colors": {
+                label: {
+                    "path": tracked[label],
+                    "source": given.get(label, {"source": "tab10"})["source"],
+                    "rgb": list(color),
+                }
+                for label, color in self.instance_colors.items()
+            },
+        }
 
     def colorize_instances(self, data: dict) -> np.ndarray:
         """Paint a semantic_segmentation frame: each tracked object in its colour,
-        everything else black.
+        everything else black (or ``dataset.segmentation.background``).
 
         ``idToLabels`` maps each id to its labels, e.g. {"class": "red_block"}; labels a
         prim inherits arrive comma-joined ("robot, camera"), so any part naming a
@@ -746,7 +892,8 @@ class SceneOrchestrator(ABC):
         ids = ids.numpy() if hasattr(ids, "numpy") else np.asarray(ids)  # warp array on GPU
         ids = ids.reshape(ids.shape[:2])
         colors = self.instance_colors
-        lut = np.zeros((int(ids.max()) + 1 if ids.size else 1, 3), np.uint8)
+        background = (self.segmentation or {}).get("background", (0, 0, 0))
+        lut = np.full((int(ids.max()) + 1 if ids.size else 1, 3), background, np.uint8)
         for label_id, labels in data.get("info", {}).get("idToLabels", {}).items():
             names = labels.get("class", "") if isinstance(labels, dict) else labels
             parts = [p.strip() for p in str(names).split(",")]

@@ -13,6 +13,7 @@ camera's two streams, and there is nothing to disambiguate when there is only on
 
 import logging
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -200,7 +201,9 @@ def test_instance_stream_gets_its_own_suffix(orchestrator):
 
 
 def test_instance_frames_paint_tracked_objects_in_their_own_colour(orchestrator):
-    scene = SimpleNamespace(instance_colors={"robot": (1, 1, 1), "bin_0": (2, 2, 2)})
+    scene = SimpleNamespace(
+        instance_colors={"robot": (1, 1, 1), "bin_0": (2, 2, 2)}, segmentation=None
+    )
     ids = np.array([[0, 1, 5], [7, 9, 9]], np.uint32)
     info = {
         "idToLabels": {
@@ -216,3 +219,139 @@ def test_instance_frames_paint_tracked_objects_in_their_own_colour(orchestrator)
 
     assert image.dtype == np.uint8 and image.shape == (2, 3, 3)
     assert image[:, :, 0].tolist() == [[0, 0, 1], [2, 0, 0]]
+
+
+# --- dataset.segmentation: tracked-object colours from an RGB or a named colour table ---
+
+ADE20K = Path(__file__).parents[1] / "config" / "segmentation_colors" / "ade20k.csv"
+TRACKED = {"blue_block": "/blocks/blue_block", "bin_0": "/bin_0", "robot": "/fr3"}
+
+
+def test_a_table_name_matches_the_whole_cell_then_the_first_token_then_any_token(orchestrator):
+    table = orchestrator.load_color_table(ADE20K)
+
+    assert len(table) == 150
+    # "box" is row 42's whole cell, though row 90 (television;...;idiot;box;...) has the token.
+    assert orchestrator.lookup_color(table, "box") == (0, 255, 20)
+    assert orchestrator.lookup_color(table, "basket") == (92, 255, 0)  # row 113's first token
+    assert orchestrator.lookup_color(table, "computer") == (0, 255, 173)  # row 75's first token
+    assert orchestrator.lookup_color(table, "handbasket") == (92, 255, 0)  # any token, one row
+
+
+def test_an_ambiguous_or_unknown_name_is_an_error(orchestrator):
+    table = orchestrator.load_color_table(ADE20K)
+
+    with pytest.raises(ValueError, match="machine.*21.*75.*79.*108.*130"):
+        orchestrator.lookup_color(table, "machine")
+    with pytest.raises(ValueError, match="no row.*spaceship"):
+        orchestrator.lookup_color(table, "spaceship")
+
+
+def test_an_rgb_is_three_ints_in_0_to_255(orchestrator):
+    assert orchestrator.as_rgb([255, 6, 82], "x") == (255, 6, 82)
+    for bad in ([256, 0, 0], [-1, 0, 0], [1, 2], [1, 2, 3, 4], [1.0, 2, 3], [True, 0, 0], "red"):
+        with pytest.raises(ValueError, match="x must be"):
+            orchestrator.as_rgb(bad, "x")
+
+
+def colors_of(orchestrator, config, task_dir="/nonexistent"):
+    """instance_colors and the guide_info.json legend of a scene with this config."""
+    scene = SimpleNamespace(
+        _config=config,
+        _scene_id=0,
+        INSTANCE_PALETTE=orchestrator.SceneOrchestrator.INSTANCE_PALETTE,
+        segmentation=orchestrator.segmentation_colors(config, task_dir),
+    )
+    scene.resolve_semantics = lambda: orchestrator.SceneOrchestrator.resolve_semantics(scene)
+    scene.instance_colors = orchestrator.SceneOrchestrator.instance_colors.fget(scene)
+    return scene.instance_colors, orchestrator.SceneOrchestrator.instance_legend.fget(scene)
+
+
+def test_without_a_segmentation_section_the_colours_are_tab10_as_before(orchestrator):
+    colors, legend = colors_of(orchestrator, {"dataset": {"tracked_objects": TRACKED}})
+
+    assert colors == {
+        "blue_block": (31, 119, 180), "bin_0": (255, 127, 14), "robot": (44, 160, 44)
+    }
+    assert legend is None
+
+
+def test_segmentation_colors_paint_tracked_labels_from_a_table_or_an_rgb(orchestrator):
+    config = {"dataset": {"tracked_objects": TRACKED, "segmentation": {
+        "tables": {"ade20k": str(ADE20K)},
+        "colors": {"blue_block": "ade20k:box", "robot": [255, 6, 82]},
+        "background": [1, 2, 3],
+    }}}
+
+    colors, legend = colors_of(orchestrator, config)
+
+    # bin_0 has no entry: it keeps its tab10 colour, and the legend says so.
+    assert colors == {"blue_block": (0, 255, 20), "bin_0": (255, 127, 14), "robot": (255, 6, 82)}
+    assert legend == {
+        "background": [1, 2, 3],
+        "colors": {
+            "blue_block": {
+                "path": "/blocks/blue_block", "source": "ade20k:box", "rgb": [0, 255, 20]
+            },
+            "bin_0": {"path": "/bin_0", "source": "tab10", "rgb": [255, 127, 14]},
+            "robot": {"path": "/fr3", "source": [255, 6, 82], "rgb": [255, 6, 82]},
+        },
+    }
+
+
+def test_the_background_defaults_to_black(orchestrator):
+    config = {"dataset": {
+        "tracked_objects": TRACKED, "segmentation": {"colors": {"robot": [9, 9, 9]}}
+    }}
+
+    assert orchestrator.segmentation_colors(config, "/nonexistent")["background"] == [0, 0, 0]
+
+
+def test_a_bare_table_name_is_guide_cores_and_a_relative_path_is_the_tasks(orchestrator, tmp_path):
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "mine.csv").write_text(
+        'Idx,Name,"Color_Code (R,G,B)"\n1,crate;box,"(1, 2, 3)"\n'
+    )
+    config = {"dataset": {"tracked_objects": TRACKED, "segmentation": {
+        "tables": {"ade20k": "ade20k", "mine": "config/mine.csv"},  # installed guide_core copy
+        "colors": {"blue_block": "ade20k:box", "bin_0": "mine:box"},
+    }}}
+
+    colors = orchestrator.segmentation_colors(config, tmp_path)["colors"]
+
+    assert colors["blue_block"]["rgb"] == [0, 255, 20]
+    assert colors["bin_0"]["rgb"] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("section, error", [
+    ({"colors": {"robot": "nope:box"}}, "unknown table 'nope'"),
+    ({"colors": {"robot": "box"}}, r"\[r, g, b\] or '<table>:<name>'"),
+    ({"colors": {"crate": [1, 2, 3]}}, "'crate' is not a dataset.tracked_objects label"),
+    ({"colors": {"robot": [1, 2, 300]}}, "colors.robot must be"),
+    (
+        {"colors": {"robot": "ade20k:machine"}, "tables": {"ade20k": str(ADE20K)}},
+        "colors.robot.*several rows",
+    ),
+    ({"colors": {}, "background": [0, 0]}, "background must be"),
+    ({"colors": {}, "tables": {"t": "missing.csv"}}, "tables.t: no file"),
+    ({"colours": {}}, "takes tables, colors, background"),
+])
+def test_a_bad_segmentation_section_fails_the_registration(orchestrator, section, error):
+    config = {"dataset": {"tracked_objects": TRACKED, "segmentation": section}}
+
+    with pytest.raises(ValueError, match=error):
+        orchestrator.segmentation_colors(config, "/nonexistent")
+
+
+def test_the_background_colour_fills_every_pixel_no_tracked_object_claims(orchestrator):
+    scene = SimpleNamespace(
+        instance_colors={"robot": (1, 1, 1)}, segmentation={"background": [7, 8, 9]}
+    )
+    ids = np.array([[0, 1, 5]], np.uint32)
+    info = {"idToLabels": {
+        "0": {"class": "BACKGROUND"}, "1": {"class": "UNLABELLED"}, "5": {"class": "robot"}
+    }}
+
+    image = orchestrator.SceneOrchestrator.colorize_instances(scene, {"data": ids, "info": info})
+
+    assert image.tolist() == [[[7, 8, 9], [7, 8, 9], [1, 1, 1]]]
