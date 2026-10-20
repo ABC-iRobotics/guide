@@ -1,6 +1,8 @@
-"""MoveIt and the cube_stack solver for each scene (same bring-up as block_bin's)."""
+"""The cube_stack solver for each scene, and MoveIt under controller: moveit (block_bin's bring-up)."""
 
 import os
+
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -16,6 +18,11 @@ from launch_ros.actions import Node
 
 def generate_nodes(context, *args, **kwargs):
     num_env = int(LaunchConfiguration("num_env").perform(context))
+
+    # The motion layer: robots.franka.controller in config/init.yaml, the switch GUIDE reads when
+    # it registers the scene (S2b). oscbf drives the arm from Isaac's physics step: no move_group.
+    with open(os.path.join(get_package_share_directory("cube_stack"), "config", "init.yaml")) as f:
+        controller = yaml.safe_load(f)["robots"]["franka"].get("controller", "moveit")
 
     # Same-host DDS discovery needs guide_core's localhost cyclonedds config.
     if "CYCLONEDDS_URI" not in os.environ:
@@ -37,20 +44,21 @@ def generate_nodes(context, *args, **kwargs):
     nodes = []
     for i in range(num_env):
         ns = f"/Sim_0/Scene_{i}/franka"
-        nodes.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(guide_moveit),
-                launch_arguments={
-                    "namespace": ns,
-                    "connected_to": f"Scene_{i}",
-                    "base_frame": f"Scene_{i}",
-                    "xyz": "-0.3 0 0",
-                    "rpy": "0 0 0",
-                    "joint_states_topic": f"{ns}/joint_states",
-                    "joint_commands_topic": f"{ns}/joint_command",
-                }.items(),
+        if controller == "moveit":
+            nodes.append(
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(guide_moveit),
+                    launch_arguments={
+                        "namespace": ns,
+                        "connected_to": f"Scene_{i}",
+                        "base_frame": f"Scene_{i}",
+                        "xyz": "-0.3 0 0",
+                        "rpy": "0 0 0",
+                        "joint_states_topic": f"{ns}/joint_states",
+                        "joint_commands_topic": f"{ns}/joint_command",
+                    }.items(),
+                )
             )
-        )
         nodes.append(
             Node(
                 package="cube_stack",
@@ -58,7 +66,7 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"cube_stack_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}"],
+                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),

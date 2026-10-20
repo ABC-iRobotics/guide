@@ -8,7 +8,7 @@ procedure beside every frame, then the task and the subtask each frame was part 
 procedure is never a frame's task: after the last placement a closing TASK takes over.
 
     StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
-      Unclutch, LocateScene, AnnounceFirst (task + subtask), StartRecording,
+      Unclutch, LocateScene, AnnounceFirst (task + subtask), StartEpisode,
       MeasureTower, TowerHeight
       -> BuildTower (PROCEDURE, loop until the tower is done)
            NextCube (TASK, condition: done?)
@@ -129,11 +129,14 @@ def episode_context(robot, sim_namespace, scene_id, plan, path=""):
         "sim_namespace": sim_namespace,
         "scene_namespace": f"/Scene_{scene_id}",
         "scene_id": scene_id,
-        "scene_path": "",
+        # The frame the tree works in: the robot's base, as every pose GUIDE and the robot
+        # exchange is (S2b Ruling 4), so LocateScene measures the identity.
+        "scene_path": "/fr3/fr3_link0",
         "robot_prim": "/fr3/fr3_rightfinger",
-        # Where HOME puts the gripper: pointing down, 50 cm over the scene origin.
+        # Where HOME puts the gripper: pointing down, 50 cm over the scene origin, which is
+        # 0.3 m in front of the base (fr3_link0 sits at (-0.3, 0, 0) of the scene).
         "rest_pose": Pose(
-            position=Point([0.0, 0.0, 0.5]),
+            position=Point([0.3, 0.0, 0.5]),
             orientation=Rotation(R.from_euler("xyz", [np.pi, 0.0, 0.0])),
         ),
         "dataset_path": path,
@@ -226,20 +229,21 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
 def main():
     parser = argparse.ArgumentParser(description="cube_stack demonstration generator.")
     parser.add_argument("--namespace", type=str, default="")
+    parser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
     args, _ = parser.parse_known_args()
     namespace = args.namespace  # e.g. /Sim_0/Scene_0
     sim_namespace = "/" + namespace.split("/")[1]
     match = re.search(r"\d+$", namespace.split("/")[-1])
     scene_id = int(match.group()) if match else 0
 
-    config = FR3RobotConfig(
-        frame_id=namespace.split("/")[-1] or "world",
+    config = FR3RobotConfig(  # poses in its base frame, fr3_link0 (the default; S2b Ruling 4)
         namespace=f"{namespace}/franka",
         planner_id="BiESTkConfigDefault",
         fallback_planner_id="PRMstarkConfigDefault",
         max_velocity=1.0,
         max_acceleration=1.0,
         gripper_action_type=ActionType.JOINT_POSITION,
+        controller=args.controller,
     )
     config.arm_action_type = ActionType.CARTESIAN_POSE
     config.cameras = {}  # the recorder captures images sim-side; the solver needs none

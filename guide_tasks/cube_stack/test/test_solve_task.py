@@ -66,7 +66,7 @@ def world(monkeypatch):
     w = World()
 
     def get_pose(self, robot, sim_namespace, scene_namespace, prim_path):
-        position = w.cubes[prim_path] if prim_path else np.zeros(3)
+        position = w.cubes[prim_path] if prim_path in w.cubes else np.zeros(3)  # the scene frame: the origin
         return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(position))})
 
     def move(self, robot, target_pose, speed=1.0, cartesian=False):
@@ -279,6 +279,15 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
     said = {s for s, _ in carried}
     assert said >= set(drawn["subtasks"]["place"]) and said & set(drawn["subtasks"]["pick"])
     assert oracle() == {"task": "Return home.", "subtask": "Return home."} and oracle.done
+
+
+def test_the_tree_works_in_the_robot_base_frame():
+    """OSCBF takes poses in the robot's base frame only (S2b Ruling 4): LocateScene measures the
+    base itself, so the scene conversion is the identity, and rest is 0.3 m in front of the base."""
+    context = st.episode_context(ROBOT, "/Sim_0", 0, plan(COLOURS))
+
+    assert context["scene_path"] == "/fr3/fr3_link0"
+    assert np.allclose(context["rest_pose"].position.to_numpy(), [0.3, 0.0, 0.5])
 
 
 # --- Until the Isaac regression passes: the recipes against the Python trees they replaced ---

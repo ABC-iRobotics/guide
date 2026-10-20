@@ -62,7 +62,7 @@ the same call, so no frame pairs a new task with the last task's subtask:
 
 ```
 StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
-  Unclutch, LocateScene, AnnounceFirst (task + subtask), StartRecording,
+  Unclutch, LocateScene, AnnounceFirst (task + subtask), StartEpisode,
   MeasureTower, TowerHeight
   -> BuildTower (PROCEDURE, loop until the tower is done)
        NextCube (TASK, condition: done?)
@@ -113,6 +113,9 @@ Cubes spawned too close to grasp are prevented rather than recovered (assumption
 `test/test_solve_task.py` runs the real tree against a fake world through each route.
 
 ## Usage
+
+The arm moves under OSCBF (`robots.franka.controller: oscbf` in `config/init.yaml`, as block_bin's;
+`moveit` brings MoveIt up instead), with every pose in the robot's base frame, `fr3_link0`.
 
 ```bash
 ros2 launch guide_core bringup.launch.py
