@@ -68,10 +68,12 @@ class SceneManager:
         for scene in self._scenes:
             interval = max(1, round(step_hz / getattr(scene, "record_frequency", DEFAULT_FPS)))
             on = enabled if enabled is not None else (frame_index + 1) % interval == 0
-            # A segmentation annotator stalls every stream of a render product whose
-            # updates are switched per frame (Isaac 6.0.1: rgb, depth and segmentation all
-            # return empty data). Such a scene renders every frame; measured no slower here.
-            if getattr(scene, "instance_annotators", None):
+            # Any recorder annotator (rgb, depth or segmentation) starves when its render
+            # product's updates are switched per frame (Isaac 6.0.1: empty data at the record
+            # tick; Plan C Task 18: an rgb-only scene dropped all 312 frames, forcing on
+            # recorded 324 with 0 drops). Such a scene renders every frame; measured no
+            # slower here. Only a scene with no recorder annotators is gated.
+            if scene._recorded_annotators():
                 on = True
             scene.set_render_products_enabled(on)
 

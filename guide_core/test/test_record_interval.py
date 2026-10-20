@@ -79,6 +79,10 @@ class FakeScene:
         # per rendered frame), so mirror that and the log becomes a list of transitions.
         self.render_enabled = None
         self.render_log = []
+        self.annotators = {}
+
+    def _recorded_annotators(self):
+        return self.annotators
 
     def set_render_products_enabled(self, enabled):
         if self.render_enabled == enabled:
@@ -202,6 +206,16 @@ def test_every_frame_renders_when_the_rate_matches_the_render_rate(SceneManager)
     scene = render(SceneManager, FakeScene(record_frequency=60), 60, 60)
 
     assert scene.render_log == [True], "on once, and never switched off again"
+
+
+def test_a_scene_with_recorder_annotators_is_never_gated(SceneManager):
+    # Isaac 6.0.1: per-frame toggling starves rgb as well as segmentation (Task 18).
+    scene = FakeScene(record_frequency=10)
+    scene.annotators = {"agentview": object()}
+
+    render(SceneManager, scene, 60, 12)
+
+    assert scene.render_log == [True]
 
 
 def test_stopping_holds_the_render_products_open(SceneManager):
