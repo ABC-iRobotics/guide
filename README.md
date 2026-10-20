@@ -236,8 +236,10 @@ A task package, `block_bin` as the example:
 guide_tasks/block_bin/
 ├── block_bin/
 │   ├── scene.py              Scene(SceneOrchestrator): the task's hooks into the simulator
-│   └── solve_task.py         the GUIDE-EX tree and the generate_demonstration service
+│   └── solve_task.py         loads config/recipes/Episode.yaml, runs it; the generate_demonstration service
 ├── config/
+│   ├── recipes/
+│   │   └── Episode.yaml      the GUIDE-EX tree: guide_ex's PickAndPlace with block_bin's overrides
 │   ├── init.yaml             USD, robot, cameras, dataset features
 │   ├── randomize.yaml        what is randomized each episode (+ the zone grid)
 │   ├── reset.yaml            where everything goes on Reset
@@ -284,44 +286,74 @@ class Scene(SceneOrchestrator):
         return f"/Scene_{self._scene_id}/blocks/{c}_block" if c else None
 ```
 
-The solver composes GUIDE-EX nodes. A node reads its inputs from the shared context
-(`dynamic_map`), takes fixed ones (`static_args`) and writes results back (`output_map`); a
+The solver runs a GUIDE-EX tree written as YAML recipes (the GUIDE-EX paper's section IV). A
+node reads its inputs from the shared context (`dynamic_map`), takes fixed ones (`static_args`;
+a mapping of `position` and/or `orientation` is a pose) and writes results back (`output_map`); a
 `CompositeNode` runs its children in order on one layer of the procedure, checks a condition,
-and swaps a failing child for its fallback (`guide_tasks/cube_stack/cube_stack/solve_task.py`,
+and swaps a failing child for its fallback. `ref:` names a leaf class (registered with `@node`)
+or a recipe: guide_ex's library (`guide_ex/guide_ex/recipes/<level>/`) or the task's own
+`config/recipes/`; `overrides` swap nested nodes by their dot path.
+`guide_ex/guide_ex/recipes/CATALOGUE.md` lists every leaf and library recipe with its inputs and
+outputs (`python -m guide_ex.recipe catalogue` regenerates it).
+
+block_bin's episode is the library's `PickAndPlace` with two of its nodes swapped
+(`guide_tasks/block_bin/config/recipes/Episode.yaml`, the lift; the other override turns the
+regrasp -90° instead of +90°):
+```yaml
+ref: PickAndPlace
+overrides:
+  # Lift 28 cm, not 20, before heading for the bin: 20 cm taught policies a lift too shallow to
+  # clear the bin walls (their main failure mode).
+  Pick.TransformCubeRetreatPose:
+    ref: TransformPose
+    alias: TransformCubeRetreatPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.28]}
+    output_map: {pose: cube_retreat_pose}
+```
+
+cube_stack writes its own subtasks on top of the library, e.g. the end of its pick
+(`guide_tasks/cube_stack/config/recipes/StackPick.yaml`, trimmed):
+```yaml
+  - ref: CloseGripper            # a library preset: SetGripperState, 0.01 m per finger
+  - ref: WaitForSeconds
+    alias: CloseGripperSettle
+    static_args: {seconds: 2.0}
+  - ref: MoveToCartesianPose
+    alias: LiftCube
+    dynamic_map: {robot: robot, target_pose: over_cube_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: IsPrimClashing
+    alias: CheckHolding
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      prim1_path: robot_prim
+      prim2_path: top
+    output_map: {has_collided: holding}
+mode: condition
+condition_expr: holding
+false_branch: {ref: NodeException, alias: NotHolding}
+```
+
+The solver loads its top recipe with the values the recipes interpolate (`${robot.gripper_joint}`,
+`${plan.tasks[0]}`, `${cube.edge}`, ...) and runs it (`guide_tasks/cube_stack/cube_stack/solve_task.py`,
 trimmed):
 ```python
-def move(alias, target, speed=0.5, cartesian=True):
-    return MoveToCartesianPose(
-        alias=alias,
-        dynamic_map={"robot": "robot", "target_pose": target},
-        static_args={"speed": speed, "cartesian": cartesian},
-    )
+def load_recipe(name, robot, plan):
+    """config/recipes/<name>.yaml as a GUIDE-EX tree, for this robot and plan."""
+    recipes = recipes_dir()  # config/recipes: in the source tree, else in the installed share
+    return load(recipes / f"{name}.yaml", values=recipe_values(robot, plan), search_paths=[recipes])
 
-pick = CompositeNode(
-    name="Pick",
-    level=Layer.SUBTASK,
-    dynamic_map=keys(*SIM, "scene_id", "robot_prim", "top", "cube_pose", "pick"),
-    children=[
-        announce("AnnouncePick", subtask_key="pick"),      # the subtask prompt, recorded
-        above("OverCubePose", "cube_pose", OVER_CUBE, "over_cube_pose"),
-        move("MoveOverCube", "over_cube_pose"),
-        above("GraspPose", "cube_pose", GRASP, "grasp_pose"),
-        move("MoveToGrasp", "grasp_pose", speed=0.2),
-        *gripper("CloseGripper", robot, CLOSED, settle=2.0),
-        move("LiftCube", "over_cube_pose"),
-        holding("CheckHolding"),
-    ],
-    mode="condition",
-    condition_expr="holding",
-    false_branch=NodeException(name="NotHolding"),
-    fallbacks={"MoveToGrasp": via_home("GraspViaHome", "MoveOverCube")},
-)
-
-tree = build_tree(robot, plan)
+tree = load_recipe("Episode", robot, plan)
 result = tree.execute(episode_context(robot, sim_namespace, scene_id, plan, path))
 ```
-The reusable nodes live in `guide_ex/guide_ex/steps/` (motion, gripper, scene queries) and
-`guide_ex/guide_ex/utility/` (poses, rotations, collections, prompts, recording, waits).
+A recipe that names an unknown node, misses a value or breaks the layers fails at `load()`,
+naming its file and the node. The reusable leaves live in `guide_ex/guide_ex/steps/` (motion,
+gripper, scene queries) and `guide_ex/guide_ex/utility/` (poses, rotations, collections,
+prompts, recording, waits).
 
 ### Zoned randomization
 

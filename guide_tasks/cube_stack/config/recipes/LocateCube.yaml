@@ -1,0 +1,31 @@
+# The cube to stack next (top) as a top-down grasp (cube_pose), in the frame of scene_pose_inv's scene.
+node_type: CompositeNode
+name: LocateCube
+level: SEQUENCE
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_pose_inv: scene_pose_inv, top: top}
+children:
+  - ref: GetPrimPose
+    alias: GetCubePose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: top}
+    output_map: {pose: cube_pose}
+  - ref: TransformPose
+    alias: CubeInScene
+    dynamic_map: {l_pose: scene_pose_inv, r_pose: cube_pose}
+    output_map: {pose: cube_pose}
+  # "auto": a cube that fell may lie on any face; take its flattest axis.
+  - ref: ProjectRotationToBaseZ
+    alias: FlattenCube
+    dynamic_map: {pose: cube_pose}
+    static_args: {heading_axis: auto}
+    output_map: {pose: cube_pose}
+  - ref: ReduceRotationToSymmetry
+    alias: MinimizeCubeTurn
+    dynamic_map: {pose: cube_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: cube_pose}
+  - ref: TransformPose
+    alias: CubeGripperDown
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
+    output_map: {pose: cube_pose}

@@ -1,0 +1,19 @@
+# The closing TASK, once the tower stands: its own prompt (the procedure is never a frame's task), go
+# home, let the tower settle, ask the scene, save the episode only if it sees the tower.
+node_type: CompositeNode
+name: Finish
+level: TASK
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, finish: finish}
+children:
+  - ref: SetPrompt
+    alias: AnnounceFinish
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, task: finish, subtask: finish}
+  - node_type: CompositeNode
+    name: GoHome
+    level: SUBTASK
+    dynamic_map: {robot: robot}
+    children:
+      - ref: MoveHome
+      - {ref: WaitForSeconds, alias: WaitForTower, static_args: {seconds: 2.0}}
+  - ref: CheckSuccess
+  - ref: StopEpisode

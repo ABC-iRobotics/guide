@@ -1,0 +1,80 @@
+# One placement: the next cube (order[built]) onto the last one standing, its prompts announced. A
+# missed grasp regrasps the other pair of faces; a cube that never got to the tower is set down where
+# it was picked and picked again.
+node_type: CompositeNode
+name: PutOn
+level: TASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  scene_pose_inv: scene_pose_inv
+  order: order
+  built: built
+  tasks: tasks
+  picks: picks
+  places: places
+  set_downs: set_downs
+children:
+  # `built` cubes stand: the next one goes on the last of them.
+  - {ref: GetItem, alias: NextTop, dynamic_map: {items: order, index: built}, static_args: {shift: 0}, output_map: {item: top}}
+  - {ref: GetItem, alias: NextSupport, dynamic_map: {items: order, index: built}, static_args: {shift: -1}, output_map: {item: support}}
+  - {ref: GetItem, alias: NextTask, dynamic_map: {items: tasks, index: built}, static_args: {shift: -1}, output_map: {item: task_prompt}}
+  - {ref: GetItem, alias: NextPick, dynamic_map: {items: picks, index: built}, static_args: {shift: -1}, output_map: {item: pick}}
+  - {ref: GetItem, alias: NextPlace, dynamic_map: {items: places, index: built}, static_args: {shift: -1}, output_map: {item: place}}
+  - {ref: GetItem, alias: NextSetDown, dynamic_map: {items: set_downs, index: built}, static_args: {shift: -1}, output_map: {item: set_down}}
+  - ref: SetPrompt
+    alias: AnnounceTask
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, task: task_prompt, subtask: pick}
+  - ref: LocateCube
+  - ref: StackPick
+  - ref: PlaceOn
+fallbacks:
+  # Route 1: the other pair of faces, on a freshly measured cube.
+  Pick:
+    node_type: RecoveryNode
+    name: Regrasp
+    level: SUBTASK
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_pose_inv: scene_pose_inv, top: top}
+    resume_target: Pick
+    max_retries: 2
+    children:
+      - {ref: OpenGripper, alias: OpenForRegrasp}
+      - {ref: WaitForSeconds, alias: OpenForRegraspSettle, static_args: {seconds: 1.0}}
+      - ref: LocateCube
+      - ref: TransformPose
+        alias: TurnGrasp
+        dynamic_map: {l_pose: cube_pose}
+        static_args:
+          r_pose: {orientation: {euler: ['z', 1.5707963267948966]}}
+        output_map: {pose: cube_pose}
+  # Route 3: the cube did not get to the tower. Set it down where it was picked (opening anywhere
+  # else drops it from height), then pick it up again from wherever it is.
+  Place:
+    node_type: RecoveryNode
+    name: RepickDropped
+    level: SUBTASK
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      scene_id: scene_id
+      scene_pose_inv: scene_pose_inv
+      top: top
+      over_cube_pose: over_cube_pose
+      grasp_pose: grasp_pose
+      set_down: set_down
+    resume_target: Pick
+    max_retries: 2
+    children:
+      - ref: SetPrompt
+        alias: AnnounceSetDown
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: set_down}
+      - {ref: MoveToCartesianPose, alias: BackOverCube, dynamic_map: {robot: robot, target_pose: over_cube_pose}, static_args: {speed: 0.5, cartesian: true}}
+      - {ref: MoveToCartesianPose, alias: SetDown, dynamic_map: {robot: robot, target_pose: grasp_pose}, static_args: {speed: 0.2, cartesian: true}}
+      - {ref: OpenGripper, alias: OpenForRepick}
+      - {ref: WaitForSeconds, alias: OpenForRepickSettle, static_args: {seconds: 1.0}}
+      - {ref: MoveToCartesianPose, alias: LeaveCube, dynamic_map: {robot: robot, target_pose: over_cube_pose}, static_args: {speed: 0.2, cartesian: true}}
+      - ref: LocateCube

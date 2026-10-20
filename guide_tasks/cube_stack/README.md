@@ -51,7 +51,10 @@ and the subtask (`Pick up the red cube.`) as language annotations (see [Dataset]
 
 ## Tree
 
-Built from reusable GUIDE-EX nodes only; nothing in it is specific to cubes or towers.
+Written as GUIDE-EX recipes in `config/recipes/` (`Episode.yaml`, the root, down to
+`StackPick.yaml` and `LocateCube.yaml`) on guide_ex's library (`PlaceOn` with `CarryToSupport` and
+`Release`, and the gripper, home and recording presets), and loaded by `solve_task.py`. Its
+leaves are reusable GUIDE-EX nodes; nothing in them is specific to cubes or towers.
 Its layers are GUIDE-EX's: the procedure stacks the cubes, each placement is a TASK (one
 job with a success criterion), the pick and the place are its SUBTASKs. Every TASK and
 SUBTASK announces its prompt (`SetPrompt`) as it starts; a TASK sets its first subtask in

@@ -1,0 +1,5 @@
+# The poses of the cubes in `order`, bottom first (tower_poses).
+ref: GetPrimPoses
+alias: MeasureTower
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_paths: order}
+output_map: {poses: tower_poses}

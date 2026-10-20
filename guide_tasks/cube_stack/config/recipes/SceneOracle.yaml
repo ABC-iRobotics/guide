@@ -1,0 +1,27 @@
+# The oracle's measurement (cube_stack.oracle): the tower, the highest cube standing and whether the
+# fingers are still on it; while the tower is not done, whether the next cube is in the fingers.
+node_type: CompositeNode
+name: SceneOracle
+level: SUBTASK
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, robot_prim: robot_prim, order: order}
+children:
+  - ref: MeasureTower
+  - ref: TowerHeight
+  - {ref: GetItem, alias: TopOfTower, dynamic_map: {items: order, index: built}, static_args: {shift: -1}, output_map: {item: top}}
+  - ref: IsPrimClashing
+    alias: TopHeld
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim1_path: robot_prim, prim2_path: top}
+    output_map: {has_collided: holding}
+mode: condition
+condition_expr: done
+false_branch:
+  node_type: CompositeNode
+  name: NextCubeHeld
+  level: SEQUENCE
+  dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, robot_prim: robot_prim, order: order, built: built}
+  children:
+    - {ref: GetItem, alias: NextFree, dynamic_map: {items: order, index: built}, static_args: {shift: 0}, output_map: {item: next}}
+    - ref: IsPrimClashing
+      alias: NextHeld
+      dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim1_path: robot_prim, prim2_path: next}
+      output_map: {has_collided: next_held}

@@ -1,0 +1,46 @@
+# cube_stack's episode: stack the cubes in the drawn order, recorded as one episode. The PROCEDURE
+# unclutches, measures the scene frame, announces the first task and subtask before the first frame,
+# starts recording and measures the tower; then BuildTower stacks it (AlreadyStacked if it stands).
+node_type: CompositeNode
+name: StackingDemonstration
+level: PROCEDURE
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  order: order
+  tasks: tasks
+  picks: picks
+  places: places
+  set_downs: set_downs
+  finish: finish
+  scene_path: scene_path
+  rest_pose: rest_pose
+  dataset_path: dataset_path
+children:
+  - ref: StackUnclutch
+  - node_type: CompositeNode
+    name: LocateScene
+    level: SEQUENCE
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_path: scene_path}
+    children:
+      - ref: GetPrimPose
+        alias: GetScenePose
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: scene_path}
+        output_map: {pose: scene_pose}
+      - {ref: InvertPose, alias: InvertScenePose, dynamic_map: {pose: scene_pose}, output_map: {pose: scene_pose_inv}}
+  # Before the first frame, so the whole episode carries a task and a subtask.
+  - ref: SetPrompt
+    alias: AnnounceFirst
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {task: "${plan.tasks[0]}", subtask: "${plan.subtasks.pick[0]}"}
+  # The episode starts once the arm is at rest, not at randomization.
+  - ref: StartEpisode
+  - ref: MeasureTower
+  - ref: TowerHeight
+mode: condition
+condition_expr: not done
+true_branch: {ref: BuildTower}
+false_branch: {ref: NodeException, alias: AlreadyStacked}

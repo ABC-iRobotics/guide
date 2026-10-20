@@ -13,7 +13,7 @@ from cube_stack import solve_task as st
 from cube_stack.scene import plan
 
 from guide_core.types.geometry import Point, Pose
-from guide_ex.core.states import DemoStatus, ExecutionResult
+from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
@@ -24,6 +24,7 @@ from guide_ex.utility.pose import is_at_offset
 from guide_ex.utility.wait import WaitForSeconds
 
 COLOURS = ["blue", "red", "green", "yellow"]  # this episode's order, bottom first
+GRASP = CLOSED = 0.01  # config/recipes: the TCP over a cube's centre at the grasp, the closed finger target
 ORDER = [f"/blocks/{c}_block" for c in COLOURS]
 PERFECT = ExecutionResult(DemoStatus.PERFECT)
 
@@ -75,7 +76,7 @@ def world(monkeypatch):
             return ExecutionResult(DemoStatus.FAILURE, error_message="no path")
         w.tcp = target_pose.position.to_numpy()
         if w.held:
-            w.cubes[w.held] = w.tcp - (0, 0, st.GRASP)
+            w.cubes[w.held] = w.tcp - (0, 0, GRASP)
             if w.slips and self.name == "MoveOverSupport":
                 w.slips -= 1
                 w.cubes[w.held] = w.cubes[w.held] + (0.1, 0.0, 0.0)
@@ -87,13 +88,13 @@ def world(monkeypatch):
         w.moves.append(self.name)
         w.tcp = np.array([0.0, 0.0, 0.5])
         if w.held:
-            w.cubes[w.held] = w.tcp - (0, 0, st.GRASP)
+            w.cubes[w.held] = w.tcp - (0, 0, GRASP)
         return PERFECT
 
     def grip(self, robot, gripper_goal_pos):
         (width,) = gripper_goal_pos.values()
-        if width == st.CLOSED:
-            under = [p for p, c in w.cubes.items() if np.allclose(c + (0, 0, st.GRASP), w.tcp)]
+        if width == CLOSED:
+            under = [p for p, c in w.cubes.items() if np.allclose(c + (0, 0, GRASP), w.tcp)]
             if under and not w.misses:
                 w.held = under[0]
             w.misses = max(0, w.misses - 1)
@@ -176,7 +177,7 @@ def test_the_layers_are_guide_exs():
                 walk(child)
 
     walk(root)
-    L = st.Layer
+    L = Layer
     assert {k: found[k] for k in ("StackingDemonstration", "BuildTower", "NextCube", "PutOn", "Pick",
                                   "Place", "Regrasp", "RepickDropped", "Finish", "GoHome", "LocateCube",
                                   "CarryToSupport", "Release")} == {
@@ -278,3 +279,52 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
     said = {s for s, _ in carried}
     assert said >= set(drawn["subtasks"]["place"]) and said & set(drawn["subtasks"]["pick"])
     assert oracle() == {"task": "Return home.", "subtask": "Return home."} and oracle.done
+
+
+# --- Until the Isaac regression passes: the recipes against the Python trees they replaced ---
+from itertools import permutations  # noqa: E402
+
+from legacy_tree import build_tree as legacy_build_tree  # noqa: E402
+from legacy_tree import describe  # noqa: E402
+from legacy_tree import oracle_tree as legacy_oracle_tree  # noqa: E402
+
+
+@pytest.mark.parametrize("colours", [COLOURS, COLOURS[:3], COLOURS[:2]])
+def test_the_recipes_build_the_python_trees(colours):
+    drawn = plan(colours)
+
+    assert describe(st.build_tree(ROBOT, drawn)) == describe(legacy_build_tree(ROBOT, drawn))
+    assert describe(st.load_recipe("SceneOracle", ROBOT, drawn)) == describe(legacy_oracle_tree())
+
+
+TROUBLES = [{}, {"misses": 1}, {"slips": 1}, {"slides": 2}, {"misses": 99},
+            {"failing_moves": ["LowerOntoSupport", "MoveOverCube"]}, {"failing_moves": ["MoveOverSupport"] * 3}]
+
+
+def both_trees(world, colours, trouble):
+    """The legacy tree's and the recipe tree's run, each in a fresh fake world: status, the prompts
+    announced (the three language levels), the moves, and whether the episode was saved."""
+    drawn = plan(list(colours))
+    runs = []
+    for build in (legacy_build_tree, st.build_tree):
+        world.__init__()
+        for name, value in trouble.items():
+            setattr(world, name, list(value) if isinstance(value, list) else value)
+        result = build(ROBOT, drawn).execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn))
+        runs.append((result.status, world.prompts, world.moves, world.saved))
+    return runs
+
+
+@pytest.mark.parametrize("colours", list(permutations(["red", "yellow", "green", "blue"])))
+def test_every_draw_announces_the_same_prompts_as_before(world, colours):
+    """Every tower order (each a fixed seed's draw): the same prompts, byte for byte."""
+    old, new = both_trees(world, colours, {})
+
+    assert new == old and old[0] == DemoStatus.PERFECT
+
+
+@pytest.mark.parametrize("trouble", TROUBLES)
+def test_every_recovery_announces_the_same_prompts_as_before(world, trouble):
+    old, new = both_trees(world, COLOURS, trouble)
+
+    assert new == old

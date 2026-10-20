@@ -1,7 +1,7 @@
 """The task and subtask the scene is at, read off the scene: cube_stack's oracle.
 
 While a policy rolls out in simulation, this measures the scene with the demonstration
-tree's own nodes -- ``measure_tower`` (the cubes' poses, the chain standing on each other)
+tree's own recipes -- MeasureTower and TowerHeight (the cubes' poses, the chain standing on each other)
 and the fingers-on-the-cube check (IsPrimClashing) -- and names what the demonstration
 would be doing, at both layers below the procedure:
 
@@ -19,49 +19,17 @@ It is the ``oracle`` source of the InstructionHolder in block_bin_eval's ``eval_
 overrides one.
 """
 
-from guide_ex.core.composite_node import CompositeNode
-from guide_ex.core.states import DemoStatus, Layer
-from guide_ex.steps.simulation.isaac.prim import IsPrimClashing
+from guide_ex.core.states import DemoStatus
 
 from cube_stack import solve_task as st
 from cube_stack.scene import CUBE
-
-
-def oracle_tree() -> CompositeNode:
-    return CompositeNode(
-        name="SceneOracle",
-        level=Layer.SUBTASK,
-        dynamic_map=st.keys(*st.SIM, "robot_prim", "order"),
-        children=[
-            *st.measure_tower(),
-            # The highest cube standing, and whether the fingers are still on it.
-            st.item("TopOfTower", "order", "top", shift=-1),
-            st.holding("TopHeld"),
-        ],
-        mode="condition",
-        condition_expr="done",
-        # Not done: is the next cube in the fingers?
-        false_branch=CompositeNode(
-            name="NextCubeHeld",
-            level=Layer.SEQUENCE,
-            dynamic_map=st.keys(*st.SIM, "robot_prim", "order", "built"),
-            children=[
-                st.item("NextFree", "order", "next"),
-                IsPrimClashing(
-                    alias="NextHeld",
-                    dynamic_map={**st.keys(*st.SIM), "prim1_path": "robot_prim", "prim2_path": "next"},
-                    output_map={"has_collided": "next_held"},
-                ),
-            ],
-        ),
-    )
 
 
 class SceneOracle:
     """``oracle()`` -> {"task": ..., "subtask": ...} the scene is at."""
 
     def __init__(self, robot, sim_namespace, scene_id, plan):
-        self.tree = oracle_tree()
+        self.tree = st.load_recipe("SceneOracle", robot, plan)  # config/recipes/SceneOracle.yaml
         self.context = st.episode_context(robot, sim_namespace, scene_id, plan)
         self.plan = plan
         self.done = False

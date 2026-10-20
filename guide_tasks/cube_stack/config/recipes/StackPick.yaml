@@ -1,0 +1,87 @@
+# Pick the next cube (top) up: announce it, 0.275 m over its centre (the TCP ~30 cm over the table),
+# grasp 1 cm above its centre, close, lift back up, and fail (NotHolding) unless it is in the fingers.
+# Every move detours through the home joints before it is tried again.
+node_type: CompositeNode
+name: Pick
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  top: top
+  cube_pose: cube_pose
+  pick: pick
+children:
+  - ref: SetPrompt
+    alias: AnnouncePick
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: pick}
+  - ref: TransformPose
+    alias: OverCubePose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.275]}
+    output_map: {pose: over_cube_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveOverCube
+    dynamic_map: {robot: robot, target_pose: over_cube_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: TransformPose
+    alias: GraspPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.01]}
+    output_map: {pose: grasp_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToGrasp
+    dynamic_map: {robot: robot, target_pose: grasp_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  - ref: CloseGripper
+  - ref: WaitForSeconds
+    alias: CloseGripperSettle
+    static_args: {seconds: 2.0}
+  - ref: MoveToCartesianPose
+    alias: LiftCube
+    dynamic_map: {robot: robot, target_pose: over_cube_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: IsPrimClashing
+    alias: CheckHolding
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      prim1_path: robot_prim
+      prim2_path: top
+    output_map: {has_collided: holding}
+mode: condition
+condition_expr: holding
+false_branch: {ref: NodeException, alias: NotHolding}
+fallbacks:
+  MoveOverCube:
+    node_type: RecoveryNode
+    name: OverCubeViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveOverCube
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: OverCubeViaHomeToHome}
+  MoveToGrasp:
+    node_type: RecoveryNode
+    name: GraspViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveOverCube
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: GraspViaHomeToHome}
+  LiftCube:
+    node_type: RecoveryNode
+    name: LiftViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: CheckHolding
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: LiftViaHomeToHome}
