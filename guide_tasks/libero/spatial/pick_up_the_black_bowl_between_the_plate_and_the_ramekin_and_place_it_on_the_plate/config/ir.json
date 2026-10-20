@@ -1,0 +1,11857 @@
+{
+ "benchmark": "libero",
+ "suite": "spatial",
+ "name": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate",
+ "language": [
+  "pick up the black bowl between the plate and the ramekin and place it on the plate",
+  "Pick the akita black bowl between the plate and the ramekin and place it on the plate"
+ ],
+ "scene": {
+  "supports": [
+   {
+    "name": "main_table",
+    "size": [
+     1.0,
+     1.2,
+     0.05
+    ],
+    "height": 0.9,
+    "friction": 0.6
+   }
+  ],
+  "fixtures": [
+   {
+    "name": "wooden_cabinet_1",
+    "asset": "wooden_cabinet",
+    "joints": [
+     {
+      "name": "top_level",
+      "kind": "prismatic",
+      "body": "cabinet_top"
+     },
+     {
+      "name": "middle_level",
+      "kind": "prismatic",
+      "body": "cabinet_middle"
+     },
+     {
+      "name": "bottom_level",
+      "kind": "prismatic",
+      "body": "cabinet_bottom"
+     }
+    ]
+   },
+   {
+    "name": "flat_stove_1",
+    "asset": "flat_stove",
+    "joints": [
+     {
+      "name": "button",
+      "kind": "revolute",
+      "body": "button"
+     }
+    ]
+   }
+  ],
+  "objects": [
+   {
+    "name": "akita_black_bowl_1",
+    "asset": "akita_black_bowl",
+    "joints": []
+   },
+   {
+    "name": "akita_black_bowl_2",
+    "asset": "akita_black_bowl",
+    "joints": []
+   },
+   {
+    "name": "cookies_1",
+    "asset": "cookies",
+    "joints": []
+   },
+   {
+    "name": "glazed_rim_porcelain_ramekin_1",
+    "asset": "glazed_rim_porcelain_ramekin",
+    "joints": []
+   },
+   {
+    "name": "plate_1",
+    "asset": "plate",
+    "joints": []
+   }
+  ]
+ },
+ "placements": [
+  {
+   "instance": "wooden_cabinet_1",
+   "low": [
+    0.02,
+    -0.28,
+    -0.0045868
+   ],
+   "high": [
+    0.04,
+    -0.26,
+    -0.0045868
+   ],
+   "yaw": [
+    2.6613778,
+    2.7242096
+   ],
+   "fixed": null,
+   "relation": "on wooden_cabinet_1 main_table_cabinet_region"
+  },
+  {
+   "instance": "flat_stove_1",
+   "low": [
+    -0.42,
+    -0.15,
+    0.02
+   ],
+   "high": [
+    -0.4,
+    -0.13,
+    0.02
+   ],
+   "yaw": [
+    0.0,
+    0.0
+   ],
+   "fixed": null,
+   "relation": "on flat_stove_1 main_table_stove_region"
+  },
+  {
+   "instance": "akita_black_bowl_1",
+   "low": [
+    -0.06,
+    0.19,
+    0.07
+   ],
+   "high": [
+    -0.04,
+    0.21,
+    0.07
+   ],
+   "yaw": [
+    1.5707963,
+    1.5707963
+   ],
+   "fixed": null,
+   "relation": "on akita_black_bowl_1 main_table_between_plate_ramekin_region"
+  },
+  {
+   "instance": "akita_black_bowl_2",
+   "low": [
+    -0.19,
+    0.31,
+    0.07
+   ],
+   "high": [
+    -0.17,
+    0.33,
+    0.07
+   ],
+   "yaw": [
+    1.5707963,
+    1.5707963
+   ],
+   "fixed": null,
+   "relation": "on akita_black_bowl_2 main_table_next_to_ramekin_region"
+  },
+  {
+   "instance": "cookies_1",
+   "low": [
+    0.06,
+    0.02,
+    0.07
+   ],
+   "high": [
+    0.08,
+    0.04,
+    0.07
+   ],
+   "yaw": [
+    1.5707963,
+    1.5707963
+   ],
+   "fixed": null,
+   "relation": "on cookies_1 main_table_box_region"
+  },
+  {
+   "instance": "glazed_rim_porcelain_ramekin_1",
+   "low": [
+    -0.21,
+    0.19,
+    0.07
+   ],
+   "high": [
+    -0.19,
+    0.21,
+    0.07
+   ],
+   "yaw": [
+    1.5707963,
+    1.5707963
+   ],
+   "fixed": null,
+   "relation": "on glazed_rim_porcelain_ramekin_1 main_table_ramekin_region"
+  },
+  {
+   "instance": "plate_1",
+   "low": [
+    0.05,
+    0.19,
+    0.07
+   ],
+   "high": [
+    0.07,
+    0.21,
+    0.07
+   ],
+   "yaw": [
+    1.5707963,
+    1.5707963
+   ],
+   "fixed": null,
+   "relation": "on plate_1 main_table_plate_region"
+  }
+ ],
+ "joint_states": [
+  {
+   "instance": "wooden_cabinet_1",
+   "joint": "top_level",
+   "low": 0.0,
+   "high": 0.0
+  },
+  {
+   "instance": "wooden_cabinet_1",
+   "joint": "middle_level",
+   "low": 0.0,
+   "high": 0.0
+  },
+  {
+   "instance": "wooden_cabinet_1",
+   "joint": "bottom_level",
+   "low": 0.0,
+   "high": 0.0
+  },
+  {
+   "instance": "flat_stove_1",
+   "joint": "button",
+   "low": 0.0,
+   "high": 0.0
+  }
+ ],
+ "init_states": [
+  {
+   "name": "demo_0",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0232458,
+      -0.272029,
+      -0.0045868
+     ],
+     "quat": [
+      0.213825,
+      0.0,
+      0.0,
+      0.976872
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.408227,
+      -0.133684,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0508519,
+      0.2063292,
+      -0.0017503
+     ],
+     "quat": [
+      0.7005747,
+      -0.0005446,
+      -0.000937,
+      0.7135782
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1836889,
+      0.3334827,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0550768,
+      0.016311,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1874223,
+      0.2058558,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0844136,
+      0.1968721,
+      0.0024714
+     ],
+     "quat": [
+      0.7191058,
+      0.0003935,
+      0.0001711,
+      0.6949005
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0090199,
+    -0.1779874,
+    -0.0117623,
+    -2.4564706,
+    -0.0100077,
+    2.2217567,
+    0.7968478,
+    0.0340473,
+    -0.034065
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_0"
+  },
+  {
+   "name": "demo_1",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.03554,
+      -0.273926,
+      -0.0045868
+     ],
+     "quat": [
+      0.231276,
+      0.0,
+      0.0,
+      0.972888
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.415006,
+      -0.135461,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0575057,
+      0.1865541,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1761233,
+      0.3161046,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0633899,
+      0.0380279,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1941519,
+      0.2058703,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0722796,
+      0.1883341,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0085614,
+    -0.136095,
+    0.0541408,
+    -2.4005241,
+    -0.0298402,
+    2.207438,
+    0.7734495,
+    0.0340698,
+    -0.0340243
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_1"
+  },
+  {
+   "name": "demo_2",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0315666,
+      -0.265241,
+      -0.0045868
+     ],
+     "quat": [
+      0.229084,
+      0.0,
+      0.0,
+      0.973407
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.401645,
+      -0.149183,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0592308,
+      0.1987668,
+      -0.0017463
+     ],
+     "quat": [
+      0.7017891,
+      -0.0004302,
+      -0.0004372,
+      0.7123845
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1944191,
+      0.3251124,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0569282,
+      0.0337658,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1894691,
+      0.2041322,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0694672,
+      0.2058136,
+      0.0024205
+     ],
+     "quat": [
+      0.7106123,
+      9.66e-05,
+      0.0001034,
+      0.7035838
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0166243,
+    -0.1594192,
+    -0.0087255,
+    -2.4511073,
+    0.0122064,
+    2.1968765,
+    0.7822353,
+    0.034094,
+    -0.0340131
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_2"
+  },
+  {
+   "name": "demo_3",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0353077,
+      -0.27159,
+      -0.0045868
+     ],
+     "quat": [
+      0.227788,
+      0.0,
+      0.0,
+      0.973711
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.417811,
+      -0.130419,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0489087,
+      0.1991609,
+      -0.0017554
+     ],
+     "quat": [
+      0.7036254,
+      -3.79e-05,
+      -0.00014,
+      0.7105711
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1792599,
+      0.3062262,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0570122,
+      0.0199309,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2105309,
+      0.199734,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0711179,
+      0.2088056,
+      0.002349
+     ],
+     "quat": [
+      0.7090888,
+      -0.000191,
+      -0.0001673,
+      0.7051192
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0102087,
+    -0.1446451,
+    -0.0043276,
+    -2.4513032,
+    -0.0110805,
+    2.2431804,
+    0.7960685,
+    0.034059,
+    -0.0340533
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_3"
+  },
+  {
+   "name": "demo_4",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0347311,
+      -0.266523,
+      -0.0045868
+     ],
+     "quat": [
+      0.211577,
+      0.0,
+      0.0,
+      0.977361
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.415175,
+      -0.14412,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0488928,
+      0.195841,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1828539,
+      0.3134362,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0601715,
+      0.0188979,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2096749,
+      0.1874568,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0740161,
+      0.1941187,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0113939,
+    -0.1594453,
+    -0.0107769,
+    -2.4598995,
+    -0.0036624,
+    2.2584037,
+    0.7652157,
+    0.0340661,
+    -0.0340412
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_4"
+  },
+  {
+   "name": "demo_5",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0253619,
+      -0.273385,
+      -0.0045868
+     ],
+     "quat": [
+      0.215612,
+      0.0,
+      0.0,
+      0.976479
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.410589,
+      -0.136396,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0640133,
+      0.2056922,
+      -0.0018066
+     ],
+     "quat": [
+      0.699975,
+      -0.0003258,
+      -0.0010759,
+      0.7141664
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1866907,
+      0.3309917,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0823141,
+      0.036537,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.20263,
+      0.2124935,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0665792,
+      0.2089142,
+      0.0024223
+     ],
+     "quat": [
+      0.7134014,
+      0.0002837,
+      0.0002189,
+      0.7007555
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0165194,
+    -0.1696715,
+    0.0198209,
+    -2.4144358,
+    0.007519,
+    2.2243984,
+    0.8075955,
+    0.0340685,
+    -0.0340421
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_5"
+  },
+  {
+   "name": "demo_6",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0274228,
+      -0.272543,
+      -0.0045868
+     ],
+     "quat": [
+      0.208329,
+      0.0,
+      0.0,
+      0.978059
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.405045,
+      -0.136905,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0645477,
+      0.2136996,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1727273,
+      0.3244835,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0775084,
+      0.0164991,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1986383,
+      0.1974818,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0526529,
+      0.2082049,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0017406,
+    -0.1440653,
+    0.0161873,
+    -2.4229298,
+    0.0047396,
+    2.2115741,
+    0.7756271,
+    0.0340884,
+    -0.0340093
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_6"
+  },
+  {
+   "name": "demo_7",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0232341,
+      -0.266993,
+      -0.0045868
+     ],
+     "quat": [
+      0.231274,
+      0.0,
+      0.0,
+      0.972889
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.419512,
+      -0.133462,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0608719,
+      0.2058421,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1931422,
+      0.3182148,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0659107,
+      0.0223999,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.196537,
+      0.2105899,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0724594,
+      0.1893063,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0044793,
+    -0.1316464,
+    0.0424101,
+    -2.3943411,
+    0.0103637,
+    2.2323971,
+    0.7903485,
+    0.034122,
+    -0.0339197
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_7"
+  },
+  {
+   "name": "demo_8",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0215503,
+      -0.262803,
+      -0.0045868
+     ],
+     "quat": [
+      0.216819,
+      0.0,
+      0.0,
+      0.976212
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.414805,
+      -0.141607,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0494377,
+      0.1893932,
+      -0.0017701
+     ],
+     "quat": [
+      0.7050915,
+      -0.0001589,
+      -0.0003065,
+      0.7091162
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1883458,
+      0.3214797,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0765068,
+      0.0190453,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2073295,
+      0.1984584,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0685264,
+      0.1990892,
+      0.0023703
+     ],
+     "quat": [
+      0.7081044,
+      -6.78e-05,
+      -2.66e-05,
+      0.7061078
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0026099,
+    -0.1090587,
+    -0.0117997,
+    -2.4205453,
+    0.0502405,
+    2.2341684,
+    0.7717695,
+    0.0341235,
+    -0.0339713
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_8"
+  },
+  {
+   "name": "demo_9",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0235002,
+      -0.264408,
+      -0.0045868
+     ],
+     "quat": [
+      0.217674,
+      0.0,
+      0.0,
+      0.976022
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.41743,
+      -0.134278,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0587453,
+      0.1907208,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1856094,
+      0.3275076,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0693607,
+      0.0312483,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1906841,
+      0.2100546,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0749435,
+      0.1960053,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0148787,
+    -0.1851832,
+    0.0050073,
+    -2.4556027,
+    -0.0123738,
+    2.2438012,
+    0.8061143,
+    0.0340614,
+    -0.0340505
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_9"
+  },
+  {
+   "name": "demo_10",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0234864,
+      -0.279005,
+      -0.0045868
+     ],
+     "quat": [
+      0.220192,
+      0.0,
+      0.0,
+      0.975457
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.411777,
+      -0.13404,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0447633,
+      0.2083058,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1696101,
+      0.3115996,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0727611,
+      0.0160054,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2108797,
+      0.2103259,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0674787,
+      0.1995793,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0020859,
+    -0.1471449,
+    -0.0100976,
+    -2.4024149,
+    -0.0288118,
+    2.2180773,
+    0.7626421,
+    0.0340438,
+    -0.0340636
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_10"
+  },
+  {
+   "name": "demo_11",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0289174,
+      -0.272795,
+      -0.0045868
+     ],
+     "quat": [
+      0.215117,
+      0.0,
+      0.0,
+      0.976588
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.407051,
+      -0.14937,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0700285,
+      0.1908237,
+      -0.0017555
+     ],
+     "quat": [
+      0.6981881,
+      -0.0005205,
+      -0.0004067,
+      0.715914
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.172431,
+      0.3149855,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0847556,
+      0.0437111,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2102162,
+      0.1864043,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0680521,
+      0.1985841,
+      0.0024482
+     ],
+     "quat": [
+      0.7125815,
+      0.0003257,
+      0.0004724,
+      0.7015891
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0183859,
+    -0.1644934,
+    -0.0054463,
+    -2.4373815,
+    0.0152476,
+    2.2320279,
+    0.7841478,
+    0.0340615,
+    -0.0340504
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_11"
+  },
+  {
+   "name": "demo_12",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0203534,
+      -0.267462,
+      -0.0045868
+     ],
+     "quat": [
+      0.220531,
+      0.0,
+      0.0,
+      0.97538
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.408644,
+      -0.14462,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0591469,
+      0.2017814,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1924952,
+      0.3153847,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0690762,
+      0.0160291,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.209339,
+      0.1920869,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0665724,
+      0.2018468,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0081868,
+    -0.1488958,
+    -0.0081472,
+    -2.4238061,
+    -0.0192076,
+    2.2297602,
+    0.7997386,
+    0.0340455,
+    -0.0340668
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_12"
+  },
+  {
+   "name": "demo_13",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0266987,
+      -0.266843,
+      -0.0045868
+     ],
+     "quat": [
+      0.231981,
+      0.0,
+      0.0,
+      0.97272
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.406457,
+      -0.147888,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0637989,
+      0.1977329,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1911678,
+      0.325626,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0803296,
+      0.0252827,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1970454,
+      0.1910225,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0739764,
+      0.2018841,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0108841,
+    -0.1218801,
+    -0.010602,
+    -2.4017054,
+    0.0051788,
+    2.1845948,
+    0.8238644,
+    0.0340815,
+    -0.0340245
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_13"
+  },
+  {
+   "name": "demo_14",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0353904,
+      -0.275608,
+      -0.0045868
+     ],
+     "quat": [
+      0.232605,
+      0.0,
+      0.0,
+      0.972571
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.413492,
+      -0.147553,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0554037,
+      0.1868351,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1663349,
+      0.3129744,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0670295,
+      0.0258226,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1953867,
+      0.1870338,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.068322,
+      0.2004907,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0127804,
+    -0.1569279,
+    -0.0236579,
+    -2.4271273,
+    -0.0374958,
+    2.1873601,
+    0.7847352,
+    0.0340324,
+    -0.0340767
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_14"
+  },
+  {
+   "name": "demo_15",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0310925,
+      -0.264344,
+      -0.0045868
+     ],
+     "quat": [
+      0.234356,
+      0.0,
+      0.0,
+      0.972151
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.41426,
+      -0.134032,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0654918,
+      0.1896575,
+      -0.0017497
+     ],
+     "quat": [
+      0.7034062,
+      -0.000292,
+      -0.0007537,
+      0.7107877
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1854255,
+      0.324078,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0837127,
+      0.0285958,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2065087,
+      0.2054996,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0597491,
+      0.1945884,
+      0.0024094
+     ],
+     "quat": [
+      0.7105182,
+      2.34e-05,
+      9.85e-05,
+      0.7036788
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0107376,
+    -0.1731026,
+    -0.0054966,
+    -2.4329523,
+    -0.0344855,
+    2.2243124,
+    0.7976247,
+    0.0340606,
+    -0.0340405
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_15"
+  },
+  {
+   "name": "demo_16",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0209982,
+      -0.264107,
+      -0.0045868
+     ],
+     "quat": [
+      0.233682,
+      0.0,
+      0.0,
+      0.972313
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.414223,
+      -0.135969,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0541074,
+      0.2114898,
+      -0.0017338
+     ],
+     "quat": [
+      0.6976077,
+      -0.0003855,
+      -0.000647,
+      0.7164796
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1691145,
+      0.3314592,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0687185,
+      0.026653,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.210411,
+      0.2129136,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0726667,
+      0.197503,
+      0.0024342
+     ],
+     "quat": [
+      0.7214247,
+      0.0004128,
+      0.0001741,
+      0.6924928
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0309382,
+    -0.1529243,
+    -0.0136846,
+    -2.414264,
+    0.0151188,
+    2.1854467,
+    0.7678691,
+    0.0341038,
+    -0.033987
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_16"
+  },
+  {
+   "name": "demo_17",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0283008,
+      -0.279101,
+      -0.0045868
+     ],
+     "quat": [
+      0.21502,
+      0.0,
+      0.0,
+      0.97661
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.405022,
+      -0.136441,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0732232,
+      0.2029814,
+      -0.0018215
+     ],
+     "quat": [
+      0.6895839,
+      -0.0007101,
+      -0.0011726,
+      0.7242045
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1695969,
+      0.3225553,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0807257,
+      0.0431361,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1856508,
+      0.1878393,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0725308,
+      0.215163,
+      0.0024603
+     ],
+     "quat": [
+      0.7053661,
+      0.0002024,
+      0.0005164,
+      0.708843
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.020201,
+    -0.1456941,
+    0.0339445,
+    -2.4186947,
+    0.0076762,
+    2.1777376,
+    0.8088085,
+    0.0340693,
+    -0.0340424
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_17"
+  },
+  {
+   "name": "demo_18",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0265813,
+      -0.271588,
+      -0.0045868
+     ],
+     "quat": [
+      0.21319,
+      0.0,
+      0.0,
+      0.977011
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.413758,
+      -0.136542,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0577816,
+      0.1938727,
+      0.0010974
+     ],
+     "quat": [
+      0.7124399,
+      -0.0364108,
+      -0.0524211,
+      0.6988245
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1711974,
+      0.3160828,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0597359,
+      0.0241836,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1944888,
+      0.201699,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.055954,
+      0.2062464,
+      0.0015519
+     ],
+     "quat": [
+      0.7192816,
+      0.0067179,
+      0.0140437,
+      0.6945442
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0227869,
+    -0.1299213,
+    -0.0055933,
+    -2.4337711,
+    0.018764,
+    2.2061215,
+    0.7920024,
+    0.0340712,
+    -0.0340307
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_18"
+  },
+  {
+   "name": "demo_19",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0375757,
+      -0.260414,
+      -0.0045868
+     ],
+     "quat": [
+      0.225404,
+      0.0,
+      0.0,
+      0.974265
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.409964,
+      -0.149292,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0516818,
+      0.2168773,
+      -0.0017618
+     ],
+     "quat": [
+      0.7392525,
+      -0.0004381,
+      -0.0007024,
+      0.6734278
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1889396,
+      0.3250963,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.074037,
+      0.0182848,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1858025,
+      0.1903119,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0903318,
+      0.1871781,
+      0.002422
+     ],
+     "quat": [
+      0.6992863,
+      0.0004891,
+      0.0002837,
+      0.7148415
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0081992,
+    -0.1705575,
+    0.0213946,
+    -2.44509,
+    0.003574,
+    2.2289665,
+    0.7825915,
+    0.0340617,
+    -0.0340504
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_19"
+  },
+  {
+   "name": "demo_20",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0396819,
+      -0.262545,
+      -0.0045868
+     ],
+     "quat": [
+      0.213631,
+      0.0,
+      0.0,
+      0.976914
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.417856,
+      -0.145967,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0399436,
+      0.2072241,
+      -0.0015216
+     ],
+     "quat": [
+      0.7064837,
+      -0.0053273,
+      -0.0053895,
+      0.7076887
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1766117,
+      0.3113558,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0575784,
+      0.0161145,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1860178,
+      0.2137482,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.072647,
+      0.1849586,
+      0.00231
+     ],
+     "quat": [
+      0.7079502,
+      -0.0003006,
+      -9.35e-05,
+      0.7062623
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0205864,
+    -0.1515791,
+    -0.0057077,
+    -2.4328366,
+    0.0046857,
+    2.186471,
+    0.7573496,
+    0.0340699,
+    -0.03404
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_20"
+  },
+  {
+   "name": "demo_21",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0280893,
+      -0.276916,
+      -0.0045868
+     ],
+     "quat": [
+      0.217799,
+      0.0,
+      0.0,
+      0.975994
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.406924,
+      -0.140049,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0370172,
+      0.2060237,
+      -0.0018264
+     ],
+     "quat": [
+      0.7070016,
+      1.59e-05,
+      2.18e-05,
+      0.7072119
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1804439,
+      0.3163322,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0701091,
+      0.015699,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.210176,
+      0.2010304,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.076964,
+      0.2013418,
+      0.0022981
+     ],
+     "quat": [
+      0.7075968,
+      -7.36e-05,
+      -3.12e-05,
+      0.7066164
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.000127,
+    -0.1708406,
+    0.0078749,
+    -2.4595476,
+    0.0071582,
+    2.1540343,
+    0.8103096,
+    0.0340735,
+    -0.0340365
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_21"
+  },
+  {
+   "name": "demo_22",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0291744,
+      -0.269999,
+      -0.0045868
+     ],
+     "quat": [
+      0.227259,
+      0.0,
+      0.0,
+      0.973834
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.415554,
+      -0.135932,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0574306,
+      0.2131918,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1905635,
+      0.3149895,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0692109,
+      0.0284677,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1867201,
+      0.1981749,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0560103,
+      0.2135114,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0059434,
+    -0.1690361,
+    0.0088255,
+    -2.4378509,
+    0.0017471,
+    2.2365661,
+    0.7907265,
+    0.0340668,
+    -0.0340448
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_22"
+  },
+  {
+   "name": "demo_23",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0291374,
+      -0.268314,
+      -0.0045868
+     ],
+     "quat": [
+      0.215812,
+      0.0,
+      0.0,
+      0.976435
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.403477,
+      -0.14566,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0600006,
+      0.2143374,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1796992,
+      0.3296405,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0674914,
+      0.0388656,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.210541,
+      0.1975749,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0707465,
+      0.2058367,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.018095,
+    -0.1488957,
+    -0.0020875,
+    -2.4337898,
+    -0.0092316,
+    2.2461917,
+    0.7828634,
+    0.0340436,
+    -0.0340675
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_23"
+  },
+  {
+   "name": "demo_24",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0365118,
+      -0.269068,
+      -0.0045868
+     ],
+     "quat": [
+      0.216572,
+      0.0,
+      0.0,
+      0.976267
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.419942,
+      -0.135963,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0807894,
+      0.2243215,
+      -0.0017348
+     ],
+     "quat": [
+      0.627762,
+      -0.0010374,
+      -0.0026273,
+      0.7784002
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1939486,
+      0.3210966,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0560182,
+      0.0307285,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1928028,
+      0.2004161,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0713727,
+      0.1835986,
+      0.0024615
+     ],
+     "quat": [
+      0.677256,
+      3.49e-05,
+      0.0001295,
+      0.7357475
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0078969,
+    -0.1423437,
+    0.0419144,
+    -2.3839797,
+    -0.0064526,
+    2.2163993,
+    0.7990193,
+    0.0341209,
+    -0.0339252
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_24"
+  },
+  {
+   "name": "demo_25",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0329166,
+      -0.27979,
+      -0.0045868
+     ],
+     "quat": [
+      0.221757,
+      0.0,
+      0.0,
+      0.975102
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.412116,
+      -0.148474,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0763846,
+      0.1964016,
+      -0.0018311
+     ],
+     "quat": [
+      0.6912886,
+      -0.0009855,
+      -0.0008314,
+      0.7225776
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1835343,
+      0.3326523,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0812231,
+      0.0153574,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1967483,
+      0.2028929,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0901945,
+      0.2072103,
+      0.0024325
+     ],
+     "quat": [
+      0.7004785,
+      0.0005363,
+      0.0008364,
+      0.7136728
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0159308,
+    -0.1715196,
+    -0.0208332,
+    -2.4476416,
+    -0.0039718,
+    2.2295712,
+    0.797063,
+    0.0340491,
+    -0.0340622
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_25"
+  },
+  {
+   "name": "demo_26",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0272571,
+      -0.264982,
+      -0.0045868
+     ],
+     "quat": [
+      0.208467,
+      0.0,
+      0.0,
+      0.978029
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.402902,
+      -0.135499,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0561292,
+      0.1981073,
+      -0.0017456
+     ],
+     "quat": [
+      0.7068393,
+      -0.0002048,
+      -0.000745,
+      0.7073738
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1936267,
+      0.3342555,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0732891,
+      0.0343735,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2031722,
+      0.1937481,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0913776,
+      0.1916158,
+      0.0024754
+     ],
+     "quat": [
+      0.7143464,
+      -6.56e-05,
+      -0.0001017,
+      0.6997922
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0109668,
+    -0.1603624,
+    0.0390709,
+    -2.4224371,
+    -0.0141309,
+    2.1969131,
+    0.7776532,
+    0.0340541,
+    -0.0340577
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_26"
+  },
+  {
+   "name": "demo_27",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0367637,
+      -0.266846,
+      -0.0045868
+     ],
+     "quat": [
+      0.235792,
+      0.0,
+      0.0,
+      0.971804
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.416823,
+      -0.143543,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0486333,
+      0.1917553,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1651374,
+      0.3293545,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0751498,
+      0.0184416,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1865826,
+      0.2052667,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0654268,
+      0.2118973,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0271724,
+    -0.1961858,
+    0.0139197,
+    -2.4572001,
+    -0.0092788,
+    2.2296314,
+    0.7857006,
+    0.0340635,
+    -0.0340394
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_27"
+  },
+  {
+   "name": "demo_28",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0201534,
+      -0.27893,
+      -0.0045868
+     ],
+     "quat": [
+      0.231826,
+      0.0,
+      0.0,
+      0.972757
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.413244,
+      -0.136781,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0522724,
+      0.1946221,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1673748,
+      0.330695,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0597389,
+      0.0196263,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1961266,
+      0.1935181,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0725495,
+      0.2051878,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0003239,
+    -0.1248194,
+    0.0359176,
+    -2.4334434,
+    -0.0266834,
+    2.2500273,
+    0.7979154,
+    0.034067,
+    -0.0340382
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_28"
+  },
+  {
+   "name": "demo_29",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0353747,
+      -0.268723,
+      -0.0045868
+     ],
+     "quat": [
+      0.230621,
+      0.0,
+      0.0,
+      0.973044
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.401236,
+      -0.1383,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0855494,
+      0.224858,
+      -0.0004402
+     ],
+     "quat": [
+      0.8448335,
+      0.0269182,
+      0.0159443,
+      0.5341137
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1678367,
+      0.3340385,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0762308,
+      0.0245745,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1869017,
+      0.1876813,
+      -0.0008337
+     ],
+     "quat": [
+      0.7068261,
+      1.06e-05,
+      -9.2e-06,
+      0.7073873
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0854676,
+      0.2023056,
+      0.0024519
+     ],
+     "quat": [
+      0.2839465,
+      -0.0001095,
+      0.000672,
+      0.9588399
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0195372,
+    -0.161175,
+    0.006051,
+    -2.4202553,
+    0.0254375,
+    2.2152715,
+    0.7970591,
+    0.0340811,
+    -0.0340291
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_29"
+  },
+  {
+   "name": "demo_30",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0398094,
+      -0.279935,
+      -0.0045868
+     ],
+     "quat": [
+      0.224549,
+      0.0,
+      0.0,
+      0.974463
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.419224,
+      -0.134533,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0636255,
+      0.2124378,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1843641,
+      0.3181765,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0578636,
+      0.0311999,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1946637,
+      0.2123937,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0738166,
+      0.1854802,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0313047,
+    -0.1547254,
+    -0.0302471,
+    -2.4235918,
+    -0.0125139,
+    2.2143106,
+    0.7858056,
+    0.0340457,
+    -0.0340667
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_30"
+  },
+  {
+   "name": "demo_31",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0261607,
+      -0.276634,
+      -0.0045868
+     ],
+     "quat": [
+      0.234973,
+      0.0,
+      0.0,
+      0.972002
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.411339,
+      -0.138998,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0649648,
+      0.198271,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1935553,
+      0.3105669,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0780668,
+      0.019682,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2112355,
+      0.2111126,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0680815,
+      0.1871634,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.001655,
+    -0.1788463,
+    0.0003681,
+    -2.4201525,
+    -0.0033146,
+    2.2241914,
+    0.8300595,
+    0.0340539,
+    -0.0340573
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_31"
+  },
+  {
+   "name": "demo_32",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0396213,
+      -0.276589,
+      -0.0045868
+     ],
+     "quat": [
+      0.236522,
+      0.0,
+      0.0,
+      0.971626
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.412616,
+      -0.134434,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0546502,
+      0.2040473,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1683724,
+      0.3309258,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0701471,
+      0.0173916,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1992989,
+      0.193544,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0701927,
+      0.1953147,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0084249,
+    -0.1703454,
+    -0.0105981,
+    -2.4504849,
+    0.0073725,
+    2.2297539,
+    0.7824318,
+    0.0340637,
+    -0.0340485
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_32"
+  },
+  {
+   "name": "demo_33",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0371886,
+      -0.270829,
+      -0.0045868
+     ],
+     "quat": [
+      0.208928,
+      0.0,
+      0.0,
+      0.977931
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.409368,
+      -0.144375,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0633668,
+      0.2062469,
+      -0.0017284
+     ],
+     "quat": [
+      0.7403537,
+      0.0003729,
+      -0.0014942,
+      0.6722158
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1881699,
+      0.3142103,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0754945,
+      0.0288831,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1931164,
+      0.2003905,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0710467,
+      0.2125142,
+      0.0024095
+     ],
+     "quat": [
+      0.667206,
+      0.0004341,
+      0.000244,
+      0.7448731
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0138571,
+    -0.1434133,
+    0.0022248,
+    -2.4375174,
+    0.0229573,
+    2.2144744,
+    0.795177,
+    0.0340643,
+    -0.0340465
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_33"
+  },
+  {
+   "name": "demo_34",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0206462,
+      -0.27997,
+      -0.0045868
+     ],
+     "quat": [
+      0.234748,
+      0.0,
+      0.0,
+      0.972056
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.403587,
+      -0.136998,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0564841,
+      0.1985711,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1877219,
+      0.3264014,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0557575,
+      0.0286043,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2108174,
+      0.2074799,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0749554,
+      0.2046602,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0110687,
+    -0.1502495,
+    1.22e-05,
+    -2.4571823,
+    0.001877,
+    2.2313731,
+    0.7730553,
+    0.0340592,
+    -0.0340531
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_34"
+  },
+  {
+   "name": "demo_35",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0230941,
+      -0.27183,
+      -0.0045868
+     ],
+     "quat": [
+      0.207602,
+      0.0,
+      0.0,
+      0.978213
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.411446,
+      -0.134556,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0400441,
+      0.1961627,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.179725,
+      0.3125138,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0579531,
+      0.0214268,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.202763,
+      0.1865056,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0742473,
+      0.2077605,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0033802,
+    -0.1712321,
+    0.0104546,
+    -2.4376177,
+    0.007645,
+    2.2006609,
+    0.793435,
+    0.0340671,
+    -0.034045
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_35"
+  },
+  {
+   "name": "demo_36",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0238948,
+      -0.261141,
+      -0.0045868
+     ],
+     "quat": [
+      0.237352,
+      0.0,
+      0.0,
+      0.971424
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.409969,
+      -0.14821,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0726768,
+      0.2002433,
+      -0.0016303
+     ],
+     "quat": [
+      0.7554028,
+      -0.0008415,
+      0.000297,
+      0.6552601
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1769157,
+      0.3136716,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0669473,
+      0.0399011,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2069205,
+      0.1981901,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0923222,
+      0.1981958,
+      0.0024377
+     ],
+     "quat": [
+      0.791241,
+      0.0007699,
+      0.0004947,
+      0.6115037
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0086382,
+    -0.1573886,
+    0.0059923,
+    -2.4452409,
+    0.0012349,
+    2.2166105,
+    0.7906341,
+    0.0340587,
+    -0.0340536
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_36"
+  },
+  {
+   "name": "demo_37",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.021932,
+      -0.278811,
+      -0.0045868
+     ],
+     "quat": [
+      0.220012,
+      0.0,
+      0.0,
+      0.975497
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.400887,
+      -0.14743,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0671865,
+      0.1954729,
+      -0.0017324
+     ],
+     "quat": [
+      0.6501321,
+      -0.0012429,
+      -0.0015569,
+      0.7598186
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1820007,
+      0.3303068,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0758787,
+      0.0339945,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2107615,
+      0.2051084,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0895087,
+      0.2038279,
+      0.0024328
+     ],
+     "quat": [
+      0.6635811,
+      0.0004203,
+      0.000853,
+      0.7481037
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0221444,
+    -0.1367936,
+    0.0422224,
+    -2.4185506,
+    0.0107883,
+    2.2418701,
+    0.7952367,
+    0.0340998,
+    -0.0339911
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_37"
+  },
+  {
+   "name": "demo_38",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0279048,
+      -0.277776,
+      -0.0045868
+     ],
+     "quat": [
+      0.234438,
+      0.0,
+      0.0,
+      0.972131
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.41581,
+      -0.133966,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0608512,
+      0.1968639,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.17188,
+      0.3262553,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0764518,
+      0.0326856,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2048645,
+      0.2071079,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.068487,
+      0.21464,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0102375,
+    -0.1396688,
+    0.0082279,
+    -2.4371873,
+    -0.0031596,
+    2.1665571,
+    0.7938557,
+    0.0340789,
+    -0.0340291
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_38"
+  },
+  {
+   "name": "demo_39",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0312812,
+      -0.261819,
+      -0.0045868
+     ],
+     "quat": [
+      0.209102,
+      0.0,
+      0.0,
+      0.977894
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.404462,
+      -0.133596,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0620805,
+      0.1987693,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1714764,
+      0.3336701,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0841735,
+      0.0334894,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2044138,
+      0.1972998,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0685886,
+      0.1928985,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.018092,
+    -0.1775699,
+    0.0050477,
+    -2.4850594,
+    -0.0155163,
+    2.2272848,
+    0.7618599,
+    0.0340525,
+    -0.0340594
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_39"
+  },
+  {
+   "name": "demo_40",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0390192,
+      -0.261115,
+      -0.0045868
+     ],
+     "quat": [
+      0.225669,
+      0.0,
+      0.0,
+      0.974204
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.411731,
+      -0.140088,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0488171,
+      0.197833,
+      -0.001743
+     ],
+     "quat": [
+      0.7025688,
+      -0.0003408,
+      -0.0008778,
+      0.7116152
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.179453,
+      0.3196707,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0665506,
+      0.0330865,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2028711,
+      0.1939833,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0757579,
+      0.1969926,
+      0.0024227
+     ],
+     "quat": [
+      0.7130251,
+      -2.07e-05,
+      1.4e-06,
+      0.7011385
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0253552,
+    -0.1587473,
+    0.0080183,
+    -2.4451821,
+    -0.0011189,
+    2.2171568,
+    0.7905604,
+    0.0340811,
+    -0.0340277
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_40"
+  },
+  {
+   "name": "demo_41",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0214503,
+      -0.267384,
+      -0.0045868
+     ],
+     "quat": [
+      0.237698,
+      0.0,
+      0.0,
+      0.971339
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.414364,
+      -0.144664,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0583432,
+      0.2138897,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1681065,
+      0.3135659,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0733943,
+      0.0244777,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2106565,
+      0.2104834,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0585145,
+      0.2117594,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0328045,
+    -0.1544075,
+    0.0437678,
+    -2.3988161,
+    0.0109286,
+    2.1949648,
+    0.7892452,
+    0.0340648,
+    -0.0340473
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_41"
+  },
+  {
+   "name": "demo_42",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0289885,
+      -0.276863,
+      -0.0045868
+     ],
+     "quat": [
+      0.21775,
+      0.0,
+      0.0,
+      0.976005
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.401407,
+      -0.149396,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0496247,
+      0.2062059,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1923028,
+      0.3312999,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0709032,
+      0.0438512,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2078633,
+      0.2000255,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0657249,
+      0.211814,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0216194,
+    -0.1587187,
+    -0.0271232,
+    -2.4425739,
+    0.0133913,
+    2.2568359,
+    0.7415757,
+    0.0340275,
+    -0.0340814
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_42"
+  },
+  {
+   "name": "demo_43",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0361567,
+      -0.278847,
+      -0.0045868
+     ],
+     "quat": [
+      0.220809,
+      0.0,
+      0.0,
+      0.975317
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.408659,
+      -0.148516,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0432528,
+      0.1926967,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1765846,
+      0.3290025,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.074586,
+      0.0313346,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2012193,
+      0.2077715,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0724478,
+      0.2015441,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0052895,
+    -0.1533917,
+    0.0115718,
+    -2.4065672,
+    0.0190509,
+    2.2052241,
+    0.7929598,
+    0.0340954,
+    -0.0340111
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_43"
+  },
+  {
+   "name": "demo_44",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0205844,
+      -0.264128,
+      -0.0045868
+     ],
+     "quat": [
+      0.209285,
+      0.0,
+      0.0,
+      0.977855
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.411141,
+      -0.142311,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0505826,
+      0.1931683,
+      -0.0017225
+     ],
+     "quat": [
+      0.6778316,
+      -0.0007979,
+      -0.0017645,
+      0.7352146
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1851302,
+      0.3263172,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0778616,
+      0.0294747,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2076201,
+      0.1949227,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0891408,
+      0.2020948,
+      0.0024305
+     ],
+     "quat": [
+      0.670046,
+      0.0004257,
+      0.000745,
+      0.7423191
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0074004,
+    -0.1347546,
+    0.0190582,
+    -2.4073177,
+    0.0091636,
+    2.2099547,
+    0.794432,
+    0.0340973,
+    -0.034005
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_44"
+  },
+  {
+   "name": "demo_45",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.037675,
+      -0.270794,
+      -0.0045868
+     ],
+     "quat": [
+      0.208885,
+      0.0,
+      0.0,
+      0.97794
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.413931,
+      -0.145876,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.080411,
+      0.2102923,
+      0.0001304
+     ],
+     "quat": [
+      0.4962852,
+      -0.0377656,
+      0.0235981,
+      0.8670166
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1656141,
+      0.3194157,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0550172,
+      0.0187837,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2002915,
+      0.186493,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0968273,
+      0.1992067,
+      0.0024308
+     ],
+     "quat": [
+      0.7199809,
+      0.0008364,
+      0.0003816,
+      0.6939933
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.02189,
+    -0.1510651,
+    0.016182,
+    -2.413559,
+    0.0140381,
+    2.2205284,
+    0.8029454,
+    0.0340971,
+    -0.034013
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_45"
+  },
+  {
+   "name": "demo_46",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0216772,
+      -0.279452,
+      -0.0045868
+     ],
+     "quat": [
+      0.220048,
+      0.0,
+      0.0,
+      0.975489
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.408833,
+      -0.137169,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0590169,
+      0.1898576,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1737167,
+      0.3131216,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0783366,
+      0.0423756,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2035802,
+      0.1972277,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0616762,
+      0.186981,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0151449,
+    -0.1324048,
+    0.0300754,
+    -2.3925837,
+    -0.0237037,
+    2.1907649,
+    0.8266651,
+    0.0340713,
+    -0.0340087
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_46"
+  },
+  {
+   "name": "demo_47",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0358252,
+      -0.269937,
+      -0.0045868
+     ],
+     "quat": [
+      0.211299,
+      0.0,
+      0.0,
+      0.977421
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.400067,
+      -0.146983,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0737734,
+      0.1899098,
+      -0.0017967
+     ],
+     "quat": [
+      0.7336618,
+      0.0002668,
+      -0.001684,
+      0.6795127
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1888447,
+      0.3220701,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0572325,
+      0.0430113,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2142046,
+      0.1904445,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0818363,
+      0.1988438,
+      0.002422
+     ],
+     "quat": [
+      0.6880824,
+      0.0007718,
+      0.0006915,
+      0.7256318
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0432349,
+    -0.1480794,
+    -0.0139124,
+    -2.4259783,
+    -0.0098426,
+    2.2264603,
+    0.744758,
+    0.0340338,
+    -0.0340755
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_47"
+  },
+  {
+   "name": "demo_48",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0353962,
+      -0.262431,
+      -0.0045868
+     ],
+     "quat": [
+      0.231055,
+      0.0,
+      0.0,
+      0.972941
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.405797,
+      -0.137208,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0532169,
+      0.1922928,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1801582,
+      0.3112726,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.066372,
+      0.0288375,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1855678,
+      0.1956928,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.065455,
+      0.1931492,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0075096,
+    -0.1166729,
+    0.0037586,
+    -2.4239485,
+    0.0062497,
+    2.1816153,
+    0.7916788,
+    0.0340978,
+    -0.0339849
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_48"
+  },
+  {
+   "name": "demo_49",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0273157,
+      -0.272389,
+      -0.0045868
+     ],
+     "quat": [
+      0.221524,
+      0.0,
+      0.0,
+      0.975155
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.408748,
+      -0.134623,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0592522,
+      0.1865951,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1850563,
+      0.3349282,
+      -0.0018415
+     ],
+     "quat": [
+      0.7071068,
+      -1.07e-05,
+      -1.4e-06,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.05656,
+      0.0199434,
+      0.0092098
+     ],
+     "quat": [
+      0.7071068,
+      -7e-07,
+      -2e-06,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1995307,
+      0.2078909,
+      -0.0008405
+     ],
+     "quat": [
+      0.7071068,
+      -1.5e-06,
+      2.1e-06,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0606072,
+      0.2099786,
+      0.0023146
+     ],
+     "quat": [
+      0.7071069,
+      -1.01e-05,
+      2e-05,
+      0.7071067
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0192335,
+    -0.1550896,
+    0.0017655,
+    -2.4730167,
+    -0.0050858,
+    2.226639,
+    0.7884334,
+    0.034055,
+    -0.0340561
+   ],
+   "seed": null,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate_demo.hdf5 demo_49"
+  },
+  {
+   "name": "eval_0",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0253957,
+      -0.2791805,
+      -0.0045868
+     ],
+     "quat": [
+      0.218324,
+      0.0,
+      0.0,
+      0.9758763
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4196694,
+      -0.1337346,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0634828,
+      0.2020626,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1887305,
+      0.3203845,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0578596,
+      0.0264329,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1973842,
+      0.1891353,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0534092,
+      0.2051823,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0001385,
+    -0.1767345,
+    -0.0365576,
+    -2.457113,
+    0.005935,
+    2.23522,
+    0.7993834,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 0,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 0"
+  },
+  {
+   "name": "eval_1",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0390093,
+      -0.2771168,
+      -0.0045868
+     ],
+     "quat": [
+      0.2221588,
+      0.0,
+      0.0,
+      0.9750105
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.401027,
+      -0.1437634,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0643153,
+      0.1969788,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1846549,
+      0.3302098,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0624524,
+      0.0373547,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2014275,
+      0.1872941,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0612946,
+      0.195058,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0382427,
+    -0.154193,
+    -0.0287181,
+    -2.435239,
+    -0.0052097,
+    2.2246759,
+    0.7741899,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 1,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 1"
+  },
+  {
+   "name": "eval_2",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0259698,
+      -0.2637155,
+      -0.0045868
+     ],
+     "quat": [
+      0.229816,
+      0.0,
+      0.0,
+      0.9732341
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4181617,
+      -0.137998,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0472249,
+      0.1994381,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1846198,
+      0.3257709,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0676864,
+      0.0378521,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1917899,
+      0.1975796,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0503953,
+      0.207878,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.00668,
+    -0.1759966,
+    -0.0142936,
+    -2.4119442,
+    0.0467964,
+    2.2247863,
+    0.8141001,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 2,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 2"
+  },
+  {
+   "name": "eval_3",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0247362,
+      -0.2639745,
+      -0.0045868
+     ],
+     "quat": [
+      0.2351926,
+      0.0,
+      0.0,
+      0.9719488
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4083568,
+      -0.1481174,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0471908,
+      0.2011149,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1702993,
+      0.3137741,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0699319,
+      0.0404559,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2135178,
+      0.2061293,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0639904,
+      0.1943372,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0042368,
+    -0.1600133,
+    -0.0281747,
+    -2.4667419,
+    -0.0074644,
+    2.2088548,
+    0.744609,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 3,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 3"
+  },
+  {
+   "name": "eval_4",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0302266,
+      -0.2604751,
+      -0.0045868
+     ],
+     "quat": [
+      0.2089298,
+      0.0,
+      0.0,
+      0.9779306
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4183833,
+      -0.1378529,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0404711,
+      0.1860353,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1751374,
+      0.3258251,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0841833,
+      0.0416496,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1891417,
+      0.2096669,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0686377,
+      0.1937926,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0210122,
+    -0.1350438,
+    0.0308265,
+    -2.4500096,
+    -0.0110669,
+    2.2411225,
+    0.8122657,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 4,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 4"
+  },
+  {
+   "name": "eval_5",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0361588,
+      -0.2696935,
+      -0.0045868
+     ],
+     "quat": [
+      0.2131692,
+      0.0,
+      0.0,
+      0.9770153
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.414284,
+      -0.1489214,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0429517,
+      0.2142363,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1840913,
+      0.3146018,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0783759,
+      0.015719,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2039545,
+      0.212474,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0631993,
+      0.2026597,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0144599,
+    -0.1504452,
+    0.0166169,
+    -2.4093441,
+    -0.024972,
+    2.2322953,
+    0.8160729,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 5,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 5"
+  },
+  {
+   "name": "eval_6",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0268654,
+      -0.2726187,
+      -0.0045868
+     ],
+     "quat": [
+      0.2213519,
+      0.0,
+      0.0,
+      0.975194
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4125101,
+      -0.1302511,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0502553,
+      0.1862533,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1667859,
+      0.3235312,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0764966,
+      0.0185653,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1906179,
+      0.2124703,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0628721,
+      0.1985149,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0213037,
+    -0.141841,
+    -0.0171275,
+    -2.4182234,
+    0.000502,
+    2.1948206,
+    0.7569259,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 6,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 6"
+  },
+  {
+   "name": "eval_7",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0379443,
+      -0.2644863,
+      -0.0045868
+     ],
+     "quat": [
+      0.2186878,
+      0.0,
+      0.0,
+      0.9757949
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4154959,
+      -0.1439967,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0473012,
+      0.186154,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1874137,
+      0.3349012,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0599958,
+      0.0372823,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2009711,
+      0.2021237,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0676829,
+      0.2131269,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0388083,
+    -0.192929,
+    0.0333156,
+    -2.4253711,
+    0.0152034,
+    2.2004176,
+    0.777468,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 7,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 7"
+  },
+  {
+   "name": "eval_8",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0397455,
+      -0.2736258,
+      -0.0045868
+     ],
+     "quat": [
+      0.2278172,
+      0.0,
+      0.0,
+      0.9737039
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.404229,
+      -0.1326021,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.061831,
+      0.2010738,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1781218,
+      0.3309929,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0710619,
+      0.0162446,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1980958,
+      0.1914398,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0749198,
+      0.2076503,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0331449,
+    -0.1749408,
+    -0.0048696,
+    -2.4754005,
+    0.0158823,
+    2.2340693,
+    0.7758549,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 8,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 8"
+  },
+  {
+   "name": "eval_9",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0257363,
+      -0.267937,
+      -0.0045868
+     ],
+     "quat": [
+      0.211166,
+      0.0,
+      0.0,
+      0.9774502
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4044493,
+      -0.1356785,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0456988,
+      0.2010949,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1852392,
+      0.313855,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0841018,
+      0.0237513,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1898436,
+      0.2048642,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0684545,
+      0.199032,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0126738,
+    -0.1600144,
+    -0.0203175,
+    -2.4449782,
+    -0.0022864,
+    2.2602609,
+    0.7798576,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 9,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 9"
+  },
+  {
+   "name": "eval_10",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0241536,
+      -0.2634311,
+      -0.0045868
+     ],
+     "quat": [
+      0.208532,
+      0.0,
+      0.0,
+      0.9780155
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4170144,
+      -0.1397439,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0551533,
+      0.2054696,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1880753,
+      0.3097869,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.077934,
+      0.0245079,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1929729,
+      0.1876536,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0517558,
+      0.1875166,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.023282,
+    -0.160654,
+    -0.0014756,
+    -2.463692,
+    -0.0226853,
+    2.2372973,
+    0.7663315,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 10,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 10"
+  },
+  {
+   "name": "eval_11",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0299856,
+      -0.26797,
+      -0.0045868
+     ],
+     "quat": [
+      0.2338818,
+      0.0,
+      0.0,
+      0.972265
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4194262,
+      -0.1470415,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.057927,
+      0.2107444,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1767745,
+      0.3273117,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0849002,
+      0.03058,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2007722,
+      0.1950085,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0660428,
+      0.2082156,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0223946,
+    -0.1897144,
+    0.0263661,
+    -2.4440868,
+    0.026782,
+    2.2122331,
+    0.7762053,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 11,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 11"
+  },
+  {
+   "name": "eval_12",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0389351,
+      -0.2762136,
+      -0.0045868
+     ],
+     "quat": [
+      0.2301459,
+      0.0,
+      0.0,
+      0.9731561
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4164142,
+      -0.1430022,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0555504,
+      0.1886568,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1821625,
+      0.3268554,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0782102,
+      0.0280413,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1860191,
+      0.2092719,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0682204,
+      0.2001225,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.005368,
+    -0.1562759,
+    -0.0099984,
+    -2.4326831,
+    0.0015826,
+    2.2080103,
+    0.7765992,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 12,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 12"
+  },
+  {
+   "name": "eval_13",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0371061,
+      -0.2637795,
+      -0.0045868
+     ],
+     "quat": [
+      0.2113334,
+      0.0,
+      0.0,
+      0.977414
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4147711,
+      -0.148456,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0460377,
+      0.20926,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1675036,
+      0.3346267,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0843783,
+      0.040572,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2130125,
+      0.2106311,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0581987,
+      0.1915917,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0482719,
+    -0.1734751,
+    0.0033411,
+    -2.4407667,
+    0.008832,
+    2.2143731,
+    0.7902533,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 13,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 13"
+  },
+  {
+   "name": "eval_14",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0272189,
+      -0.2659452,
+      -0.0045868
+     ],
+     "quat": [
+      0.2123716,
+      0.0,
+      0.0,
+      0.977189
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4027976,
+      -0.1371737,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0439832,
+      0.1920779,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1854518,
+      0.3197691,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0846575,
+      0.0377096,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.214095,
+      0.2094505,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0580683,
+      0.2062541,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.017688,
+    -0.1968388,
+    -0.0038108,
+    -2.436741,
+    0.0118446,
+    2.2309145,
+    0.7849305,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 14,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 14"
+  },
+  {
+   "name": "eval_15",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0363163,
+      -0.2731119,
+      -0.0045868
+     ],
+     "quat": [
+      0.2166135,
+      0.0,
+      0.0,
+      0.9762574
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4191032,
+      -0.1385681,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.04961,
+      0.1904443,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1700531,
+      0.3219194,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0653892,
+      0.0167331,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1919575,
+      0.2053118,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0648279,
+      0.1998982,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0294052,
+    -0.1425375,
+    -0.0221338,
+    -2.4310474,
+    0.0167828,
+    2.2115673,
+    0.7842885,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 15,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 15"
+  },
+  {
+   "name": "eval_16",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0286149,
+      -0.2781185,
+      -0.0045868
+     ],
+     "quat": [
+      0.2204709,
+      0.0,
+      0.0,
+      0.9753936
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4130384,
+      -0.1375698,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0525986,
+      0.1978965,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1912701,
+      0.3301476,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0611393,
+      0.0177296,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.206384,
+      0.2128748,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0747099,
+      0.1871593,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0052158,
+    -0.1557961,
+    -0.0106866,
+    -2.3963444,
+    0.0026276,
+    2.2419826,
+    0.7957229,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 16,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 16"
+  },
+  {
+   "name": "eval_17",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0232195,
+      -0.2688451,
+      -0.0045868
+     ],
+     "quat": [
+      0.211939,
+      0.0,
+      0.0,
+      0.9772829
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4126384,
+      -0.1457012,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0524032,
+      0.2088783,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1930072,
+      0.3101786,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0653984,
+      0.0211988,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2007871,
+      0.187356,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0617092,
+      0.2115373,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0125536,
+    -0.1545178,
+    0.0170836,
+    -2.4710407,
+    0.0075664,
+    2.2147707,
+    0.7879224,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 17,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 17"
+  },
+  {
+   "name": "eval_18",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0343483,
+      -0.2743835,
+      -0.0045868
+     ],
+     "quat": [
+      0.2256039,
+      0.0,
+      0.0,
+      0.9742191
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4183455,
+      -0.1306046,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0359402,
+      0.1875751,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1882458,
+      0.3341344,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0809483,
+      0.0211841,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2111028,
+      0.1944197,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0605551,
+      0.1934341,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0112712,
+    -0.1886087,
+    -0.0218078,
+    -2.4358318,
+    0.0109892,
+    2.2218609,
+    0.7849477,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 18,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 18"
+  },
+  {
+   "name": "eval_19",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0385174,
+      -0.2745226,
+      -0.0045868
+     ],
+     "quat": [
+      0.2249589,
+      0.0,
+      0.0,
+      0.9743683
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.418799,
+      -0.1437891,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.035378,
+      0.1860355,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1886988,
+      0.3308766,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0706056,
+      0.0236879,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1905785,
+      0.185188,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0724574,
+      0.2051258,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0035838,
+    -0.1578701,
+    -0.0023527,
+    -2.431675,
+    -0.0098769,
+    2.2027984,
+    0.8092667,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 19,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 19"
+  },
+  {
+   "name": "eval_20",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0292229,
+      -0.2775656,
+      -0.0045868
+     ],
+     "quat": [
+      0.2292515,
+      0.0,
+      0.0,
+      0.9733672
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4095478,
+      -0.1418166,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0489825,
+      0.2148023,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1889951,
+      0.3228245,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0780879,
+      0.0307325,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2056593,
+      0.2004432,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0723208,
+      0.2076937,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0090356,
+    -0.1900587,
+    -0.0019258,
+    -2.4347866,
+    0.0300995,
+    2.2186006,
+    0.7508715,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 20,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 20"
+  },
+  {
+   "name": "eval_21",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0321169,
+      -0.265804,
+      -0.0045868
+     ],
+     "quat": [
+      0.2139022,
+      0.0,
+      0.0,
+      0.9768551
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.418218,
+      -0.1373857,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0549637,
+      0.2021502,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.171801,
+      0.3105991,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0764337,
+      0.028549,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1908854,
+      0.1956721,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0741292,
+      0.1897014,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0077738,
+    -0.1388173,
+    -0.0160356,
+    -2.4661953,
+    -0.0229055,
+    2.2608274,
+    0.783243,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 21,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 21"
+  },
+  {
+   "name": "eval_22",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0239859,
+      -0.2782288,
+      -0.0045868
+     ],
+     "quat": [
+      0.2266125,
+      0.0,
+      0.0,
+      0.973985
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4069362,
+      -0.1408133,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.054228,
+      0.2073095,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1734564,
+      0.3297671,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0604813,
+      0.0299225,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1939667,
+      0.1850164,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0740795,
+      0.2088058,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0047183,
+    -0.1492164,
+    -0.0293984,
+    -2.4454815,
+    -0.0088034,
+    2.1999346,
+    0.7672305,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 22,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 22"
+  },
+  {
+   "name": "eval_23",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0328292,
+      -0.2774271,
+      -0.0045868
+     ],
+     "quat": [
+      0.216577,
+      0.0,
+      0.0,
+      0.9762655
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4177258,
+      -0.1369331,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0627919,
+      0.1987677,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1733127,
+      0.3314976,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.064371,
+      0.0339305,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.191931,
+      0.2093288,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0496211,
+      0.2106243,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.017788,
+    -0.158921,
+    -0.0133874,
+    -2.4972236,
+    0.0267253,
+    2.2085083,
+    0.7780164,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 23,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 23"
+  },
+  {
+   "name": "eval_24",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0281035,
+      -0.2685052,
+      -0.0045868
+     ],
+     "quat": [
+      0.2277163,
+      0.0,
+      0.0,
+      0.9737275
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.409872,
+      -0.1387157,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0564205,
+      0.2023919,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1882836,
+      0.3059964,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0620863,
+      0.0279755,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2135802,
+      0.2015049,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0461458,
+      0.2035853,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0052477,
+    -0.1439719,
+    0.0216779,
+    -2.413577,
+    0.005068,
+    2.2314386,
+    0.7619106,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 24,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 24"
+  },
+  {
+   "name": "eval_25",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0200062,
+      -0.275668,
+      -0.0045868
+     ],
+     "quat": [
+      0.2328996,
+      0.0,
+      0.0,
+      0.9725008
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4126394,
+      -0.1499595,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0460415,
+      0.2018536,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1688451,
+      0.3309313,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0812606,
+      0.0276373,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1887991,
+      0.1876296,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0630844,
+      0.2107617,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.012851,
+    -0.1163109,
+    0.0244866,
+    -2.4405021,
+    -0.030911,
+    2.2085071,
+    0.7583132,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 25,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 25"
+  },
+  {
+   "name": "eval_26",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.024688,
+      -0.2786478,
+      -0.0045868
+     ],
+     "quat": [
+      0.2227782,
+      0.0,
+      0.0,
+      0.9748691
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4057428,
+      -0.1337377,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0390515,
+      0.1973106,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.190608,
+      0.3106935,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0690169,
+      0.0261563,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2054384,
+      0.1985581,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0649292,
+      0.1941913,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0109044,
+    -0.1631675,
+    -0.0104451,
+    -2.4349053,
+    -0.0267832,
+    2.2348031,
+    0.7783678,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 26,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 26"
+  },
+  {
+   "name": "eval_27",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0262763,
+      -0.2775761,
+      -0.0045868
+     ],
+     "quat": [
+      0.2164604,
+      0.0,
+      0.0,
+      0.9762914
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4135282,
+      -0.1313758,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0470171,
+      0.1881831,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.191103,
+      0.3080003,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0592005,
+      0.0384199,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.185542,
+      0.2128655,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0532898,
+      0.1947556,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.035248,
+    -0.1552637,
+    -0.02449,
+    -2.4511473,
+    -0.0225576,
+    2.1995167,
+    0.8215888,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 27,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 27"
+  },
+  {
+   "name": "eval_28",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0376979,
+      -0.2646858,
+      -0.0045868
+     ],
+     "quat": [
+      0.2117315,
+      0.0,
+      0.0,
+      0.9773279
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.419356,
+      -0.148996,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0588156,
+      0.2036864,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1822255,
+      0.3059764,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0558436,
+      0.0251496,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2034192,
+      0.1853309,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0636582,
+      0.2025145,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0020477,
+    -0.1352256,
+    -0.0061192,
+    -2.4269116,
+    -0.0009555,
+    2.2321864,
+    0.844356,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 28,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 28"
+  },
+  {
+   "name": "eval_29",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0301264,
+      -0.2696153,
+      -0.0045868
+     ],
+     "quat": [
+      0.2362795,
+      0.0,
+      0.0,
+      0.9716851
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4146959,
+      -0.1474156,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0451607,
+      0.2054115,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1843384,
+      0.3182261,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0677239,
+      0.0190489,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2051623,
+      0.210115,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0638921,
+      0.1981281,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0047621,
+    -0.1582098,
+    0.0180812,
+    -2.4386648,
+    0.0209398,
+    2.2270274,
+    0.7837912,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 29,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 29"
+  },
+  {
+   "name": "eval_30",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0285821,
+      -0.2781545,
+      -0.0045868
+     ],
+     "quat": [
+      0.2306052,
+      0.0,
+      0.0,
+      0.9730474
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4081479,
+      -0.134346,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0503099,
+      0.2071717,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1851166,
+      0.3218789,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0629712,
+      0.0230993,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1858755,
+      0.1994072,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0732599,
+      0.2002157,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0127264,
+    -0.1609268,
+    -0.0142922,
+    -2.4219517,
+    0.0454078,
+    2.228977,
+    0.7861431,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 30,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 30"
+  },
+  {
+   "name": "eval_31",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0213536,
+      -0.2665454,
+      -0.0045868
+     ],
+     "quat": [
+      0.210155,
+      0.0,
+      0.0,
+      0.9776681
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4105491,
+      -0.1364514,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0480548,
+      0.2007922,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1857917,
+      0.3266645,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0603508,
+      0.0283996,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1893202,
+      0.1941664,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0614323,
+      0.1955771,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0012918,
+    -0.1720043,
+    -0.0179696,
+    -2.4780746,
+    -0.0194276,
+    2.2166422,
+    0.756073,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 31,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 31"
+  },
+  {
+   "name": "eval_32",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0314446,
+      -0.2724573,
+      -0.0045868
+     ],
+     "quat": [
+      0.2329142,
+      0.0,
+      0.0,
+      0.9724973
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4135413,
+      -0.1362677,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0541202,
+      0.1982151,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1909474,
+      0.3303023,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0550339,
+      0.022694,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2000672,
+      0.1961356,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0744768,
+      0.2050777,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0283674,
+    -0.1840451,
+    -0.0317158,
+    -2.4737027,
+    -0.0209451,
+    2.2632941,
+    0.7811172,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 32,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 32"
+  },
+  {
+   "name": "eval_33",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0313698,
+      -0.2618379,
+      -0.0045868
+     ],
+     "quat": [
+      0.2242467,
+      0.0,
+      0.0,
+      0.9745324
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.414915,
+      -0.1382244,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0509508,
+      0.2126353,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1772572,
+      0.3150338,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0567803,
+      0.0200316,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1890645,
+      0.1938639,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0748568,
+      0.1934761,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0035252,
+    -0.1746036,
+    0.0085779,
+    -2.4791492,
+    -0.0269768,
+    2.2317289,
+    0.7713394,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 33,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 33"
+  },
+  {
+   "name": "eval_34",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0374435,
+      -0.2751452,
+      -0.0045868
+     ],
+     "quat": [
+      0.2376841,
+      0.0,
+      0.0,
+      0.9713425
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4069788,
+      -0.1403182,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0622618,
+      0.2071198,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1751361,
+      0.316657,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0802269,
+      0.0222612,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2050095,
+      0.2005002,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0536277,
+      0.1893046,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0111466,
+    -0.1280023,
+    -0.0097899,
+    -2.4416789,
+    0.016338,
+    2.1958969,
+    0.7816255,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 34,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 34"
+  },
+  {
+   "name": "eval_35",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0291699,
+      -0.2612999,
+      -0.0045868
+     ],
+     "quat": [
+      0.2274814,
+      0.0,
+      0.0,
+      0.9737824
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4010635,
+      -0.1480643,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0531126,
+      0.2081195,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1885656,
+      0.3149454,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0745598,
+      0.0347726,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1865606,
+      0.1860277,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0680225,
+      0.1896884,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0080699,
+    -0.1501219,
+    -0.0331273,
+    -2.4219661,
+    -0.0191271,
+    2.2453503,
+    0.7748839,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 35,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 35"
+  },
+  {
+   "name": "eval_36",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0279647,
+      -0.2621234,
+      -0.0045868
+     ],
+     "quat": [
+      0.2322912,
+      0.0,
+      0.0,
+      0.9726463
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4119323,
+      -0.1363399,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0537821,
+      0.2129839,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1754908,
+      0.3082067,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.063638,
+      0.0345173,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1980476,
+      0.2100573,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0689617,
+      0.2012268,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.024288,
+    -0.1574257,
+    0.0247199,
+    -2.4690508,
+    -0.0402824,
+    2.2385312,
+    0.7771043,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 36,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 36"
+  },
+  {
+   "name": "eval_37",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0332334,
+      -0.2786201,
+      -0.0045868
+     ],
+     "quat": [
+      0.2162635,
+      0.0,
+      0.0,
+      0.976335
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.405944,
+      -0.1436208,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0531941,
+      0.1966184,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1713386,
+      0.317225,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0798686,
+      0.025401,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2012685,
+      0.2121689,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0733589,
+      0.19542,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.008007,
+    -0.1726136,
+    0.001956,
+    -2.415232,
+    0.0061137,
+    2.2062767,
+    0.7949829,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 37,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 37"
+  },
+  {
+   "name": "eval_38",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0249947,
+      -0.2655924,
+      -0.0045868
+     ],
+     "quat": [
+      0.222957,
+      0.0,
+      0.0,
+      0.9748283
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4073077,
+      -0.1313486,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0610934,
+      0.2125259,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1685796,
+      0.3274667,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0557663,
+      0.0213855,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2074741,
+      0.207749,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0574078,
+      0.1893357,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0344983,
+    -0.1578214,
+    0.0280946,
+    -2.4286937,
+    -0.0258437,
+    2.2350359,
+    0.8067699,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 38,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 38"
+  },
+  {
+   "name": "eval_39",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0307867,
+      -0.2772825,
+      -0.0045868
+     ],
+     "quat": [
+      0.2224685,
+      0.0,
+      0.0,
+      0.9749399
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4138723,
+      -0.1384163,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0643958,
+      0.1989634,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1706775,
+      0.3271773,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0734914,
+      0.0225023,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1981304,
+      0.2127378,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0618304,
+      0.1850225,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0308536,
+    -0.1635056,
+    0.005648,
+    -2.4197081,
+    -0.0077037,
+    2.2251188,
+    0.7778198,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 39,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 39"
+  },
+  {
+   "name": "eval_40",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0338683,
+      -0.2611616,
+      -0.0045868
+     ],
+     "quat": [
+      0.2154738,
+      0.0,
+      0.0,
+      0.9765096
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.418807,
+      -0.1361896,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0629713,
+      0.2127518,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1879515,
+      0.3112967,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0617733,
+      0.0352855,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2003147,
+      0.1858522,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0571201,
+      0.1947361,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0183225,
+    -0.1686553,
+    0.0088087,
+    -2.4669208,
+    -0.016325,
+    2.2085195,
+    0.8050575,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 40,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 40"
+  },
+  {
+   "name": "eval_41",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0353586,
+      -0.2774806,
+      -0.0045868
+     ],
+     "quat": [
+      0.2085889,
+      0.0,
+      0.0,
+      0.9780034
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4034602,
+      -0.1330186,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0615817,
+      0.1855289,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1787352,
+      0.3347228,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0831392,
+      0.0169177,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1943059,
+      0.2126864,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0466042,
+      0.1897179,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.033377,
+    -0.150836,
+    0.0331347,
+    -2.4238457,
+    -0.0043499,
+    2.2130811,
+    0.7983725,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 41,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 41"
+  },
+  {
+   "name": "eval_42",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0287776,
+      -0.262828,
+      -0.0045868
+     ],
+     "quat": [
+      0.214122,
+      0.0,
+      0.0,
+      0.9768069
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4060526,
+      -0.1481165,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.036325,
+      0.1944536,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1734057,
+      0.3264948,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0773322,
+      0.0320934,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.200707,
+      0.1960211,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.067512,
+      0.204192,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0006126,
+    -0.1851138,
+    0.0263388,
+    -2.4418036,
+    0.0093767,
+    2.2320403,
+    0.8062617,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 42,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 42"
+  },
+  {
+   "name": "eval_43",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0208755,
+      -0.2795994,
+      -0.0045868
+     ],
+     "quat": [
+      0.2178537,
+      0.0,
+      0.0,
+      0.9759814
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4032157,
+      -0.1382571,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0637478,
+      0.202384,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1782167,
+      0.3275558,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0634605,
+      0.0296785,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2043778,
+      0.2003113,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0700731,
+      0.194494,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0175485,
+    -0.1472252,
+    0.0265011,
+    -2.4297665,
+    0.0242872,
+    2.2653271,
+    0.7852077,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 43,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 43"
+  },
+  {
+   "name": "eval_44",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0251623,
+      -0.2718846,
+      -0.0045868
+     ],
+     "quat": [
+      0.2340652,
+      0.0,
+      0.0,
+      0.9722209
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4006163,
+      -0.1467537,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0513056,
+      0.2000997,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1666423,
+      0.3108631,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0813843,
+      0.0157454,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1917725,
+      0.2016906,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0643523,
+      0.1936277,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0116017,
+    -0.1319435,
+    0.0102455,
+    -2.4387124,
+    0.0046918,
+    2.2454812,
+    0.7889217,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 44,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 44"
+  },
+  {
+   "name": "eval_45",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0305698,
+      -0.264727,
+      -0.0045868
+     ],
+     "quat": [
+      0.2202805,
+      0.0,
+      0.0,
+      0.9754366
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4037661,
+      -0.1397954,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0574604,
+      0.1892305,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1817173,
+      0.3070901,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0732049,
+      0.0384659,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2147395,
+      0.203924,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0606039,
+      0.1891655,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0226888,
+    -0.1671183,
+    0.0055949,
+    -2.4899876,
+    -0.0053063,
+    2.2583657,
+    0.7881538,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 45,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 45"
+  },
+  {
+   "name": "eval_46",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0215445,
+      -0.2745486,
+      -0.0045868
+     ],
+     "quat": [
+      0.2100803,
+      0.0,
+      0.0,
+      0.9776841
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.407563,
+      -0.1313194,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0585694,
+      0.1859617,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1775926,
+      0.3115249,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0845577,
+      0.0246254,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1866808,
+      0.202632,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0561611,
+      0.2079801,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0107755,
+    -0.1758638,
+    -0.0016096,
+    -2.4969456,
+    0.0073819,
+    2.218338,
+    0.7856835,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 46,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 46"
+  },
+  {
+   "name": "eval_47",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0350734,
+      -0.2706964,
+      -0.0045868
+     ],
+     "quat": [
+      0.2151086,
+      0.0,
+      0.0,
+      0.9765901
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4179255,
+      -0.130663,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0435853,
+      0.2087998,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1729115,
+      0.3080054,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0740249,
+      0.0346551,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2069779,
+      0.2126326,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0651282,
+      0.187183,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    -0.0074088,
+    -0.1682373,
+    -0.0054271,
+    -2.4155276,
+    0.0205755,
+    2.2279805,
+    0.8072259,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 47,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 47"
+  },
+  {
+   "name": "eval_48",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0319155,
+      -0.269724,
+      -0.0045868
+     ],
+     "quat": [
+      0.2259591,
+      0.0,
+      0.0,
+      0.9741368
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.4061102,
+      -0.1369501,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0611916,
+      0.2116403,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1658856,
+      0.3102975,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.07523,
+      0.0390002,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.1971604,
+      0.2090411,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.0688223,
+      0.1851836,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0219852,
+    -0.1617263,
+    0.008987,
+    -2.4345043,
+    -0.0166097,
+    2.2231245,
+    0.7947899,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 48,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 48"
+  },
+  {
+   "name": "eval_49",
+   "poses": {
+    "wooden_cabinet_1": {
+     "position": [
+      0.0318643,
+      -0.272161,
+      -0.0045868
+     ],
+     "quat": [
+      0.2267194,
+      0.0,
+      0.0,
+      0.9739601
+     ]
+    },
+    "flat_stove_1": {
+     "position": [
+      -0.407526,
+      -0.1368837,
+      0.02
+     ],
+     "quat": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "akita_black_bowl_1": {
+     "position": [
+      -0.0607618,
+      0.1878602,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "akita_black_bowl_2": {
+     "position": [
+      -0.1769852,
+      0.3260416,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "cookies_1": {
+     "position": [
+      0.0589151,
+      0.0249628,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "glazed_rim_porcelain_ramekin_1": {
+     "position": [
+      -0.2125519,
+      0.1882541,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    },
+    "plate_1": {
+     "position": [
+      0.057337,
+      0.2125207,
+      0.07
+     ],
+     "quat": [
+      0.7071068,
+      0.0,
+      0.0,
+      0.7071068
+     ]
+    }
+   },
+   "joints": {
+    "wooden_cabinet_1/top_level": 0.0,
+    "wooden_cabinet_1/middle_level": 0.0,
+    "wooden_cabinet_1/bottom_level": 0.0,
+    "flat_stove_1/button": 0.0
+   },
+   "robot_joints": [
+    0.0098722,
+    -0.1363084,
+    0.0007856,
+    -2.4545283,
+    0.0173272,
+    2.2101577,
+    0.792496,
+    0.020833,
+    -0.020833
+   ],
+   "seed": 49,
+   "source": "pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.pruned_init row 49"
+  }
+ ],
+ "goal": [
+  {
+   "predicate": "on",
+   "args": [
+    "akita_black_bowl_1",
+    "plate_1"
+   ],
+   "params": {
+    "grasp": {
+     "position": [
+      -0.05,
+      0.0,
+      0.03
+     ],
+     "orientation": {
+      "euler": [
+       "xz",
+       3.141592653589793,
+       1.5707963267948966
+      ]
+     }
+    },
+    "carry": {
+     "position": [
+      -0.05,
+      0.0,
+      0.0
+     ],
+     "orientation": {
+      "euler": [
+       "xz",
+       3.141592653589793,
+       1.5707963267948966
+      ]
+     }
+    },
+    "close": 0.0
+   }
+  }
+ ],
+ "success": {
+  "xy_tol": 0.03
+ },
+ "robot_base": {
+  "position": [
+   -0.66,
+   0.0,
+   0.012
+  ],
+  "quat": [
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "robot_home": [
+  0.0,
+  -0.161,
+  0.0,
+  -2.445,
+  0.0,
+  2.227,
+  0.7853982
+ ],
+ "cameras": [
+  {
+   "name": "agentview",
+   "parent": "",
+   "pose": {
+    "position": [
+     0.658613,
+     0.0,
+     0.71035
+    ],
+    "quat": [
+     0.638018,
+     0.30485,
+     0.30485,
+     0.638018
+    ]
+   },
+   "fovy": 45.0
+  },
+  {
+   "name": "wrist",
+   "parent": "hand",
+   "pose": {
+    "position": [
+     0.05,
+     0.0,
+     0.0
+    ],
+    "quat": [
+     0.0,
+     0.707107,
+     0.707107,
+     0.0
+    ]
+   },
+   "fovy": 75.0
+  }
+ ],
+ "radii": {
+  "akita_black_bowl_1": 0.025,
+  "akita_black_bowl_2": 0.025,
+  "cookies_1": 0.025,
+  "glazed_rim_porcelain_ramekin_1": 0.025,
+  "plate_1": 0.025
+ }
+}
