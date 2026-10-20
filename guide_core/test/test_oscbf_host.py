@@ -118,6 +118,7 @@ class FakeController:
     def __init__(self, model, mode, *args):
         self.model, self.mode, self.events, self.targets = model, mode, {"infeasible": 0}, []
         self.q_rest = np.asarray(args[2] if len(args) > 2 and args[2] is not None else model.home, float)
+        self.obstacle_boxes, self.obstacles = (list(args[3]) if len(args) > 3 else []), []
         self.gravity = lambda q: model.manipulator.gravity_vector(q)  # Controller's compiled gravity
         self.limit = model.max_velocity if mode == "velocity" else model.max_effort
         FakeController.made += 1
@@ -131,6 +132,9 @@ class FakeController:
     def step(self, target, q, qd):
         self.targets.append(target)
         return np.full(7, 0.5)
+
+    def set_obstacles(self, poses, half_extents, margins):
+        self.obstacles.append((np.array(poses), np.array(half_extents), np.array(margins)))
 
 
 @pytest.fixture
@@ -160,13 +164,14 @@ def robot_stage(drop=()):
     return stage
 
 
-def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, q_rest=None, logger=None, **arm):
+def make_host(module, monkeypatch, mode="torque", rate=None, stage=None, q_rest=None, logger=None, obstacles=(), hz=0.0, **arm):
     model = Model.load(ROBOT)
     fake = FakeArm(Model.load(ROBOT), model.home, **arm)
     stage = robot_stage() if stage is None else stage
     monkeypatch.setattr(module, "Articulation", lambda path: fake)
     monkeypatch.setattr(module, "get_current_stage", lambda: stage)
-    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate, q_rest=q_rest, logger=logger)
+    host = module.OscbfHost("/Scene_0/fr3", robot=ROBOT, mode=mode, rate=rate, q_rest=q_rest, logger=logger,
+                            obstacles=obstacles, obstacle_update_hz=hz)
     return host, fake
 
 
@@ -715,3 +720,154 @@ def test_a_barrier_refusal_names_the_barrier(host_module, monkeypatch):
     monkeypatch.setattr(FakeController, "barrier_values", lambda self, q: np.array([0.3, -0.02, 0.5]))
     host, arm = make_host(host_module, monkeypatch)
     assert "barrier #1" in host.diagnostics["refused"] and "[]" not in host.diagnostics["refused"]
+
+
+def klt(stage, path="/Scene_0/bin_0", at=(0.5, 0.0, 0.1)):
+    """block_bin's KLT bin as small_KLT.usd builds it: a rigid body, a scaled Collision Xform holding Cube
+    colliders of size 1 (here the floor and one wall), plus a guide-purpose Mesh collider, as S1 hides MJCF's."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    body = UsdGeom.Xform.Define(stage, path)
+    body.AddTranslateOp().Set(Gf.Vec3d(*at))
+    UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
+    UsdGeom.Xform.Define(stage, f"{path}/Collision").AddScaleOp().Set(Gf.Vec3d(0.992, 0.992, 1.073))
+    for name, t, s in (("floor", (0, 0, -0.067), (0.17, 0.26, 0.0023)), ("wall", (0.093, 0, 0.0056), (0.01, 0.298, 0.126))):
+        cube = UsdGeom.Cube.Define(stage, f"{path}/Collision/{name}")
+        cube.CreateSizeAttr(1.0)
+        cube.AddTranslateOp().Set(Gf.Vec3d(*t))
+        cube.AddScaleOp().Set(Gf.Vec3f(*s))
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+    mesh = UsdGeom.Mesh.Define(stage, f"{path}/Collision/handle")
+    mesh.CreatePointsAttr([(-0.01, -0.02, 0.0), (0.01, 0.02, 0.03), (0.01, -0.02, 0.0)])
+    mesh.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.1, 0.05))
+    mesh.AddRotateZOp().Set(90.0)
+    mesh.CreatePurposeAttr(UsdGeom.Tokens.guide)
+    UsdPhysics.CollisionAPI.Apply(mesh.GetPrim())
+    UsdGeom.Xform.Define(stage, f"{path}/Visual")  # no collider: no box
+    return stage
+
+
+def corners(T, half):
+    """The 8 corners of a box (T 4x4, half extents), rounded to compare as sets."""
+    signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+    return np.round(sorted(map(tuple, (signs * half) @ T[:3, :3].T + T[:3, 3])), 9)
+
+
+def test_collider_boxes_come_from_cubes_and_the_bounds_of_other_gprims(host_module):
+    """Each collider gprim gives one box in the obstacle's frame: a Cube its size times the full local transform
+    (the Collision Xform's scale included), a Mesh its local bound; the guide purpose counts. obb: one box."""
+    stage = klt(Usd_stage())
+    poses, halves = host_module.prim_boxes(stage, "/Scene_0/bin_0", "collision")
+    S = np.diag([0.992, 0.992, 1.073])
+    floor = np.eye(4)
+    floor[:3, 3] = S @ [0, 0, -0.067]
+    np.testing.assert_allclose(corners(poses[0], halves[0]), corners(floor, S @ [0.085, 0.13, 0.00115]), atol=1e-7)
+    handle = np.eye(4)
+    handle[:3, :3], handle[:3, 3] = [[0, -1, 0], [1, 0, 0], [0, 0, 1]], S @ [0.0, 0.1, 0.065]  # rotated 90 deg about z
+    np.testing.assert_allclose(corners(poses[2], halves[2]), corners(handle, [0.01 * 0.992, 0.02 * 0.992, 0.015 * 1.073]), atol=1e-7)
+    assert len(poses) == 3
+    (obb,), (half,) = host_module.prim_boxes(stage, "/Scene_0/bin_0", "obb")
+    every = np.concatenate([corners(T, h) for T, h in zip(poses, halves)])
+    np.testing.assert_allclose(corners(obb, half)[[0, -1]], [every.min(axis=0), every.max(axis=0)], atol=1e-7)
+
+
+def Usd_stage():
+    from pxr import Usd
+
+    return Usd.Stage.CreateInMemory()
+
+
+def test_obstacle_config_merges_the_scene_and_the_robot_lists(host_module):
+    scene = {"obstacles": [{"path": "/bin_0"}], "obstacle_update_hz": 1}
+    robot = {"obstacles": [{"path": "/shelf", "shape": "obb", "margin": 0.0, "kinematic": True}], "obstacle_update_hz": 10}
+    entries, hz = host_module.obstacle_config(scene, robot)
+    assert entries == [{"path": "/bin_0", "shape": "collision", "margin": 0.01, "kinematic": False},
+                       {"path": "/shelf", "shape": "obb", "margin": 0.0, "kinematic": True}] and hz == 10.0
+    assert host_module.obstacle_config(scene, {}) == ([entries[0]], 1.0)
+    assert host_module.obstacle_config({}, {}) == ([], 0.0)
+    for bad in ({"path": "/bin_0", "colour": "red"}, {"path": "/bin_0", "shape": "mesh"}, {"path": "/bin_0", "margin": -0.01}):
+        with pytest.raises(ValueError, match="/bin_0"):
+            host_module.obstacle_config({"obstacles": [bad]}, {})
+    with pytest.raises(ValueError, match="no path"):
+        host_module.obstacle_config({}, {"obstacles": [{"shape": "obb"}]})
+
+
+def test_a_bad_obstacle_fails_the_registration_naming_the_prim(host_module, monkeypatch):
+    from pxr import UsdPhysics
+
+    stage = klt(robot_stage())
+    with pytest.raises(ValueError, match="/Scene_0/nothing"):
+        make_host(host_module, monkeypatch, stage=stage, obstacles=[{**host_module.OBSTACLE, "path": "/Scene_0/nothing"}])
+    UsdPhysics.ArticulationRootAPI.Apply(stage.GetPrimAtPath("/Scene_0/fr3"))
+    with pytest.raises(ValueError, match="kinematic, but /Scene_0/fr3 is an articulation"):
+        host_module.prepare_obstacle(stage, "/Scene_0/fr3/fr3_link0", kinematic=True)
+    with pytest.raises(ValueError, match="rigid body /Scene_0/bin_0 under it"):
+        host_module.prepare_obstacle(stage, "/Scene_0", kinematic=False)
+    stage.DefinePrim("/Scene_0/bin_0/empty", "Xform")
+    with pytest.raises(ValueError, match="/Scene_0/bin_0/empty: no collider gprims"):
+        host_module.prim_boxes(stage, "/Scene_0/bin_0/empty", "collision")
+
+
+def test_listed_objects_are_barriers_placed_in_the_base_frame_and_refreshed(host_module, monkeypatch):
+    """The bin's 3 boxes reach the controller in fr3_link0's frame (here moved and turned) at registration and
+    attach, after refresh_obstacles (GUIDE's Randomize and Reset), and every 1/obstacle_update_hz s of play."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    stage = klt(robot_stage())
+    base = UsdGeom.Xformable(stage.GetPrimAtPath("/Scene_0/fr3/fr3_link0"))
+    base.AddTranslateOp().Set(Gf.Vec3d(0.1, 0.0, 0.0))
+    base.AddRotateZOp().Set(90.0)
+    entry = {**host_module.OBSTACLE, "path": "/Scene_0/bin_0", "margin": 0.02, "kinematic": True}
+    host, arm = make_host(host_module, monkeypatch, stage=stage, obstacles=[entry], hz=30.0, rate=120.0)
+    c = host._controller
+    assert c.obstacle_boxes == [3] and len(c.obstacles) == 1
+    assert UsdPhysics.RigidBodyAPI(stage.GetPrimAtPath("/Scene_0/bin_0")).GetKinematicEnabledAttr().Get() is True
+    poses, halves, margins = c.obstacles[0]
+    floor = np.r_[0.5 - 0.1, 0.0, 0.1 - 0.067 * 1.073]  # world, from the base
+    np.testing.assert_allclose(poses[0, :3, 3], [floor[1], -floor[0], floor[2]], atol=1e-7)  # the base turned +90 deg about z
+    np.testing.assert_allclose(margins, 0.02)
+    UsdGeom.XformCommonAPI(stage.GetPrimAtPath("/Scene_0/bin_0")).SetTranslate(Gf.Vec3d(0.5, 0.2, 0.1))  # Randomize moves it
+    host.refresh_obstacles()
+    np.testing.assert_allclose(c.obstacles[-1][0][0, :3, 3], [0.2, -floor[0], floor[2]], atol=1e-7)
+    run(host, 120)  # 1 s: the attach (here it rebuilds the controller), then every 1/30 s
+    assert host._controller.obstacle_boxes == [3] and 1 + 29 <= len(host._controller.obstacles) <= 1 + 31
+
+
+def test_without_obstacles_the_controller_has_none(host_module, monkeypatch):
+    host, arm = make_host(host_module, monkeypatch)
+    run(host, 4)
+    assert host._controller.obstacle_boxes == [] and host._controller.obstacles == []
+
+
+def test_an_attached_body_gets_spheres_covering_its_colliders(host_module, monkeypatch):
+    """The wrist camera (a 124 x 29 x 26 mm box, here turned on its mount) on fr3_hand: spheres along its long
+    axis, on the hand's link and so its group; every corner of the box lies inside one of them."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    stage = camera_stage()
+    UsdGeom.Xformable(stage.GetPrimAtPath("/Scene_0/fr3/fr3_hand")).AddTranslateOp().Set(Gf.Vec3d(0.3, 0.0, 0.5))
+    camera = UsdGeom.Xformable(stage.GetPrimAtPath("/Scene_0/fr3/rsd455/RSD455"))
+    camera.AddTranslateOp().Set(Gf.Vec3d(0.35, 0.0, 0.55))
+    camera.AddRotateZOp().Set(30.0)
+    cube = UsdGeom.Cube.Define(stage, "/Scene_0/fr3/rsd455/RSD455/collision")
+    cube.CreateSizeAttr(1.0)
+    cube.AddScaleOp().Set(Gf.Vec3f(0.124, 0.029, 0.026))
+    UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+    mount = UsdGeom.Cube.Define(stage, "/Scene_0/fr3/mount/collision")  # the mount: a 2 cm cube on the hand
+    mount.CreateSizeAttr(0.02)
+    UsdPhysics.CollisionAPI.Apply(mount.GetPrim())
+    log = Log()
+    host, arm = make_host(host_module, monkeypatch, stage=stage, logger=log)
+    model = host.model
+    n = len(Model.load(ROBOT).sphere_radii)
+    assert model.sphere_links[n:] == ["fr3_hand"] * (1 + 5) and set(model.sphere_groups[n:]) == {7}  # mount 1, camera 5
+    pin_hand = model.pin_model.frames[model.pin_model.getFrameId("fr3_hand")].placement.homogeneous
+    centres = (np.c_[model.sphere_centers[n + 1:], np.ones(5)] @ np.linalg.inv(pin_hand).T)[:, :3]  # hand frame
+    T = np.eye(4)
+    T[:3, :3] = [[np.cos(np.pi / 6), -np.sin(np.pi / 6), 0], [np.sin(np.pi / 6), np.cos(np.pi / 6), 0], [0, 0, 1]]
+    T[:3, 3] = [0.05, 0.0, 0.05]
+    box = corners(T, [0.062, 0.0145, 0.013])
+    inside = np.linalg.norm(box[:, None] - centres[None], axis=2) <= model.sphere_radii[n + 1:] + 1e-6  # corners on the spheres
+    assert inside.any(axis=1).all()
+    assert model.sphere_radii[n + 1] < 0.025  # the box cut into 5 near-cubes: no sphere the size of the whole camera
+    assert any("RSD455: 5 collision spheres" in m for _, m in log.lines)

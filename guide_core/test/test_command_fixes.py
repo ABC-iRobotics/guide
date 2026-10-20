@@ -163,13 +163,16 @@ def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_modu
         def __init__(self, *args, **kwargs):
             made.append((args, kwargs))
 
-    monkeypatch.setitem(sys.modules, "guide_core.control.oscbf_host", SimpleNamespace(OscbfHost=FakeHost))
+    config = {"obstacles": [{"path": "/bin_0"}]}
+    parsed = []
+    monkeypatch.setitem(sys.modules, "guide_core.control.oscbf_host", SimpleNamespace(
+        OscbfHost=FakeHost, obstacle_config=lambda scene, oscbf: parsed.append((scene, oscbf)) or ([{"path": "/bin_0", "shape": "obb"}], 10.0)))
     robots = [{"namespace": "/franka", "articulation_root": "/fr3", "path": "/franka",
                "default_joint_states": list(range(9)), "controller": "oscbf",
                "oscbf": {"robot": "fr3", "mode": "velocity", "rate": 60}}]
     manager = SimpleNamespace(
         get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: robots,
-        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None)],
+        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None, _config=config)],
     )
     controls = []
     runtime = host(
@@ -187,6 +190,9 @@ def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_modu
     assert args == ("/Scene_0/fr3",) and (kwargs["robot"], kwargs["mode"], kwargs["rate"]) == ("fr3", "velocity", 60)
     assert kwargs["q_rest"] == list(range(7))
     assert runtime._motion_hosts[0][0].topic == "/Sim_0/Scene_0/franka/motion_target"
+    # init.yaml's obstacles: the scene's config and the robot's oscbf section, paths under this scene's root
+    assert parsed == [(config, robots[0]["oscbf"])]
+    assert kwargs["obstacles"] == [{"path": "/Scene_0/bin_0", "shape": "obb"}] and kwargs["obstacle_update_hz"] == 10.0
 
 
 def test_motion_targets_are_subscribed_depth_one_and_converted(isaac_import):
@@ -271,7 +277,8 @@ def test_reset_homes_the_oscbf_robots_of_that_scene(command_module):
     runtime = host(
         _simulator=SimpleNamespace(_scene_manager=manager),
         _execute_instructions_directly=lambda instructions: [],
-        _motion_hosts={0: [SimpleNamespace(home=lambda: homed.append(0))], 1: [SimpleNamespace(home=lambda: homed.append(1))]},
+        _motion_hosts={0: [SimpleNamespace(home=lambda: homed.append(0), refresh_obstacles=lambda: None)],
+                       1: [SimpleNamespace(home=lambda: homed.append(1), refresh_obstacles=lambda: None)]},
     )
 
     assert module._cmd_reset_scene(runtime, 1) is True
@@ -350,12 +357,31 @@ def test_reset_runs_reset_yaml_before_homing(command_module):
     runtime = host(
         _simulator=SimpleNamespace(_scene_manager=manager),
         _execute_instructions_directly=lambda instructions: calls.extend(instructions) or [],
-        _motion_hosts={0: [SimpleNamespace(home=lambda: calls.append("home"))]},
+        _motion_hosts={0: [SimpleNamespace(home=lambda: calls.append("home"), refresh_obstacles=lambda: calls.append("obstacles"))]},
     )
 
     module._cmd_reset_scene(runtime, 0)
 
-    assert calls == ["reset.yaml", "reset_fire", "home"]
+    assert calls == ["reset.yaml", "reset_fire", "home", "obstacles"]  # the barriers follow the objects reset.yaml moved
+
+
+def test_randomize_refreshes_the_obstacles_after_moving_the_objects(command_module):
+    """The bins move on Randomize (block_bin's randomize.yaml): the OSCBF barriers read their new poses before
+    the solver's next target. Only that scene's hosts."""
+    module = command_module("_cmd_simulator")
+    calls = []
+    manager = SimpleNamespace(randomize_preprocess=lambda i, **kwargs: ["randomize.yaml"],
+                              randomize_postprocess=lambda i, results: calls.append("postprocess") or "{}")
+    runtime = host(
+        _simulator=SimpleNamespace(_scene_manager=manager),
+        _execute_instructions_directly=lambda instructions: calls.extend(instructions) or [],
+        _motion_hosts={0: [SimpleNamespace(refresh_obstacles=lambda: calls.append("obstacles 0"))],
+                       1: [SimpleNamespace(refresh_obstacles=lambda: calls.append("obstacles 1"))]},
+    )
+
+    module._cmd_randomize_scene(runtime, 1)
+
+    assert calls == ["randomize.yaml", "obstacles 1", "postprocess"]
 
 
 def test_register_scene_reports_refused_robots_in_its_message(isaac_import):

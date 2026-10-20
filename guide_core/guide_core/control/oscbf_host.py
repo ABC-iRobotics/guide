@@ -6,12 +6,14 @@ the controller, write joint efforts (torque) or velocity targets (velocity). Not
 over ROS per substep; states return over the existing per-frame /joint_states.
 """
 
+import itertools
+
 import numpy as np
 import warp as wp
 from isaacsim.core.experimental.prims import Articulation
 from isaacsim.core.experimental.utils.stage import get_current_stage
 from isaacsim.core.simulation_manager import SimulationEvent, SimulationManager
-from pxr import Sdf, Usd, UsdPhysics
+from pxr import Sdf, Usd, UsdGeom, UsdPhysics
 from scipy.spatial.transform import Rotation
 
 from guide_motion import description
@@ -24,6 +26,116 @@ from guide_motion.targets import JOINTS, Target, TargetHolder
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
 HOME_SPEED = 1.0  # Reset's homing at GUIDE-EX speed 1.0: the planner caps each joint below its URDF velocity limit
 RATE = {"torque": 60.0, "velocity": 60.0}  # Hz without an oscbf.rate: once per rendered frame, physics 120 Hz (Ruling 12, spec Q4)
+OBSTACLE = {"path": None, "shape": "collision", "margin": 0.01, "kinematic": False}  # an init.yaml obstacles entry, defaults
+PURPOSES = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide]  # S1 hides MJCF colliders as guide
+
+
+def obstacle_config(scene: dict, oscbf: dict) -> tuple:
+    """init.yaml's obstacles: the scene's `obstacles` then this robot's `oscbf.obstacles`, each with the
+    OBSTACLE defaults, and the update rate (Hz; the robot's `obstacle_update_hz` over the scene's, 0 = only
+    at registration, play and after every Randomize and Reset). A malformed entry fails the registration."""
+    entries = []
+    for where, items in (("obstacles", scene.get("obstacles")), ("oscbf.obstacles", oscbf.get("obstacles"))):
+        for item in items or []:
+            if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                raise ValueError(f"{where}: {item!r} has no path")
+            entry = {**OBSTACLE, **item}
+            if set(item) - set(OBSTACLE) or entry["shape"] not in ("collision", "obb") or not entry["margin"] >= 0.0:
+                raise ValueError(f"{where} {item['path']}: unknown keys {sorted(set(item) - set(OBSTACLE))}, or shape not "
+                                 f"collision | obb, or margin < 0: {item}")
+            entries.append(entry)
+    return entries, float(oscbf.get("obstacle_update_hz", scene.get("obstacle_update_hz", 0.0)))
+
+
+def _rigid(matrix) -> np.ndarray:
+    """A USD local-to-world matrix (row vectors) as a 4x4 pose (column vectors) without its scale."""
+    T = np.array(matrix, float).T
+    T[:3, :3] /= np.linalg.norm(T[:3, :3], axis=0)  # ponytail: no shear, as in Isaac's assets; polar-decompose if one has it
+    return T
+
+
+def prim_boxes(stage, path: str, shape: str):
+    """(T_prim_box (n, 4, 4), half extents (n, 3)) in the prim's unscaled frame. collision: one box per
+    collider gprim under it, a Cube's own, any other gprim's local bound; obb: the prim's local bound."""
+    prim = stage.GetPrimAtPath(path)
+    if not prim.IsValid():
+        raise ValueError(f"obstacle {path}: no such prim")
+    xforms, bounds = UsdGeom.XformCache(), UsdGeom.BBoxCache(Usd.TimeCode.Default(), PURPOSES)
+    parts = [prim] if shape == "obb" else [
+        p for p in Usd.PrimRange(prim, Usd.TraverseInstanceProxies())
+        if p.IsA(UsdGeom.Gprim) and p.HasAPI(UsdPhysics.CollisionAPI) and UsdPhysics.CollisionAPI(p).GetCollisionEnabledAttr().Get() is not False]
+    to_prim = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(prim)))
+    poses, halves = [], []
+    for part in parts:
+        if part.IsA(UsdGeom.Cube):
+            centre, half = np.zeros(3), np.full(3, UsdGeom.Cube(part).GetSizeAttr().Get() / 2.0)
+        else:
+            box = bounds.ComputeUntransformedBound(part).ComputeAlignedRange()
+            if box.IsEmpty():
+                continue
+            centre, half = (np.array(box.GetMin()) + box.GetMax()) / 2.0, (np.array(box.GetMax()) - box.GetMin()) / 2.0
+        M = to_prim @ np.array(xforms.GetLocalToWorldTransform(part), float).T
+        scale = np.linalg.norm(M[:3, :3], axis=0)
+        T = np.eye(4)
+        T[:3, :3], T[:3, 3] = M[:3, :3] / scale, M[:3, :3] @ centre + M[:3, 3]
+        poses.append(T)
+        halves.append(half * scale)
+    if not poses:
+        raise ValueError(f"obstacle {path}: no {'collider gprims' if shape == 'collision' else 'geometry'} under it")
+    return np.array(poses), np.array(halves)
+
+
+def prepare_obstacle(stage, path: str, kinematic: bool):
+    """The obstacle's prim, its rigid body made kinematic if asked (before play). A rigid body below it would move
+    apart from its boxes, and an articulation cannot be kinematic: either fails the registration, the prim named."""
+    prim = stage.GetPrimAtPath(path)
+    if not prim.IsValid():
+        raise ValueError(f"obstacle {path}: no such prim")
+    if kinematic:
+        owner = prim
+        while owner.IsValid() and not owner.HasAPI(UsdPhysics.ArticulationRootAPI):
+            owner = owner.GetParent()
+        inside = [p for p in Usd.PrimRange(prim) if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
+        if owner.IsValid() or inside:
+            raise ValueError(f"obstacle {path}: kinematic, but {(owner if owner.IsValid() else inside[0]).GetPath()} is an articulation")
+    bodies = [p for p in Usd.PrimRange(prim) if p.HasAPI(UsdPhysics.RigidBodyAPI)]
+    if any(b != prim for b in bodies):
+        raise ValueError(f"obstacle {path}: rigid body {next(b for b in bodies if b != prim).GetPath()} under it moves on its own; list it instead")
+    if kinematic and bodies:
+        UsdPhysics.RigidBodyAPI(prim).CreateKinematicEnabledAttr(True)
+    return prim
+
+
+def attached_spheres(stage, changed, links) -> list:
+    """Spheres covering each body include_attached_bodies joined: its colliders' box in its own frame, cut
+    along the longest side into near-cubes, one sphere around each. [(link, body, centres (n, 3) in the
+    link's USD frame, radii)], link the robot link it hangs off (directly or through other joined bodies)."""
+    parent = {}
+    for joint, body, _ in changed:
+        j = UsdPhysics.Joint(stage.GetPrimAtPath(joint))
+        b0, b1 = (str(rel.GetTargets()[0]) for rel in (j.GetBody0Rel(), j.GetBody1Rel()))
+        parent[body] = b0 if b1 == body else b1
+    signs = np.array(list(itertools.product((-1.0, 1.0), repeat=3)))
+    xforms, out = UsdGeom.XformCache(), []
+    for body in parent:
+        link = parent[body]
+        while link in parent:
+            link = parent[link]
+        try:
+            poses, halves = prim_boxes(stage, body, "collision")
+        except ValueError:  # no colliders: nothing it could hit
+            continue
+        corners = (poses[:, None, :3, :3] @ (signs[None] * halves[:, None])[..., None])[..., 0] + poses[:, None, :3, 3]
+        lo, hi = corners.reshape(-1, 3).min(axis=0), corners.reshape(-1, 3).max(axis=0)
+        size, axis = hi - lo, int(np.argmax(hi - lo))
+        n = int(np.ceil(size[axis] / max(np.delete(size, axis).max(), 1e-3) - 1e-9))
+        step = np.eye(3)[axis] * size[axis] / n
+        centres = lo + np.where(np.arange(3) == axis, 0.0, size / 2.0) + (np.arange(n)[:, None] + 0.5) * step
+        radius = 0.5 * np.linalg.norm(np.where(np.arange(3) == axis, size[axis] / n, size))
+        T = np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(link)))) @ _rigid(
+            xforms.GetLocalToWorldTransform(stage.GetPrimAtPath(body)))
+        out.append((link.rsplit("/", 1)[1], body, centres @ T[:3, :3].T + T[:3, 3], np.full(n, radius)))
+    return out
 
 
 def apply_mass_overrides(stage, articulation_root: str, robot: str) -> list:
@@ -99,7 +211,9 @@ def include_attached_bodies(stage, articulation_root: str, links) -> list:
 
 class OscbfHost:
     def __init__(self, articulation_root: str, robot: str = "fr3", mode: str = "torque", gains=None,
-                 rate=None, barriers=None, q_rest=None, logger=None):
+                 rate=None, barriers=None, q_rest=None, logger=None, obstacles=(), obstacle_update_hz=0.0):
+        """obstacles: obstacle_config entries, paths absolute: OSCBF barriers, poses refreshed at registration,
+        every attach, refresh_obstacles (GUIDE's Randomize and Reset) and obstacle_update_hz while playing."""
         self.holder = TargetHolder(stale_after=0.25)
         self.reset_time = None  # sim time (/clock's) of the last Reset; guide_ros drops targets stamped at or before it
         self.mode, self.rate, self._logger = mode, rate or RATE[mode], logger
@@ -113,13 +227,29 @@ class OscbfHost:
         elif missing := apply_mass_overrides(get_current_stage(), articulation_root, robot):
             # else the step would recompile to the asset's masses at attach and pass its M/g check
             self._refuse(f"mass overrides: {articulation_root} has no {missing}")
-        for joint, body, mass in include_attached_bodies(get_current_stage(), articulation_root, self.model.usd_to_urdf):
+        stage = get_current_stage()
+        changed = include_attached_bodies(stage, articulation_root, self.model.usd_to_urdf)
+        for joint, body, mass in changed:
             self._log("info", f"{body} (mass {'from its colliders' if mass is None else f'{mass} kg'}) joins the articulation: "
                               f"{joint} no longer excluded; folded into the model at attach")
-        self._settings = (mode, gains, barriers, q_rest)
+        for link, body, centres, radii in attached_spheres(stage, changed, self.model.usd_to_urdf):
+            X = self.model.usd_to_urdf.get(link, np.eye(4))  # the link's USD body frame -> its URDF frame
+            self.model.add_spheres(link, centres @ X[:3, :3].T + X[:3, 3], radii)
+            self._log("info", f"{body}: {len(radii)} collision spheres of {1e3 * radii[0]:.0f} mm on {link}")
+        self._obstacles = [(prepare_obstacle(stage, o["path"], o["kinematic"]), *prim_boxes(stage, o["path"], o["shape"]), o["margin"])
+                           for o in obstacles]
+        self._base = next((p for p in Usd.PrimRange(stage.GetPrimAtPath(articulation_root)) if p.GetName() == self.model.base_link), None)
+        if self._obstacles and self._base is None:
+            raise ValueError(f"obstacles: no {self.model.base_link} under {articulation_root} to place them from")
+        self._obstacle_dt = 1.0 / obstacle_update_hz if obstacle_update_hz > 0 else 0.0
+        self._settings = (mode, gains, barriers, q_rest, [len(half) for _, _, half, _ in self._obstacles])
         enable_compilation_cache()
         self._controller = Controller(self.model, *self._settings)
         self._log("info", f"{robot} {mode}: OSCBF step compiled in {self._controller.warm_up():.1f} s")
+        self.refresh_obstacles()
+        for (prim, _, half, margin), o in zip(self._obstacles, obstacles):
+            self._log("info", f"obstacle {prim.GetPath()}: {o['shape']}, {len(half)} boxes, margin {margin} m{', kinematic' if o['kinematic'] else ''}; "
+                              f"pose read on play, Randomize and Reset{f' and at {obstacle_update_hz} Hz' if self._obstacle_dt else ''}")
         if np.min(self._controller.barrier_values(self._controller.q_rest)) <= 0.0:  # attach sends the arm there
             self._refuse(f"q_rest {np.round(self._controller.q_rest, 4).tolist()} breaks the controller's barriers "
                          f"({self._breach(self._controller.q_rest)})")
@@ -143,6 +273,17 @@ class OscbfHost:
         # at or before it and is dropped (FIX C2-2); every later one comes after the solver's wait for home
         self.reset_time = SimulationManager.get_simulation_time()
         self.holder.put(self._home)
+
+    def refresh_obstacles(self) -> None:
+        """The obstacles' poses on the stage (USD; PhysX writes moving bodies back) -> the controller's base-frame boxes."""
+        if not self._obstacles:
+            return
+        xforms = UsdGeom.XformCache()
+        to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4)) @ np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(self._base)))
+        poses = [to_base @ _rigid(xforms.GetLocalToWorldTransform(prim)) @ boxes for prim, boxes, _, _ in self._obstacles]
+        halves = [half for _, _, half, _ in self._obstacles]
+        margins = [np.full(len(half), margin) for _, _, half, margin in self._obstacles]
+        self._controller.set_obstacles(np.concatenate(poses), np.concatenate(halves), np.concatenate(margins))
 
     def _breach(self, q) -> str:
         """What puts q outside the controller's barriers: joints outside their limits, and the lowest barrier."""
@@ -205,6 +346,9 @@ class OscbfHost:
             if self.mode == "torque":
                 self._write(self._u)
             return
+        if self._obstacle_dt and self._t >= self._refresh_at:
+            self.refresh_obstacles()
+            self._refresh_at += self._obstacle_dt
         q, qd = self._read()
         target, stale = self.holder.get(self._t)
         if target is not None and target is self._home:
@@ -263,6 +407,7 @@ class OscbfHost:
             folded = {n: round(float(m), 4) for n, m in properties[0].items() if n not in self.model.usd_to_urdf}
             self._log("warning", f"PhysX mass properties differ from the description{f' (extra links, kg: {folded})' if folded else ''}: "
                                  f"recompiled in {self._controller.warm_up():.1f} s")
+        self.refresh_obstacles()  # a stop put them back where they were authored; a rebuilt controller has none placed
         q, _ = self._read_api()
         M = arm.get_mass_matrices().numpy()[0][np.ix_(self._arm_dofs, self._arm_dofs)]
         g = arm.get_dof_gravity_compensation_forces().numpy()[0][self._arm_dofs]
@@ -297,6 +442,7 @@ class OscbfHost:
             self._data = self._host if on_cpu else wp.zeros(sample.shape, dtype=wp.float32, device=sample.device)
             self._index = wp.array([0], dtype=wp.int32, device=sample.device)
         self._t, self._k, self._hold, self._width, self._homing = 0.0, 0, None, None, None  # the clock restarts
+        self._refresh_at = self._obstacle_dt
         self._controller.events["infeasible"] = self.diagnostics["infeasible"] = 0  # counted per attach
         self._attached = True
         damping = f", drive damping {np.round(self._damping, 3).tolist()}" if self.mode == "velocity" else ""

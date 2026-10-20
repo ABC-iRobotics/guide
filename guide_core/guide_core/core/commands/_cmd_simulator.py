@@ -40,6 +40,8 @@ def _cmd_randomize_scene(self, scene_id: int, seed=None, params=None, use_zone=F
         scene_id, seed=seed, inject=inject, zone=zone_arg
     )
     results = self._execute_instructions_directly(instructions)
+    for host in getattr(self, "_motion_hosts", {}).get(scene_id, []):
+        host.refresh_obstacles()  # the objects moved: the barriers follow them
     return simulator._scene_manager.randomize_postprocess(scene_id, results)
 
 
@@ -53,6 +55,7 @@ def _cmd_reset_scene(self, scene_id: int) -> bool:
     # Ruling 2: reset.yaml's drive targets (either dialect, now landed) do not move an oscbf arm; its host homes it
     for host in getattr(self, "_motion_hosts", {}).get(scene_id, []):
         host.home()
+        host.refresh_obstacles()
     return simulator._scene_manager.reset_postprocess(scene_id, results)
 
 
@@ -65,15 +68,17 @@ def _cmd_is_success(self, scene_id: int) -> bool:
     return simulator._scene_manager.is_success_postprocess(scene_id, results)
 
 
-def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, robot: dict) -> None:
+def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, robot: dict, scene: dict) -> None:
     """S2b: guide_motion's OSCBF controller in the physics step drives this robot.
 
     Compiles at registration (seconds; the persistent JAX cache makes restarts quicker). The
     GUIDE node subscribes `<namespace>/motion_target` for it after the scene is registered.
+    `scene`: the scene's init.yaml, for its obstacles (barriers of every OSCBF robot in it).
     """
-    from guide_core.control.oscbf_host import OscbfHost
+    from guide_core.control.oscbf_host import OscbfHost, obstacle_config
 
     settings = robot.get("oscbf", {})
+    obstacles, update_hz = obstacle_config(scene, settings)
     host = OscbfHost(
         articulation_root,
         robot=settings.get("robot", "fr3"),
@@ -84,6 +89,8 @@ def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, r
         # nullspace posture: the configuration every episode starts from
         q_rest=list(robot.get("default_joint_states", []))[:7] or None,
         logger=self._logger,
+        obstacles=[{**o, "path": f"/Scene_{scene_id}{o['path']}"} for o in obstacles],  # scene-relative, as tracked_objects
+        obstacle_update_hz=update_hz,
     )
     host.topic = f"{namespace}/motion_target"
     if not hasattr(self, "_motion_hosts"):
@@ -141,6 +148,7 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                     f'{scene_path}{robot.get("articulation_root", "/robot")}',
                     f'{simulator._sim_path}{scene_path}{robot.get("namespace", "/robot")}',
                     robot,
+                    scene._config,
                 )
             self._cmd_create_tf_graph(
                 namespace=f'{simulator._sim_path}{scene_path}{robot.get("namespace", "/robot")}',
