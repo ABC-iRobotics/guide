@@ -91,3 +91,9 @@ CATKIN_IGNORE
 env_isaaclab
 cli_runner/
 *.claude
+
+# Agent working documents (superpowers specs/plans/ledgers, Claude-made notes) stay local unless
+# selected for publishing: `git add -f <file>` publishes one.
+docs/superpowers/
+.superpowers/
+docs/design/libero-asset-spike.md
