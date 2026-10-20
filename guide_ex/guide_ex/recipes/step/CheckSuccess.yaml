@@ -1,0 +1,5 @@
+# Ask the scene whether the task is done: task_success (StopEpisode saves on it) and task_reason.
+ref: IsTaskSuccessful
+alias: CheckSuccess
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+output_map: {success: task_success, reason: task_reason}

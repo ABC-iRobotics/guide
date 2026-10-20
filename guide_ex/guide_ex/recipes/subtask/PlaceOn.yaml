@@ -1,0 +1,20 @@
+# Place what is held on a support (support): announce the subtask (place), carry it over, release it.
+node_type: CompositeNode
+name: Place
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  scene_pose_inv: scene_pose_inv
+  top: top
+  support: support
+  place: place
+children:
+  - ref: SetPrompt
+    alias: AnnouncePlace
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: place}
+  - ref: CarryToSupport
+  - ref: Release

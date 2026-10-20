@@ -1,0 +1,29 @@
+# Put the target into the goal container as one recorded episode: unclutch, record, locate the target,
+# [hold for the camera transition], pick (PickRecovery on a failure), place, go home, judge, save or drop.
+node_type: CompositeNode
+name: PickAndPlace
+level: TASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  target: target
+  goal: goal
+  rest_pose: rest_pose
+  dataset_path: dataset_path
+children:
+  - ref: Unclutch
+  # The episode starts once the arm is unclutched at rest, not at randomization.
+  - ref: StartEpisode
+  - ref: GetTargetPose
+  - ref: CameraHold
+  - ref: Pick
+  - ref: Place
+  - ref: Return
+  # ...and ends after homing (Return's wait let the scene settle): saved if the scene says done.
+  - ref: CheckSuccess
+  - ref: StopEpisode
+fallbacks:
+  Pick: {ref: PickRecovery}

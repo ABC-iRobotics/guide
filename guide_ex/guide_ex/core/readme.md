@@ -9,3 +9,8 @@ The GUIDE-EX execution model every node builds on:
 - `composite_node.py`: `CompositeNode`, which runs children of a lower layer in `normal`,
   `condition` or `loop` mode, and `RecoveryNode`, the fallback for a failed child that resumes
   its parent at `resume_target`.
+
+`guide_ex.recipe` builds these trees from YAML (the GUIDE-EX paper's recipes): `load()` turns a
+recipe into nodes, `@node` registers the leaf classes a recipe's `ref` names, and
+`python -m guide_ex.recipe catalogue` lists every leaf and library recipe in
+`recipes/CATALOGUE.md`.

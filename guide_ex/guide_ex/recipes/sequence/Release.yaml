@@ -1,0 +1,49 @@
+# Set what is held down on the support and let go: lower slowly to the release height (0.0665 m over
+# the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), open, and
+# rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.
+node_type: CompositeNode
+name: Release
+level: SEQUENCE
+dynamic_map: {robot: robot, support_pose: support_pose, over_support_pose: over_support_pose}
+children:
+  - ref: TransformPose
+    alias: PlacePose
+    dynamic_map: {r_pose: support_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.0665]}
+    output_map: {pose: place_pose}
+  - ref: MoveToCartesianPose
+    alias: LowerOntoSupport
+    dynamic_map: {robot: robot, target_pose: place_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  - ref: OpenGripper
+  - ref: WaitForSeconds
+    alias: OpenGripperSettle
+    static_args: {seconds: 1.0}
+  - ref: MoveToCartesianPose
+    alias: RetreatFromTower
+    dynamic_map: {robot: robot, target_pose: over_support_pose}
+    static_args: {speed: 0.2, cartesian: true}
+fallbacks:
+  LowerOntoSupport:
+    node_type: RecoveryNode
+    name: LowerViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot, over_support_pose: over_support_pose}
+    resume_target: LowerOntoSupport
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: LowerViaHomeToHome}
+      - ref: MoveToCartesianPose
+        alias: BackOverSupport
+        dynamic_map: {robot: robot, target_pose: over_support_pose}
+        static_args: {speed: 0.5, cartesian: true}
+  RetreatFromTower:
+    node_type: RecoveryNode
+    name: RetreatViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: RetreatFromTower
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: RetreatViaHomeToHome}

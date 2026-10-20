@@ -1,0 +1,12 @@
+# Pick's fallback when the straight lift cannot run: up through the (high) rest pose instead, then
+# resume at the grasp check, so the arm never sweeps across at grasp height.
+node_type: RecoveryNode
+name: RetreatViaRest
+level: SEQUENCE
+dynamic_map: {robot: robot, rest_pose: rest_pose}
+resume_target: CheckClash
+children:
+  - ref: MoveToCartesianPose
+    alias: MoveToRestRetreat
+    dynamic_map: {robot: robot, target_pose: rest_pose}
+    static_args: {speed: 1.0}

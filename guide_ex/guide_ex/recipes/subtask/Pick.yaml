@@ -1,0 +1,64 @@
+# Pick the target up from above (cube_pose): approach 10 cm over it, grasp 1 cm above its centre,
+# close, lift 20 cm, and fail (NoGrasp) unless the fingers hold it.
+node_type: CompositeNode
+name: Pick
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  robot_prim: robot_prim
+  target: target
+  cube_pose: cube_pose
+  rest_pose: rest_pose
+children:
+  - ref: TransformPose
+    alias: TransformCubeApproachPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.1]}
+    output_map: {pose: cube_approach_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToCubeApproach
+    dynamic_map: {robot: robot, target_pose: cube_approach_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: TransformPose
+    alias: TransformCubeGraspPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.01]}
+    output_map: {pose: cube_grasp_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToCube
+    dynamic_map: {robot: robot, target_pose: cube_grasp_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  - ref: CloseGripper
+  - ref: WaitForSeconds
+    alias: WaitAfterClose
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}
+  - ref: TransformPose
+    alias: TransformCubeRetreatPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.2]}
+    output_map: {pose: cube_retreat_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToCubeRetreat
+    dynamic_map: {robot: robot, target_pose: cube_retreat_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: IsPrimClashing
+    alias: CheckClash
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      prim1_path: robot_prim
+      prim2_path: target
+    output_map: {has_collided: grasp_success}
+output_map: {grasp_success: grasp_success}
+mode: condition
+condition_expr: grasp_success
+false_branch: {ref: NodeException, alias: NoGrasp}
+fallbacks:
+  MoveToCubeRetreat: {ref: RetreatViaRest}

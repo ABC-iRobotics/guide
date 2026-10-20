@@ -1,0 +1,4 @@
+# Start recording the episode into dataset_path (a busy recorder has held start_recording for ~3 min).
+ref: StartRecording
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, path: dataset_path}
+static_args: {timeout_sec: 240.0}

@@ -1,0 +1,22 @@
+# A failed Pick's recovery (the paper's Fig. 3): measure the target again, open, and turn the grasp
+# 90 deg about z to try the other pair of faces; its parent then resumes at Pick.
+node_type: RecoveryNode
+name: PickRecovery
+level: SUBTASK
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, target: target}
+resume_target: Pick
+children:
+  - ref: GetTargetPose
+  - ref: OpenGripper
+    alias: OpenGripperRecovery
+  - ref: WaitForSeconds
+    alias: WaitAfterOpenRecovery
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}
+  - ref: TransformPose
+    alias: RotateCubePose
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['z', 1.5707963267948966]}}
+    output_map: {pose: cube_pose}
+output_map: {cube_pose: cube_pose}

@@ -1,0 +1,4 @@
+# Stop recording: save the episode if task_success, else discard it (saving encodes every camera first).
+ref: StopRecording
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, save_episode: task_success}
+static_args: {timeout_sec: 300.0}

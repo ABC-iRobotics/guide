@@ -1,0 +1,26 @@
+# Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it
+# already was at rest), open.
+node_type: CompositeNode
+name: Unclutch
+level: SUBTASK
+dynamic_map: {robot: robot, rest_pose: rest_pose}
+children:
+  - ref: MoveToCartesianPose
+    alias: MoveToRest
+    dynamic_map: {robot: robot, target_pose: rest_pose}
+    static_args: {speed: 1.0}
+  - ref: TransformPose
+    alias: TransformUncluchPose
+    dynamic_map: {r_pose: rest_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, -0.1]}
+    output_map: {pose: uncluch_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToUncluch
+    dynamic_map: {robot: robot, target_pose: uncluch_pose}
+    static_args: {speed: 1.0}
+  - ref: OpenGripper
+  - ref: WaitForSeconds
+    alias: WaitAfterOpen
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}

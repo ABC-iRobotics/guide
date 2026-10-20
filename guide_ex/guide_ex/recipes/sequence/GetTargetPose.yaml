@@ -1,0 +1,29 @@
+# The target's pose as a top-down grasp (cube_pose): measured, its tilt dropped, its yaw reduced by the
+# cube's 4 identical sides, the gripper turned to face down.
+node_type: CompositeNode
+name: GetTargetPose
+level: SEQUENCE
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, target: target}
+children:
+  - ref: GetPrimPose
+    alias: GetCubePose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: target}
+    output_map: {pose: cube_pose}
+  # A pure base-Z turn, so the grasp comes straight down instead of tilting with the cube.
+  - ref: ProjectRotationToBaseZ
+    alias: ProjectCubeToBaseZ
+    dynamic_map: {pose: cube_pose}
+    output_map: {pose: cube_pose}
+  # 4 identical sides: the smallest equivalent wrist turn.
+  - ref: ReduceRotationToSymmetry
+    alias: MinimizeCubeRotation
+    dynamic_map: {pose: cube_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: cube_pose}
+  - ref: TransformPose
+    alias: TransformCubePoseForGripper
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
+    output_map: {pose: cube_pose}
+output_map: {cube_pose: cube_pose}

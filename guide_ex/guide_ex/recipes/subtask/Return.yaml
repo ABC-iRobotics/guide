@@ -1,0 +1,14 @@
+# Go back to the rest pose and stay still for 1 s, the stationary end of going home.
+node_type: CompositeNode
+name: Return
+level: SUBTASK
+dynamic_map: {robot: robot, rest_pose: rest_pose}
+children:
+  - ref: MoveToCartesianPose
+    alias: MoveToRest
+    dynamic_map: {robot: robot, target_pose: rest_pose}
+    static_args: {speed: 1.0}
+  - ref: WaitForSeconds
+    alias: WaitAfterTask
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 1.0}

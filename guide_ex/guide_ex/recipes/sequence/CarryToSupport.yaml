@@ -1,0 +1,73 @@
+# Carry what is held (top) over the support: measure the support now (it may have been nudged), go
+# 10 cm over where the cube will rest, and fail (DroppedInTransit) unless it is still in the fingers.
+# A failed move detours through the home joints first.
+node_type: CompositeNode
+name: CarryToSupport
+level: SEQUENCE
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  robot_prim: robot_prim
+  scene_pose_inv: scene_pose_inv
+  top: top
+  support: support
+children:
+  - ref: GetPrimPose
+    alias: GetSupportPose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: support}
+    output_map: {pose: support_pose}
+  - ref: TransformPose
+    alias: SupportInScene
+    dynamic_map: {l_pose: scene_pose_inv, r_pose: support_pose}
+    output_map: {pose: support_pose}
+  # "auto": a support that fell may lie on any face; take its flattest axis.
+  - ref: ProjectRotationToBaseZ
+    alias: FlattenSupport
+    dynamic_map: {pose: support_pose}
+    static_args: {heading_axis: auto}
+    output_map: {pose: support_pose}
+  - ref: ReduceRotationToSymmetry
+    alias: MinimizeSupportTurn
+    dynamic_map: {pose: support_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: support_pose}
+  - ref: TransformPose
+    alias: SupportGripperDown
+    dynamic_map: {l_pose: support_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
+    output_map: {pose: support_pose}
+  # 0.1665 m: the release height (0.0665, see Release) plus 10 cm, so the carried cube clears the tower.
+  - ref: TransformPose
+    alias: OverSupportPose
+    dynamic_map: {r_pose: support_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.1665]}
+    output_map: {pose: over_support_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveOverSupport
+    dynamic_map: {robot: robot, target_pose: over_support_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: IsPrimClashing
+    alias: CheckStillHolding
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      prim1_path: robot_prim
+      prim2_path: top
+    output_map: {has_collided: holding}
+mode: condition
+condition_expr: holding
+false_branch: {ref: NodeException, alias: DroppedInTransit}
+fallbacks:
+  MoveOverSupport:
+    node_type: RecoveryNode
+    name: CarryViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveOverSupport
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: CarryViaHomeToHome}

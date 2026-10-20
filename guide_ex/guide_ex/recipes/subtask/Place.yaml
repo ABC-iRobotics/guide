@@ -1,0 +1,41 @@
+# Drop what is held into the goal container (goal): 15 cm over its centre, straight down, minimal wrist
+# turn, then open.
+node_type: CompositeNode
+name: Place
+level: SUBTASK
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, goal: goal}
+children:
+  - ref: GetPrimPose
+    alias: GetBinPose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: goal}
+    output_map: {pose: bin_pose}
+  - ref: ProjectRotationToBaseZ
+    alias: ProjectBinToBaseZ
+    dynamic_map: {pose: bin_pose}
+    output_map: {pose: bin_pose}
+  - ref: ReduceRotationToSymmetry
+    alias: MinimizeBinRotation
+    dynamic_map: {pose: bin_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: bin_pose}
+  - ref: TransformPose
+    alias: TransformBinPoseForGripper
+    dynamic_map: {l_pose: bin_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
+    output_map: {pose: bin_pose}
+  - ref: TransformPose
+    alias: TransformBinApproachPose
+    dynamic_map: {r_pose: bin_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.15]}
+    output_map: {pose: bin_approach_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToBinApproach
+    dynamic_map: {robot: robot, target_pose: bin_approach_pose}
+    static_args: {speed: 0.5}
+  - ref: OpenGripper
+  - ref: WaitForSeconds
+    alias: WaitAfterOpen
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}

@@ -1,0 +1,8 @@
+# Move the arm to its home joints (${robot.home}): the one well-posed start for a 7-DoF arm, which a
+# Cartesian move keeps in whatever posture it is in and a pose goal may leave in any.
+ref: MoveToJointConfiguration
+alias: MoveHome
+dynamic_map: {robot: robot}
+static_args:
+  target_configuration: ${robot.home}
+  speed: 1.0

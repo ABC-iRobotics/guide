@@ -1,0 +1,29 @@
+node_type: CompositeNode
+name: PickAndPlace
+level: TASK
+children:
+  - ref: Unclutch
+  - ref: GetTargetPose
+  - ref: Pick
+  - ref: Place
+  - ref: Return
+fallbacks:
+  Pick:
+    node_type: RecoveryNode
+    name: PickRecovery
+    level: SUBTASK
+    resume_target: Pick
+    children:
+      - ref: GetTargetPose
+      - ref: OpenGripper
+        alias: OpenGripperRecovery
+      - ref: TransformPose
+        alias: RotateCubePose
+        dynamic_map:
+          l_pose: target_pose
+        static_args:
+          r_pose:
+            orientation:
+              euler: ['z', 1.57]
+        output_map:
+          pose: target_pose

@@ -1,0 +1,7 @@
+# Close onto a ~5 cm cube: 0.01 m per finger lies past its faces, so the stalled fingers keep squeezing
+# (the gripper controller holds the stalled position; a target at the faces held no force).
+ref: SetGripperState
+alias: CloseGripper
+dynamic_map: {robot: robot}
+static_args:
+  gripper_goal_pos: {"${robot.gripper_joint}": 0.01}

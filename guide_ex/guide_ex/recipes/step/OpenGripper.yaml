@@ -1,0 +1,6 @@
+# Open the gripper fully: 0.04 m per finger, the Franka hand's (FR3 and Panda) widest.
+ref: SetGripperState
+alias: OpenGripper
+dynamic_map: {robot: robot}
+static_args:
+  gripper_goal_pos: {"${robot.gripper_joint}": 0.04}
