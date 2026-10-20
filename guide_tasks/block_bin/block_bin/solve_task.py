@@ -42,6 +42,9 @@ namespace_base = ""
 # dataset.camera_transition's duration in config/init.yaml (the launch passes it): s of sim time
 # the arm holds still right after StartRecording while the cameras move onto their mounts. 0: off.
 startup_padding = 0.0
+# dataset.fps (the launch passes it). The hold lasts one frame period longer: it starts at the
+# StartRecording reply, the transition at the first recorded frame, up to 1/fps later.
+record_fps = 10.0
 
 
 def solveTask(scene_id, robot, zone=None, path=""):
@@ -382,7 +385,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
             get_target_pose_sequence,
             *(
                 [WaitForSeconds(alias="WaitForCameras", dynamic_map={"timer": "robot"},
-                                static_args={"seconds": startup_padding})]
+                                static_args={"seconds": startup_padding + 1.0 / record_fps})]
                 if startup_padding
                 else []
             ),
@@ -611,10 +614,12 @@ def main():
     argparser.add_argument("--namespace", type=str, default="")
     argparser.add_argument("--controller", choices=["moveit", "oscbf"], default="moveit")
     argparser.add_argument("--startup-padding", type=float, default=0.0)
+    argparser.add_argument("--fps", type=float, default=10.0)
     args = argparser.parse_known_args()
-    global namespace_base, startup_padding
+    global namespace_base, startup_padding, record_fps
     namespace_base = args[0].namespace if args[0].namespace else ""
     startup_padding = args[0].startup_padding
+    record_fps = args[0].fps
 
     match = re.search(r"\d+$", namespace_base.split("/")[-1].strip())
     scene_id = int(match.group()) if match else 0

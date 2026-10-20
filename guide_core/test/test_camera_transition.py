@@ -271,3 +271,69 @@ def test_a_resumed_episode_does_not_start_another_transition(episode):
 
     assert len(run.frames) > paused_at and {f["prompts"]["subtask"] for f in run.frames[paused_at:]} == {""}
     assert {name: ops(run.stage, name) for name in CAMERAS} == authored
+
+
+def registration(stage, monkeypatch):
+    """_cmd_register_scene on a block_bin-like scene whose USD is `stage`, the rest faked."""
+    from guide_core.core.commands._cmd_simulator import _cmd_register_scene
+
+    usd = SimpleNamespace(get_context=lambda: SimpleNamespace(get_stage=lambda: stage))
+    monkeypatch.setitem(sys.modules, "omni", SimpleNamespace(usd=usd))
+    monkeypatch.setitem(sys.modules, "omni.usd", usd)
+    scene = Scene.__new__(Scene)
+    scene._config, scene._scene_id = {"cameras": CAMERAS, "dataset": {"camera_transition": ON}}, 0
+    scene.camera_transition = camera_transition(scene._config)
+    manager = SimpleNamespace(get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: None,
+                              get_scene_camera_graphs=lambda i: None, _scenes=[scene])
+    runtime = SimpleNamespace(
+        _simulator=SimpleNamespace(_add_scene_to_manager=lambda p: (0, (0, 0, 0), {}),
+                                   _scene_manager=manager, _sim_path="/Sim_0"),
+        _cmd_add_scene=lambda **kwargs: None, _cmd_set_world_poses=lambda **kwargs: None,
+    )
+    return lambda: _cmd_register_scene(runtime, "block_bin")
+
+
+def test_a_moved_camera_without_translate_and_orient_ops_fails_the_registration(monkeypatch):
+    # Not the physics step that opens the first episode: begin_camera_transition runs inside
+    # Isaac's physics callback, where a raise is no registration error anyone sees.
+    stage = block_bin_stage()
+    assert registration(stage, monkeypatch)() == (0, (0, 0, 0))
+
+    stage.GetPrimAtPath("/Scene_0/top").RemoveProperty("xformOp:orient")
+    with pytest.raises(ValueError, match=r"camera_transition: camera 'top' \(/Scene_0/top\) has no "
+                                         r"xformOp:translate and xformOp:orient"):
+        registration(stage, monkeypatch)()
+
+
+def test_a_reset_between_episodes_leaves_the_next_transition_clean(episode):
+    # Episode 1 stops inside its transition; the Reset homes the arm (the wrist camera's body
+    # moves) through the real Reset command; episode 2 opens on base as the arm now stands
+    # and eases onto the mounts of the reset arm, every authored op as it was.
+    from guide_core.core.commands._cmd_simulator import _cmd_reset_scene
+
+    run = episode(ON)
+    authored = {name: ops(run.stage, name) for name in CAMERAS}
+    run.step(10 * 12)
+    run.manager.stop_recording(0)
+    run.step(1)
+    assert {name: ops(run.stage, name) for name in CAMERAS} == authored
+    scene = run.scene
+    scene.reset_instructions, scene.reset_preprocess = [], lambda instructions: instructions
+    scene.reset_postprocess, scene.reset_fire = lambda result: True, lambda: None
+    body = UsdGeom.Xformable(run.stage.GetPrimAtPath("/Scene_0/fr3/rsd455/RSD455"))
+    runtime = SimpleNamespace(
+        _simulator=SimpleNamespace(_scene_manager=run.manager),
+        _execute_instructions_directly=lambda instructions: body.GetOrderedXformOps()[0].Set(
+            Gf.Vec3d(0.01, -0.02, 0.03)),
+    )
+
+    assert _cmd_reset_scene(runtime, 0) is True
+    mount = {name: world(run.stage, name) for name in CAMERAS}  # the wrist's moved with the arm
+    run.manager.start_recording(0)
+    poses = run.step(40 * 12)[-40:]
+
+    frames = run.frames[-40:]
+    assert [f["prompts"]["subtask"] for f in frames] == ["Startup"] * 20 + [""] * 20
+    assert all(same_pose(poses[0][name], mount["base"]) for name in CAMERAS)
+    assert all(same_pose(poses[k][name], mount[name]) for k in range(20, 40) for name in CAMERAS)
+    assert {name: ops(run.stage, name) for name in CAMERAS} == authored

@@ -118,3 +118,30 @@ def test_every_dataset_of_one_recorder_gets_its_run_info(tmp_path):
 
     assert roots[0] != roots[1]
     assert all((root / "meta" / "guide_info.json").exists() for root in roots)
+
+
+def test_an_empty_subtask_row_round_trips_through_write_language(tmp_path):
+    # After "Startup" block_bin announces no subtask, so the recorder closes the label with a
+    # row of content "". LeRobot keeps it as written and reads it back as the active subtask.
+    from guide_core.scene.scene_recorder import write_language
+
+    recorder = SceneRecorder("pkg", "empty", {"dataset": {"fps": 10}})
+    recorder._logger = logging.getLogger("test_subtasks")
+    recorder.LeRobotDataset = lerobot_dataset.LeRobotDataset
+    recorder.set_output_path(str(tmp_path))
+    start = None
+    for i in range(5):  # no prompt at all: the recorder writes no language of its own
+        start = recorder._process_frame({"timestamp": i, "observation": {"joint1.pos": 0.0, **POSE},
+                                         "action": {"joint1.pos": 0.0, **POSE}, "task": "t",
+                                         "prompts": {"procedure": "", "subtask": ""}}, start)
+    recorder._finalize_episode()
+    root = recorder.dataset.root
+    recorder._finalize_dataset()
+
+    assert write_language(root, {0: {"subtask": [(0, "Startup"), (3, "")]}})
+
+    register_guide_styles()
+    rows = lerobot_dataset.LeRobotDataset("pkg", root=root)[4]["language_persistent"]
+    assert [(r["style"], r["content"], r["timestamp"]) for r in rows] == [
+        ("subtask", "Startup", 0.0), ("subtask", "", pytest.approx(0.3))]
+    assert active(root, "subtask") == {0: ["Startup"] * 3 + [""] * 2}

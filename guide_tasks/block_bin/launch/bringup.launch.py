@@ -25,9 +25,11 @@ def generate_nodes(context, *args, **kwargs):
         config = yaml.safe_load(f)
     controller = config["robots"]["franka"].get("controller", "moveit")
     # dataset.camera_transition: GUIDE moves the cameras onto their mounts for `duration` s at the
-    # start of every episode, and the solver holds the arm still for as long (GUIDE validates it).
+    # start of every episode, and the solver holds the arm still for as long plus one frame period
+    # at dataset.fps (GUIDE validates both).
     transition = (config.get("dataset") or {}).get("camera_transition") or {}
     startup_padding = transition.get("duration", 0.0) if transition.get("enabled") is True else 0.0
+    fps = (config.get("dataset") or {}).get("fps", 10)
 
     # Same-host DDS discovery on this machine needs the localhost cyclonedds
     # config (loopback has no MULTICAST flag + multiple NICs), otherwise these
@@ -95,7 +97,7 @@ def generate_nodes(context, *args, **kwargs):
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
                 arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller,
-                           "--startup-padding", str(startup_padding)],
+                           "--startup-padding", str(startup_padding), "--fps", str(fps)],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),

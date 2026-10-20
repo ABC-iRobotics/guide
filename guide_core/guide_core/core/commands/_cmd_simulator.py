@@ -115,6 +115,12 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
     self._cmd_add_scene(stage_config=config, root=scene_path)
     self._cmd_set_world_poses(prim_path=scene_path, pose=pose)
 
+    scene = simulator._scene_manager._scenes[id]
+    # Now that its USD is on the stage: a camera the transition cannot move fails the
+    # registration here, not the physics step that opens the first episode.
+    if getattr(scene, "camera_transition", None):
+        scene.check_camera_transition()
+
     robots = simulator._scene_manager.get_scene_robot_graphs(id)
     cameras = simulator._scene_manager.get_scene_camera_graphs(id)
 
@@ -174,7 +180,6 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 path=f'{scene_path}/Graph{camera.get("path", "/cam")}_tf_graph',
             )
 
-    scene = simulator._scene_manager._scenes[id]
     if getattr(scene, "replicator_files", None):
         scene.build_replicator()
 

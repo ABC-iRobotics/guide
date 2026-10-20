@@ -15,7 +15,7 @@ up and drops it into that bin through MoveIt 2.
 | `config/randomize.yaml` | Replicator YAML: the blocks uniform over the table with any yaw, the bins fixed, a 0.1 m zone grid (5 x 4 = 20 zones) for the drawn block. |
 | `config/reset.yaml` | Replicator YAML for the Reset service: blocks in a row, bins, arm and fingers at home. |
 | `config/success.yaml` | `is_prim_contained`: the block inside the bin. |
-| `launch/bringup.launch.py` | Per scene (`num_env`, default 1): MoveIt (`franka_fr3_moveit_config`'s `guide_moveit.launch.py`) and the `solve_task` node under the `.venv` Python, given the controller and the camera transition's duration from `config/init.yaml`. |
+| `launch/bringup.launch.py` | Per scene (`num_env`, default 1): MoveIt (`franka_fr3_moveit_config`'s `guide_moveit.launch.py`) and the `solve_task` node under the `.venv` Python, given the controller, the camera transition's duration and `dataset.fps` from `config/init.yaml`; WaitForCameras holds the arm for the duration plus one frame period. |
 | `assets/` | `block_bin.usd`, the scene, and the RealSense D435 camera mount it references. |
 
 ## Usage

@@ -1225,6 +1225,31 @@ class SceneOrchestrator(ABC):
 
     # ---- camera transition: main thread only (SceneManager.step's physics callback) ----
 
+    def check_camera_transition(self) -> None:
+        """At registration, once the scene's USD is on the stage: every camera the transition
+        moves has the xformOp:translate and xformOp:orient it is moved by. A ValueError here
+        fails the registration, so the physics step that opens an episode never raises."""
+        import omni.usd
+
+        self._transition_ops(omni.usd.get_context().get_stage())
+
+    def _transition_ops(self, stage) -> list:
+        """(prim, [translate op, orient op]) of every camera but ``from``; a ValueError naming
+        the first camera without a prim or without either op."""
+        moved = []
+        for name, data in self._config["cameras"].items():
+            prim = stage.GetPrimAtPath(f"/Scene_{self._scene_id}{data['path']}")
+            if not prim:
+                raise ValueError(f"camera_transition: camera '{name}' has no prim at {prim.GetPath()}")
+            if name == self.camera_transition["from"]:
+                continue
+            ops = [prim.GetAttribute("xformOp:translate"), prim.GetAttribute("xformOp:orient")]
+            if not all(ops):
+                raise ValueError(f"camera_transition: camera '{name}' ({prim.GetPath()}) has no "
+                                 f"xformOp:translate and xformOp:orient to move it by")
+            moved.append((prim, ops))
+        return moved
+
     def begin_camera_transition(self) -> None:
         """As an episode opens, every camera but ``from`` jumps onto ``from``'s world pose.
 
@@ -1238,17 +1263,10 @@ class SceneOrchestrator(ABC):
         self.end_camera_transition()  # a camera still on its way has no mount to keep
         stage = omni.usd.get_context().get_stage()
         cameras, source = self._config["cameras"], self.camera_transition["from"]
-        moved = []
-        for name, data in cameras.items():
-            if name == source:
-                continue
-            prim = stage.GetPrimAtPath(f"/Scene_{self._scene_id}{data['path']}")
-            ops = [prim.GetAttribute("xformOp:translate"), prim.GetAttribute("xformOp:orient")]
-            if not all(ops):
-                raise ValueError(f"camera_transition: camera '{name}' ({prim.GetPath()}) has no "
-                                 f"xformOp:translate and xformOp:orient to move it by")
-            local = UsdGeom.Xformable(prim).GetLocalTransformation()
-            moved.append((prim, ops, [op.Get() for op in ops], local))
+        moved = [
+            (prim, ops, [op.Get() for op in ops], UsdGeom.Xformable(prim).GetLocalTransformation())
+            for prim, ops in self._transition_ops(stage)  # checked at registration
+        ]
         self._transition = {
             "from": stage.GetPrimAtPath(f"/Scene_{self._scene_id}{cameras[source]['path']}"),
             "cameras": moved,

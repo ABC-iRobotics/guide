@@ -69,7 +69,8 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, st
                    (0.45, -0.25, 0.137), (0.3, 0.0, 0.5)]
     settle = [SetGripperState.POLL] * SetGripperState.STILL_SAMPLES + [SetGripperState.RESIDUAL]
     # the post-Randomize pause, settles and WaitForSeconds; with the camera transition, its wait right
-    # after StartRecording, before any move but Unclutch's (rest, unclutch, open the hand)
-    padding = [startup] if startup else []
+    # after StartRecording, before any move but Unclutch's (rest, unclutch, open the hand): the
+    # duration plus one 10 fps frame, as t = 0 is the first frame, up to 1/fps after the reply
+    padding = [startup + 1 / 10] if startup else []
     assert [s for s, _ in slept] == [5, *settle, 0.5, *padding, *settle, 0.5, *settle, 0.5, 1.0]
-    assert [m for s, m in slept if s == startup] == ([3] if startup else [])
+    assert [m for s, m in slept if s in padding] == ([3] if startup else [])
