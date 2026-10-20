@@ -1,3 +1,4 @@
+# The scene-frame chain is identity with frame_id fr3_link0; kept so robots with another base frame stay correct.
 # The cube to stack next (top) as a top-down grasp (cube_pose), in the frame of scene_pose_inv's scene.
 node_type: CompositeNode
 name: LocateCube

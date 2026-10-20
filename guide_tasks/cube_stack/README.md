@@ -68,7 +68,7 @@ StackingDemonstration (PROCEDURE "Stack the cubes.", condition: not done)
        NextCube (TASK, condition: done?)
          MeasureTower (GetPrimPoses), TowerHeight (ChainLength)   -> built, done
          done -> Finish (TASK "Return home."): AnnounceFinish (task + subtask),
-                   GoHome (SUBTASK "Return home."), CheckSuccess, StopRecording
+                   GoHome (SUBTASK "Return home."), CheckSuccess, StopEpisode
          else -> PutOn (TASK "Put the red cube on the blue cube.")
                    NextTop, NextSupport, NextTask, ... (GetItem: order[built], ...)
                    AnnounceTask (task + pick), LocateCube (SEQUENCE)
@@ -104,7 +104,7 @@ The five failures judged most likely, most likely first:
 | # | Failure | Detected by | Route |
 |---|---------|-------------|-------|
 | 1 | Grasp misses (block_bin's only failure mode in 300 episodes) | finger/cube contact after the lift (`Pick` condition) | `Regrasp`: open, measure the cube again, grasp the other pair of faces, retry `Pick` (2x) |
-| 2 | An arm motion fails: no path, an aborted trajectory, or a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; `MoveToCartesianPose` refuses a path under 95% before moving | `*ViaHome`: detour through the home joints, retry the move (2x per move) |
+| 2 | An arm motion fails: no path, or an aborted trajectory; under `controller: moveit` also a straight-line path MoveIt can only partly compute (executed, it stopped short or ended in self-collision) | the move fails; under `controller: moveit` `MoveToCartesianPose` refuses a path under 95% before moving (OSCBF plans straight lines or refuses) | `*ViaHome`: detour through the home joints, retry the move (2x per move) |
 | 3 | The Place subtask fails: the cube slips out, or the arm finds no way there or down onto it | finger/cube contact above the tower (`CarryToSupport` condition), or the moves' own detours run out | `RepickDropped` (subtask "Set it down."): set it down where it was picked (opening anywhere else drops it from height), pick it up again from wherever it is (2x) |
 | 4 | A placed cube does not stay, or the tower is knocked | every loop pass measures the whole tower | the loop itself: rebuild from the lowest layer out of place (3 spare passes) |
 | 5 | Anything beyond that (cube off the table, retries used up) | the tree fails | the episode is discarded; generation redraws a layout and tries again (8 attempts, then the run stops) |
