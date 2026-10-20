@@ -1,0 +1,28 @@
+# Put the target (top, once held) on a support (support): announce the pick, locate the target as a
+# top-down grasp, pick it, carry it over the support and set it down (PlaceOn, which announces `place`).
+# No recording: the episode around it is the task's. A task fits the grasp to its object by overriding
+# GetTargetPose's TransformCubePoseForGripper, Pick's CloseGripper and Place's CarryToSupport.SupportGripperDown.
+node_type: CompositeNode
+name: PutOn
+level: TASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  robot_prim: robot_prim
+  target: target
+  top: top
+  support: support
+  pick: pick
+  place: place
+  rest_pose: rest_pose
+  scene_pose_inv: scene_pose_inv
+children:
+  # The recorded subtask must not be empty while the arm travels to the target.
+  - ref: SetPrompt
+    alias: AnnouncePick
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: pick}
+  - ref: GetTargetPose
+  - ref: Pick
+  - ref: PlaceOn

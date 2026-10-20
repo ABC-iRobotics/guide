@@ -21,6 +21,29 @@
       "used_by": []
     },
     {
+      "doc": "Put the target (top, once held) on a support (support): announce the pick, locate the target as a top-down grasp, pick it, carry it over the support and set it down (PlaceOn, which announces `place`). No recording: the episode around it is the task's. A task fits the grasp to its object by overriding GetTargetPose's TransformCubePoseForGripper, Pick's CloseGripper and Place's CarryToSupport.SupportGripperDown.",
+      "inputs": [
+        "pick",
+        "place",
+        "rest_pose",
+        "robot",
+        "robot_prim",
+        "scene_id",
+        "scene_namespace",
+        "scene_pose_inv",
+        "sim_namespace",
+        "support",
+        "target",
+        "top"
+      ],
+      "kind": "recipe",
+      "level": "TASK",
+      "name": "PutOn",
+      "outputs": [],
+      "source": "tasks/PutOn.yaml",
+      "used_by": []
+    },
+    {
       "doc": "Pick the target up from above (cube_pose): approach 10 cm over it, grasp 1 cm above its centre, close, lift 20 cm, and fail (NoGrasp) unless the fingers hold it.",
       "inputs": [
         "cube_pose",
@@ -39,7 +62,8 @@
       ],
       "source": "subtasks/Pick.yaml",
       "used_by": [
-        "PickAndPlace"
+        "PickAndPlace",
+        "PutOn"
       ]
     },
     {
@@ -96,7 +120,9 @@
       "name": "PlaceOn",
       "outputs": [],
       "source": "subtasks/PlaceOn.yaml",
-      "used_by": []
+      "used_by": [
+        "PutOn"
+      ]
     },
     {
       "doc": "Go back to the rest pose and stay still for 1 s, the stationary end of going home.",
@@ -165,7 +191,8 @@
       "source": "sequences/GetTargetPose.yaml",
       "used_by": [
         "PickAndPlace",
-        "PickRecovery"
+        "PickRecovery",
+        "PutOn"
       ]
     },
     {
@@ -564,7 +591,8 @@
       "outputs": [],
       "source": "utility/recording.py",
       "used_by": [
-        "PlaceOn"
+        "PlaceOn",
+        "PutOn"
       ]
     },
     {
