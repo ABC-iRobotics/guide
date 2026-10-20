@@ -64,6 +64,12 @@ class SceneManager:
         runs per ``app.update()`` and re-publishes the last frame regardless. That rate
         is a static ``frameSkipCount`` on the camera helper, set once when the graph is
         built -- see ``_set_publish_rate``.
+
+        In production this gate is effectively off: since f5048ea every scene with a render
+        product records, and such a scene renders every frame (``set_render_products_enabled``
+        keeps its products on). The gating code stays for a scene with no recorder annotators.
+        ponytail: gate only while the recorder is idle (between episodes, after a run), if
+        Isaac allows toggling the texture there without starving the annotators.
         """
         for scene in self._scenes:
             interval = max(1, round(step_hz / getattr(scene, "record_frequency", DEFAULT_FPS)))

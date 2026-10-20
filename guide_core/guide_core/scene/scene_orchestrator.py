@@ -863,6 +863,11 @@ class SceneOrchestrator(ABC):
         the frame before a capture (SceneManager.step), while the runtime is not
         stepping, and for a scene with an instance stream, which renders every frame.
 
+        Since f5048ea every scene with a render product records, so gate_render keeps its
+        products on and this switch is effectively off in production.
+        ponytail: gate only while the recorder is idle, if Isaac allows it without starving
+        the annotators.
+
         Isaac's own code drives render products this way; see
         ``omni/replicator/core/scripts/annotators.py`` and
         ``isaacsim/replicator/nurec_utils/render.py``.
