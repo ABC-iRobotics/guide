@@ -1,0 +1,224 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wooden_cabinet"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wooden_cabinet" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "wooden_cabinet"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.124655105, -0.11010005, 0.0045868047), (0.13177176, 0.11170429, 0.22299), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.1218, -0.07871, -0.095), (0.12888, 0.11005, 0.22299)]
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "base"
+                {
+                    over "Box"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_1"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_2"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_3"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_4"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_5"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_6"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_7"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "Box_8"
+                    {
+                        uniform token purpose = "guide"
+                    }
+
+                    over "cabinet_top"
+                    {
+                        over "Box"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_1"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_2"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_3"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_4"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_5"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_6"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_7"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_8"
+                        {
+                            uniform token purpose = "guide"
+                        }
+                    }
+
+                    over "cabinet_middle"
+                    {
+                        over "Box"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_1"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_2"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_3"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_4"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_5"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_6"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_7"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_8"
+                        {
+                            uniform token purpose = "guide"
+                        }
+                    }
+
+                    over "cabinet_bottom"
+                    {
+                        over "Box"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_1"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_2"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_3"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_4"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_5"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_6"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_7"
+                        {
+                            uniform token purpose = "guide"
+                        }
+
+                        over "Box_8"
+                        {
+                            uniform token purpose = "guide"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

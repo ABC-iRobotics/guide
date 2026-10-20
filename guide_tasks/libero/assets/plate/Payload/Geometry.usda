@@ -1,0 +1,308 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "plate"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "plate"
+{
+    def Scope "Geometry"
+    {
+        def Xform "Body" (
+            displayName = ""
+        )
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Sphere "bottom_site"
+            {
+                float3[] extent = [(-0.005, -0.005, -0.005), (0.005, 0.005, 0.005)]
+                color3f[] primvars:displayColor = [(0, 0, 0)] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayColor:indices = None
+                float[] primvars:displayOpacity = [0] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayOpacity:indices = None
+                uniform token purpose = "guide"
+                double radius = 0.005
+                quatf xformOp:orient = (1, 0, 0, 0)
+                float3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0, 0, -0.06)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Sphere "top_site"
+            {
+                float3[] extent = [(-0.005, -0.005, -0.005), (0.005, 0.005, 0.005)]
+                color3f[] primvars:displayColor = [(0, 0, 0)] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayColor:indices = None
+                float[] primvars:displayOpacity = [0] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayOpacity:indices = None
+                uniform token purpose = "guide"
+                double radius = 0.005
+                quatf xformOp:orient = (1, 0, 0, 0)
+                float3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0, 0, 0.04)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Sphere "horizontal_radius_site"
+            {
+                float3[] extent = [(-0.005, -0.005, -0.005), (0.005, 0.005, 0.005)]
+                color3f[] primvars:displayColor = [(0, 0, 0)] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayColor:indices = None
+                float[] primvars:displayOpacity = [0] (
+                    interpolation = "constant"
+                )
+                int[] primvars:displayOpacity:indices = None
+                uniform token purpose = "guide"
+                double radius = 0.005
+                quatf xformOp:orient = (1, 0, 0, 0)
+                float3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0.025, 0.025, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            }
+
+            def Xform "object"
+            {
+                quatf xformOp:orient = (1, 0, 0, 0)
+                float3 xformOp:scale = (1, 1, 1)
+                double3 xformOp:translate = (0, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                def Mesh "model_vis" (
+                    prepend references = @./GeometryLibrary.usdc@</Geometry/model_vis>
+                )
+                {
+                    color3f[] primvars:displayColor = [(0.5, 0.5, 0.5)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [1] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    quatf xformOp:orient = (1, 0, 0, 0)
+                    float3 xformOp:scale = (0.5, 0.5, 0.5)
+                    double3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box"
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.49355903, 0.49355903, -0.50635904, 0.50635904)
+                    float3 xformOp:scale = (0.00222, 0.02851, 0.03057)
+                    double3 xformOp:translate = (0, 0, 0.00313)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_1" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.7057363, 0.121389374, 0.6878964, 0.118319385)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0, 0.04828, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_2" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.7057363, 0.121389374, 0.6878964, 0.118319385)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0, 0.04828, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_3" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.7011423, 0.3603612, 0.598392, -0.14306048)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0.03237, 0.03583, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_4" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.5959001, 0.55892015, 0.41899008, -0.39618006)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0.04818, 0.00314, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_5" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.67591155, -0.40164092, 0.59224135, 0.17629042)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0.03658, -0.03152, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_6" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (-0.13507007, -0.69059044, 0.105000064, 0.7027204)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (0.0023, -0.04823, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_7" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.5933889, 0.15266971, 0.69910866, -0.36854932)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (-0.03334, -0.03492, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_8" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.4082706, 0.4074606, 0.5882509, -0.5667908)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (-0.04827, -0.0013, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "Box_9" (
+                    displayName = "Box"
+                )
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                    color3f[] primvars:displayColor = [(0.8, 0.8, 0.8)] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayColor:indices = None
+                    float[] primvars:displayOpacity = [0.3] (
+                        interpolation = "constant"
+                    )
+                    int[] primvars:displayOpacity:indices = None
+                    double size = 2
+                    quatf xformOp:orient = (0.60515726, -0.1539193, 0.6813569, 0.38189828)
+                    float3 xformOp:scale = (0.00254, 0.01913, 0.02851)
+                    double3 xformOp:translate = (-0.03442, 0.03386, 0.00696)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+    }
+}
+

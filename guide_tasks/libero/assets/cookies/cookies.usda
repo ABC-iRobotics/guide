@@ -1,0 +1,49 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "cookies"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "cookies" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "cookies"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.03104, -0.041810673, -0.01003818), (0.03104, 0.041810706, 0.010037905), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.005, -0.005, -0.065), (0.03, 0.03, 0.044999998)]
+
+    over "Geometry"
+    {
+        over "Body" (
+            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "object"
+            {
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "PhysicsFixedJoint"
+                {
+                    bool physics:jointEnabled = 0
+                }
+            }
+
+            over "PhysicsFixedJoint"
+            {
+                bool physics:jointEnabled = 0
+            }
+        }
+    }
+}
+

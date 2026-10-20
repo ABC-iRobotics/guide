@@ -1,0 +1,6 @@
+plate: from LIBERO (https://github.com/Lifelong-Robot-Learning/LIBERO @ 8f1084e, libero/libero/assets).
+Origin: Google Scanned Objects, Google LLC.
+Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/legalcode
+The original model files carry Google LLC's CC BY 4.0 header (per the licence report 2026-10-19 (tracker doc libero-licences)).
+Changes: MuJoCo MJCF/OBJ/MSH converted to USD with mujoco_usd_converter (guide_core/scripts/spike_libero_convert.py); physics overrides authored by guide_bench (assets.py).
+Not covered by GUIDE's GPL-3.0 licence: see ../../LICENSE-ASSETS.md.

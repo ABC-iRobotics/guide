@@ -1,0 +1,39 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "glazed_rim_porcelain_ramekin"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "glazed_rim_porcelain_ramekin"
+{
+    def Scope "Materials"
+    {
+        def Material "glazed_rim_porcelain_ramekin" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/glazed_rim_porcelain_ramekin>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "glazed_rim_porcelain_ramekin_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </glazed_rim_porcelain_ramekin/Materials/glazed_rim_porcelain_ramekin>
+                }
+            }
+        }
+    }
+}
+

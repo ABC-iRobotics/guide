@@ -1,0 +1,104 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "cookies"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "cookies"
+{
+    def Scope "Physics"
+    {
+        def Material "PhysicsMaterial" (
+            prepend apiSchemas = ["PhysicsMaterialAPI", "NewtonMaterialAPI", "MjcMaterialAPI"]
+        )
+        {
+            uniform double mjc:rollingfriction = 0.1
+            uniform double mjc:torsionalfriction = 0.3
+            float newton:rollingFriction = 0.1
+            float newton:torsionalFriction = 0.3
+            float physics:dynamicFriction = 0.95
+        }
+    }
+
+    def "Geometry"
+    {
+        def "Body" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "bottom_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            over "top_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            over "horizontal_radius_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            def PhysicsFixedJoint "PhysicsFixedJoint"
+            {
+                rel physics:body0 = </cookies>
+                rel physics:body1 = </cookies/Geometry/Body>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def "object" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+            )
+            {
+                over "cookies_vis" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding:physics = </cookies/Physics/PhysicsMaterial>
+                    uniform int mjc:group = 1
+                    uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                    uniform double[] mjc:solref = [0.001, 1]
+                    float newton:contactGap = 0
+                    uniform token physics:approximation = "convexHull"
+                    bool physics:collisionEnabled = 0
+                    float physics:density = 100
+                }
+
+                over "Box" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding:physics = </cookies/Physics/PhysicsMaterial>
+                    uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                    uniform double[] mjc:solref = [0.001, 1]
+                    float newton:contactGap = 0
+                    float physics:density = 100
+                }
+
+                def PhysicsFixedJoint "PhysicsFixedJoint"
+                {
+                    rel physics:body0 = </cookies/Geometry/Body>
+                    rel physics:body1 = </cookies/Geometry/Body/object>
+                    point3f physics:localPos0 = (0, 0, 0)
+                    point3f physics:localPos1 = (0, 0, 0)
+                    quatf physics:localRot0 = (1, 0, 0, 0)
+                    quatf physics:localRot1 = (1, 0, 0, 0)
+                }
+            }
+        }
+    }
+}
+

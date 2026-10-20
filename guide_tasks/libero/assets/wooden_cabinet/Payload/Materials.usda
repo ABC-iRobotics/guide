@@ -1,0 +1,129 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wooden_cabinet"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wooden_cabinet"
+{
+    def Scope "Materials"
+    {
+        def Material "wooden_cabinet_base" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_base>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_top" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_top>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_top_handle" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_top_handle>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_middle" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_middle>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_middle_handle" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_middle_handle>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_bottom" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_bottom>
+        )
+        {
+        }
+
+        def Material "wooden_cabinet_bottom_handle" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/wooden_cabinet_bottom_handle>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "base"
+                {
+                    over "wooden_cabinet_base_vis" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_base>
+                    }
+
+                    over "cabinet_top"
+                    {
+                        over "wooden_cabinet_top_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_top>
+                        }
+
+                        over "wooden_cabinet_top_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_top_handle>
+                        }
+                    }
+
+                    over "cabinet_middle"
+                    {
+                        over "wooden_cabinet_middle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_middle>
+                        }
+
+                        over "wooden_cabinet_middle_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_middle_handle>
+                        }
+                    }
+
+                    over "cabinet_bottom"
+                    {
+                        over "wooden_cabinet_bottom_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_bottom>
+                        }
+
+                        over "wooden_cabinet_bottom_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/wooden_cabinet_bottom_handle>
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

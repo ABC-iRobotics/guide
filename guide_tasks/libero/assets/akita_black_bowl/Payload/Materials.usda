@@ -1,0 +1,39 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "akita_black_bowl"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "akita_black_bowl"
+{
+    def Scope "Materials"
+    {
+        def Material "akita_black_bowl" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/akita_black_bowl>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "akita_black_bowl_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </akita_black_bowl/Materials/akita_black_bowl>
+                }
+            }
+        }
+    }
+}
+

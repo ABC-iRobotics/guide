@@ -1,0 +1,6 @@
+wooden_cabinet: from LIBERO (https://github.com/Lifelong-Robot-Learning/LIBERO @ 8f1084e, libero/libero/assets).
+Origin: LIBERO (Lifelong Robot Learning); origin of meshes and textures unknown.
+Licence: No licence file for LIBERO's assets; LIBERO's code is MIT (https://github.com/Lifelong-Robot-Learning/LIBERO/blob/master/LICENSE) and its README lists 'Datasets: CC BY 4.0', whose scope (demos only, or also assets) is unclear
+Origin and redistribution terms unverified (per the licence report 2026-10-19 (tracker doc libero-licences)).
+Changes: MuJoCo MJCF/OBJ/MSH converted to USD with mujoco_usd_converter (guide_core/scripts/spike_libero_convert.py); physics overrides authored by guide_bench (assets.py).
+Not covered by GUIDE's GPL-3.0 licence: see ../../LICENSE-ASSETS.md.

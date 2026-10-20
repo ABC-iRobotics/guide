@@ -1,0 +1,244 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "akita_black_bowl"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "akita_black_bowl" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "akita_black_bowl"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.055894297, -0.1556423, -0.0000042), (0.0558838, -0.044382203, 0.0526456), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.005, -0.005, -0.065), (0.03, 0.03, 0.044999998)]
+
+    over "Geometry"
+    {
+        over "Body" (
+            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "object"
+            {
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_1"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_2"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_3"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_4"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_5"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_6"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_7"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_8"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_9"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_10"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_11"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_12"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_13"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_14"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_15"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_16"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_17"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_18"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_19"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_20"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_21"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_22"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_23"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_24"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_25"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_26"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_27"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_28"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_29"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_30"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_31"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_32"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_33"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_34"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_35"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_36"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_37"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_38"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_39"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "PhysicsFixedJoint"
+                {
+                    bool physics:jointEnabled = 0
+                }
+            }
+
+            over "PhysicsFixedJoint"
+            {
+                bool physics:jointEnabled = 0
+            }
+        }
+    }
+}
+

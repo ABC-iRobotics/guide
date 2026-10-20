@@ -1,0 +1,6 @@
+glazed_rim_porcelain_ramekin: from LIBERO (https://github.com/Lifelong-Robot-Learning/LIBERO @ 8f1084e, libero/libero/assets).
+Origin: Google Scanned Objects (Google LLC) via LIBERO, re-modelled; origin not proven.
+Licence: CC BY 4.0 if the Google Scanned Objects origin holds (unverified), https://creativecommons.org/licenses/by/4.0/legalcode
+Attribute both Google Scanned Objects and LIBERO (per the licence report 2026-10-19 (tracker doc libero-licences)).
+Changes: MuJoCo MJCF/OBJ/MSH converted to USD with mujoco_usd_converter (guide_core/scripts/spike_libero_convert.py); physics overrides authored by guide_bench (assets.py).
+Not covered by GUIDE's GPL-3.0 licence: see ../../LICENSE-ASSETS.md.

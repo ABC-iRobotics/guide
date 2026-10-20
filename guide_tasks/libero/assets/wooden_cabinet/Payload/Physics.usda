@@ -1,0 +1,690 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wooden_cabinet"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wooden_cabinet"
+{
+    def Scope "Physics"
+    {
+        def Material "PhysicsMaterial" (
+            prepend apiSchemas = ["PhysicsMaterialAPI", "NewtonMaterialAPI", "MjcMaterialAPI"]
+        )
+        {
+            uniform double mjc:rollingfriction = 0.1
+            uniform double mjc:torsionalfriction = 0.3
+            float newton:rollingFriction = 0.1
+            float newton:torsionalFriction = 0.3
+            float physics:dynamicFriction = 0.95
+        }
+    }
+
+    def "Geometry"
+    {
+        def "Body" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsArticulationRootAPI", "NewtonArticulationRootAPI"]
+        )
+        {
+            over "bottom_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            over "top_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            over "horizontal_radius_site" (
+                prepend apiSchemas = ["MjcSiteAPI"]
+            )
+            {
+            }
+
+            def PhysicsFixedJoint "PhysicsFixedJoint"
+            {
+                rel physics:body0 = </wooden_cabinet>
+                rel physics:body1 = </wooden_cabinet/Geometry/Body>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def "object" (
+                prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+            )
+            {
+                def PhysicsFixedJoint "PhysicsFixedJoint"
+                {
+                    rel physics:body0 = </wooden_cabinet/Geometry/Body>
+                    rel physics:body1 = </wooden_cabinet/Geometry/Body/object>
+                    point3f physics:localPos0 = (0, 0, 0)
+                    point3f physics:localPos1 = (0, 0, 0)
+                    quatf physics:localRot0 = (1, 0, 0, 0)
+                    quatf physics:localRot1 = (1, 0, 0, 0)
+                }
+
+                def "base" (
+                    prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+                )
+                {
+                    over "wooden_cabinet_base_vis" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform int mjc:group = 1
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        uniform token physics:approximation = "convexHull"
+                        bool physics:collisionEnabled = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_1" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_2" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_3" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_4" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_5" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_6" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_7" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "Box_8" (
+                        prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                        uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                        uniform double[] mjc:solref = [0.001, 1]
+                        float newton:contactGap = 0
+                        float physics:density = 100
+                    }
+
+                    over "top_side" (
+                        prepend apiSchemas = ["MjcSiteAPI"]
+                    )
+                    {
+                    }
+
+                    def PhysicsFixedJoint "PhysicsFixedJoint"
+                    {
+                        rel physics:body0 = </wooden_cabinet/Geometry/Body/object>
+                        rel physics:body1 = </wooden_cabinet/Geometry/Body/object/base>
+                        point3f physics:localPos0 = (0, 0, 0)
+                        point3f physics:localPos1 = (0, 0, 0)
+                        quatf physics:localRot0 = (1, 0, 0, 0)
+                        quatf physics:localRot1 = (1, 0, 0, 0)
+                    }
+
+                    def "cabinet_top" (
+                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                    )
+                    {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
+                        over "wooden_cabinet_top_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_1" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_2" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_3" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_4" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_5" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "wooden_cabinet_top_handle_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_6" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_7" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_8" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "top_region" (
+                            prepend apiSchemas = ["MjcSiteAPI"]
+                        )
+                        {
+                        }
+
+                        def PhysicsPrismaticJoint "top_level" (
+                            prepend apiSchemas = ["MjcJointAPI"]
+                        )
+                        {
+                            uniform double mjc:damping = 50
+                            uniform token physics:axis = "Y"
+                            rel physics:body0 = </wooden_cabinet/Geometry/Body/object/base>
+                            rel physics:body1 = </wooden_cabinet/Geometry/Body/object/base/cabinet_top>
+                            point3f physics:localPos0 = (0, 0, 0)
+                            point3f physics:localPos1 = (0, 0, 0)
+                            quatf physics:localRot0 = (1, 0, 0, 0)
+                            quatf physics:localRot1 = (1, 0, 0, 0)
+                            float physics:lowerLimit = -0.16
+                            float physics:upperLimit = 0.01
+                        }
+                    }
+
+                    def "cabinet_middle" (
+                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                    )
+                    {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
+                        over "wooden_cabinet_middle_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_1" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_2" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_3" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_4" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_5" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "wooden_cabinet_middle_handle_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_6" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_7" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_8" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "middle_region" (
+                            prepend apiSchemas = ["MjcSiteAPI"]
+                        )
+                        {
+                        }
+
+                        def PhysicsPrismaticJoint "middle_level" (
+                            prepend apiSchemas = ["MjcJointAPI"]
+                        )
+                        {
+                            uniform double mjc:damping = 50
+                            uniform token physics:axis = "Y"
+                            rel physics:body0 = </wooden_cabinet/Geometry/Body/object/base>
+                            rel physics:body1 = </wooden_cabinet/Geometry/Body/object/base/cabinet_middle>
+                            point3f physics:localPos0 = (0, 0, 0)
+                            point3f physics:localPos1 = (0, 0, 0)
+                            quatf physics:localRot0 = (1, 0, 0, 0)
+                            quatf physics:localRot1 = (1, 0, 0, 0)
+                            float physics:lowerLimit = -0.16
+                            float physics:upperLimit = 0.01
+                        }
+                    }
+
+                    def "cabinet_bottom" (
+                        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+                    )
+                    {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
+                        over "wooden_cabinet_bottom_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_1" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_2" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_3" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_4" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_5" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "wooden_cabinet_bottom_handle_vis" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform int mjc:group = 1
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            uniform token physics:approximation = "convexHull"
+                            bool physics:collisionEnabled = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_6" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_7" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "Box_8" (
+                            prepend apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "MjcCollisionAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding:physics = </wooden_cabinet/Physics/PhysicsMaterial>
+                            uniform double[] mjc:solimp = [0.998, 0.998, 0.001, 0.5, 2]
+                            uniform double[] mjc:solref = [0.001, 1]
+                            float newton:contactGap = 0
+                            float physics:density = 100
+                        }
+
+                        over "bottom_region" (
+                            prepend apiSchemas = ["MjcSiteAPI"]
+                        )
+                        {
+                        }
+
+                        def PhysicsPrismaticJoint "bottom_level" (
+                            prepend apiSchemas = ["MjcJointAPI"]
+                        )
+                        {
+                            uniform double mjc:damping = 50
+                            uniform token physics:axis = "Y"
+                            rel physics:body0 = </wooden_cabinet/Geometry/Body/object/base>
+                            rel physics:body1 = </wooden_cabinet/Geometry/Body/object/base/cabinet_bottom>
+                            point3f physics:localPos0 = (0, 0, 0)
+                            point3f physics:localPos1 = (0, 0, 0)
+                            quatf physics:localRot0 = (1, 0, 0, 0)
+                            quatf physics:localRot1 = (1, 0, 0, 0)
+                            float physics:lowerLimit = -0.16
+                            float physics:upperLimit = 0.01
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

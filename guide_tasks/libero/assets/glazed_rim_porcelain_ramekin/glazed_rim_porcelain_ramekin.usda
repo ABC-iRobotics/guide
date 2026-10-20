@@ -1,0 +1,169 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "glazed_rim_porcelain_ramekin"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "glazed_rim_porcelain_ramekin" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "glazed_rim_porcelain_ramekin"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.04466895, -0.04442827, 0.000003), (0.04465087, 0.044665042, 0.043333), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.005, -0.005, -0.065), (0.03, 0.03, 0.044999998)]
+
+    over "Geometry"
+    {
+        over "Body" (
+            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "object"
+            {
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_1"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_2"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_3"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_4"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_5"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_6"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_7"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_8"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_9"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_10"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_11"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_12"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_13"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_14"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_15"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_16"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_17"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_18"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_19"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_20"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_21"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_22"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_23"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_24"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "PhysicsFixedJoint"
+                {
+                    bool physics:jointEnabled = 0
+                }
+            }
+
+            over "PhysicsFixedJoint"
+            {
+                bool physics:jointEnabled = 0
+            }
+        }
+    }
+}
+

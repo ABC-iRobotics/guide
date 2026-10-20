@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "flat_stove"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "flat_stove"
+{
+    def Scope "Materials"
+    {
+        def Material "stove_knob_metal" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/stove_knob_metal>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "base"
+                {
+                    over "burner"
+                    {
+                        over "base_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </flat_stove/Materials/stove_knob_metal>
+                        }
+
+                        over "base" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </flat_stove/Materials/stove_knob_metal>
+                        }
+
+                        over "burner_plate"
+                        {
+                            over "burner" (
+                                prepend apiSchemas = ["MaterialBindingAPI"]
+                            )
+                            {
+                                rel material:binding = </flat_stove/Materials/stove_knob_metal>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

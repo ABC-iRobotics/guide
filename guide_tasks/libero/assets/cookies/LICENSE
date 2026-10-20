@@ -1,0 +1,6 @@
+cookies: from LIBERO (https://github.com/Lifelong-Robot-Learning/LIBERO @ 8f1084e, libero/libero/assets).
+Origin: NVIDIA HOPE dataset (Tyree et al., IROS 2022), https://github.com/swtyree/hope-dataset.
+Licence: CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+NonCommercial and ShareAlike: not usable commercially, adaptations stay CC BY-NC-SA 4.0; likely incompatible with GPL terms, so kept as a separately licensed file (per the licence report 2026-10-19 (tracker doc libero-licences); BOP lists CC BY-SA 4.0, the stricter is assumed).
+Changes: MuJoCo MJCF/OBJ/MSH converted to USD with mujoco_usd_converter (guide_core/scripts/spike_libero_convert.py); physics overrides authored by guide_bench (assets.py).
+Not covered by GUIDE's GPL-3.0 licence: see ../../LICENSE-ASSETS.md.
