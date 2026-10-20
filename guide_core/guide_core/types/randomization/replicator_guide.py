@@ -158,7 +158,10 @@ def fixture_pose(path_pattern: str, position, rotation):
 
     At build (registration): body0 released, so PhysX reads the anchor as a world pose at parse time
     as it does at run time, and the anchor written at the middle of the distributions, so the first
-    draw is a small move. Per fire, after the trigger: localPos0/localRot0 = scene origin * pose *
+    draw is a small move. The fixture's root prim gets the same pose, so the weld is not "disjoint" at
+    parse: PhysX otherwise snaps the body onto the anchor in the first step (a LIBERO cabinet rotated
+    ~155 deg and 0.27 m from its authored origin came out non-finite, Isaac 6.0.1, 2026-10-20).
+    Per fire, after the trigger: localPos0/localRot0 = scene origin * pose *
     the weld's body1 frame (fire). The distributions are wired into the trigger through a
     guide:fixture* attribute on the fixture, so the graph draws them every fire."""
     import omni.usd
@@ -172,6 +175,7 @@ def fixture_pose(path_pattern: str, position, rotation):
     frame = fixtures.local1(weld)
     fixtures.write_weld(weld, *fixtures.weld_world_pose(
         fixtures.scene_matrix(stage, _registered["prefix"]), midpoint(position), midpoint(rotation), *frame))
+    fixtures.place_root(root, midpoint(position), midpoint(rotation))
     prims = _sampled(path_pattern, {"guide:fixturePosition": position, "guide:fixtureRotation": rotation})
     _registered.setdefault("fixtures", []).append({"weld": weld, "position": position, "rotation": rotation, "local1": frame})
     return prims

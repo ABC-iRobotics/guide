@@ -99,6 +99,16 @@ def test_write_weld_sets_the_world_anchor():
     assert np.allclose([q.GetReal(), *q.GetImaginary()], quat, atol=1e-6)
 
 
+def test_place_root_poses_the_root_as_the_build_anchor_does():
+    stage = Usd.Stage.CreateInMemory()
+    cabinet(stage)
+    root = stage.GetPrimAtPath("/Scene_0/objects/cab")
+    fixtures.place_root(root, [0.03, -0.27, -0.0046], [0, 0, 155.0])
+    m = np.array(UsdGeom.Xformable(root).ComputeLocalToWorldTransform(Usd.TimeCode.Default()))
+    assert np.allclose(m[3, :3], [0.03, -0.27, -0.0046])
+    assert np.allclose(R.from_matrix(m[:3, :3].T).as_euler("xyz", degrees=True), [0, 0, 155.0])
+
+
 def test_a_joint_gets_the_joint_state_api_and_loses_its_holding_drive():
     stage = Usd.Stage.CreateInMemory()
     weld, drawer = cabinet(stage)
