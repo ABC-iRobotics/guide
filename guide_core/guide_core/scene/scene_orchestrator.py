@@ -10,8 +10,9 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import yaml
 from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
 
-from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder
+from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import replicator_guide
 from guide_core.types.randomization import (
@@ -48,6 +49,24 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
     return millimetres.reshape(millimetres.shape[0], millimetres.shape[1], 1)
 
 
+def eased_pose(p0, q0, p1, q1, u: float) -> tuple[np.ndarray, np.ndarray]:
+    """The pose a fraction ``u`` of the way from (p0, q0) to (p1, q1), eased in and out:
+    ``s = smoothstep(u) = 3u^2 - 2u^3``, position ``lerp(p0, p1, s)``, orientation
+    ``slerp(q0, q1, s)``. Quaternions are Isaac's [w, x, y, z]; ``u`` is clipped to [0, 1]."""
+    u = min(max(float(u), 0.0), 1.0)
+    s = u * u * (3.0 - 2.0 * u)
+    p = (1.0 - s) * np.asarray(p0, float) + s * np.asarray(p1, float)
+    q = Slerp([0.0, 1.0], R.from_quat([q0, q1], scalar_first=True))(s).as_quat(scalar_first=True)
+    return p, q
+
+
+def _pose(matrix) -> tuple[np.ndarray, np.ndarray]:
+    """(position, [w, x, y, z]) of a USD transform matrix, its scale divided out."""
+    m = np.array(matrix).T  # USD's row-vector matrix -> column vectors
+    rotation = m[:3, :3] / np.linalg.norm(m[:3, :3], axis=0)
+    return m[:3, 3], R.from_matrix(rotation).as_quat(scalar_first=True)
+
+
 class SceneOrchestrator(ABC):
 
     _config: dict
@@ -60,6 +79,11 @@ class SceneOrchestrator(ABC):
 
     state: SceneState
     recorder: SceneRecorder
+
+    #: dataset.camera_transition, checked (scene_recorder.camera_transition); None: off.
+    camera_transition: Optional[dict] = None
+    #: The transition under way: the cameras it moves, their mounts, the step of frame 0.
+    _transition: Optional[dict] = None
 
     def __init__(
         self,
@@ -100,6 +124,8 @@ class SceneOrchestrator(ABC):
 
         with config_file.open("r") as f:
             self._config = yaml.safe_load(f)
+        # dataset.camera_transition, checked here: a bad section fails the registration.
+        self.camera_transition = camera_transition(self._config)
 
         self._get_usd_params(package_name)
 
@@ -905,6 +931,11 @@ class SceneOrchestrator(ABC):
             self._logger.warning(f"[SceneOrchestrator] dropping frame, no data yet for {missing}")
             return None
 
+        # The episode's first frame is the camera transition's t = 0; its frames carry its label.
+        transition = getattr(self, "_transition", None)
+        if transition is not None and transition["start"] is None:
+            transition["start"] = current_step
+
         # Joint states
         if hasattr(self, "obs_masks"):
             for r_name, attr_masks in self.obs_masks.items():
@@ -1031,10 +1062,92 @@ class SceneOrchestrator(ABC):
             "action": action,
             # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
             # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
-            # go in as language prompts.
+            # go in as language prompts; a camera transition's frames carry its label as subtask.
             "task": self.prompts["task"] or self.task,
-            "prompts": {"procedure": self.task, "subtask": self.prompts["subtask"]},
+            "prompts": {
+                "procedure": self.task,
+                "subtask": (
+                    self.camera_transition["label"] if transition is not None
+                    else self.prompts["subtask"]
+                ),
+            },
         }
 
     def clear_recording_history(self):
         self._last_recorded_obs_pose = None
+
+    # ---- camera transition: main thread only (SceneManager.step's physics callback) ----
+
+    def begin_camera_transition(self) -> None:
+        """As an episode opens, every camera but ``from`` jumps onto ``from``'s world pose.
+
+        Its own pose (its authored local transform, under its parent as the parent stands)
+        stays the target; the authored translate/orient values are kept and put back as
+        they were at the end. Until the episode's first frame, which is t = 0, the cameras
+        hold here (step_camera_transition)."""
+        import omni.usd
+        from pxr import UsdGeom
+
+        self.end_camera_transition()  # a camera still on its way has no mount to keep
+        stage = omni.usd.get_context().get_stage()
+        cameras, source = self._config["cameras"], self.camera_transition["from"]
+        moved = []
+        for name, data in cameras.items():
+            if name == source:
+                continue
+            prim = stage.GetPrimAtPath(f"/Scene_{self._scene_id}{data['path']}")
+            ops = [prim.GetAttribute("xformOp:translate"), prim.GetAttribute("xformOp:orient")]
+            if not all(ops):
+                raise ValueError(f"camera_transition: camera '{name}' ({prim.GetPath()}) has no "
+                                 f"xformOp:translate and xformOp:orient to move it by")
+            local = UsdGeom.Xformable(prim).GetLocalTransformation()
+            moved.append((prim, ops, [op.Get() for op in ops], local))
+        self._transition = {
+            "from": stage.GetPrimAtPath(f"/Scene_{self._scene_id}{cameras[source]['path']}"),
+            "cameras": moved,
+            "start": None,  # the physics step of the episode's first frame (record_step)
+        }
+        self._place_cameras(0.0)
+        self._logger.info(
+            f"[SceneOrchestrator] camera transition: {[str(c[0].GetPath()) for c in moved]} from "
+            f"'{source}' onto their mounts over {self.camera_transition['duration']} s"
+        )
+
+    def step_camera_transition(self, step: int, hz: float) -> None:
+        """Each physics step of a recording: the cameras ``(step - frame 0's step) / hz`` s
+        into the transition, or back on their mounts once ``duration`` has passed."""
+        transition = self._transition
+        if transition is None or transition["start"] is None:
+            return
+        t = (step - transition["start"]) / hz
+        if t >= self.camera_transition["duration"]:
+            self.end_camera_transition()
+        else:
+            self._place_cameras(t / self.camera_transition["duration"])
+
+    def end_camera_transition(self) -> None:
+        """Every moved camera back on its mount, its authored translate/orient values as is."""
+        if self._transition is None:
+            return
+        for _prim, ops, mount, _local in self._transition["cameras"]:
+            for op, value in zip(ops, mount):
+                op.Set(value)
+        self._transition = None
+
+    def _place_cameras(self, u: float) -> None:
+        """Each moved camera at fraction ``u`` of its eased way from ``from`` to its mount,
+        written as the local pose that puts it there under its parent's current pose."""
+        from pxr import Usd, UsdGeom
+
+        def world(prim):
+            return UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+
+        p0, q0 = _pose(world(self._transition["from"]))
+        for prim, (translate, orient), mount, local in self._transition["cameras"]:
+            parent = world(prim.GetParent())
+            p, q = eased_pose(p0, q0, *_pose(local * parent), u)
+            position = np.linalg.solve(np.array(parent).T, [*p, 1.0])[:3]
+            turn = R.from_quat(_pose(parent)[1], scalar_first=True)
+            rotation = turn.inv() * R.from_quat(q, scalar_first=True)
+            translate.Set(type(mount[0])(*position))
+            orient.Set(type(mount[1])(*rotation.as_quat(scalar_first=True)))

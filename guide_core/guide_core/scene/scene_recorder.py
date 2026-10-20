@@ -34,6 +34,35 @@ DEFAULT_FPS = 10
 #: registered with LeRobot by ``register_guide_styles`` wherever it is written or resolved.
 PROMPT_STYLES = ("procedure", "subtask")
 
+#: dataset.camera_transition's keys. Off when the section is missing or ``enabled: false``.
+CAMERA_TRANSITION_KEYS = ("enabled", "duration", "from", "label")
+
+
+def camera_transition(config: dict) -> dict | None:
+    """``dataset.camera_transition`` of a task config, checked: {duration, from, label}, or None
+    when it is off. Every camera starts an episode on ``from``'s pose and eases onto its own
+    mount over ``duration`` s of sim time; the frames meanwhile carry the subtask ``label``.
+    Raises ValueError on anything else, so a bad section fails the scene's registration."""
+    section = (config.get("dataset") or {}).get("camera_transition")
+    if section is None:
+        return None
+    where = "dataset.camera_transition"
+    if not isinstance(section, dict) or set(section) - set(CAMERA_TRANSITION_KEYS):
+        raise ValueError(f"{where} takes {', '.join(CAMERA_TRANSITION_KEYS)}; got {section!r}")
+    if not isinstance(section.get("enabled"), bool):
+        raise ValueError(f"{where}.enabled must be true or false; got {section.get('enabled')!r}")
+    if not section["enabled"]:
+        return None
+    duration, source, label = section.get("duration"), section.get("from"), section.get("label")
+    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or not duration > 0:
+        raise ValueError(f"{where}.duration must be a number of seconds > 0; got {duration!r}")
+    if source not in (config.get("cameras") or {}):
+        raise ValueError(f"{where}.from must name a camera under `cameras:` "
+                         f"({', '.join(config.get('cameras') or {}) or 'none'}); got {source!r}")
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError(f"{where}.label must be a non-empty string; got {label!r}")
+    return {"duration": float(duration), "from": source, "label": label}
+
 
 def register_guide_styles() -> None:
     """Make LeRobot accept GUIDE's ``procedure`` style as a persistent one (idempotent)."""
@@ -126,6 +155,8 @@ class SceneRecorder(Thread):
         self._episode_frames = 0
         self._language: dict = {}
         self._saved_language: dict = {}
+        # The camera transition's label, which ends with its frames (see _process_frame).
+        self._transition_label = (camera_transition(config) or {}).get("label")
 
         self.dataset = None
         self.LeRobotDataset = None
@@ -397,11 +428,14 @@ class SceneRecorder(Thread):
         self.dataset.add_frame(frame)
         # LeRobot numbers an episode's frames 0, 1, ... in the order they are added. A
         # level is recorded where it changes to a new prompt. "" is not recorded: LeRobot
-        # keeps a persistent row active until the next one and stores no empty row, so a
-        # level keeps its last prompt until another one replaces it.
+        # keeps a persistent row active until the next one, so a level keeps its last prompt
+        # until another one replaces it. The camera transition's label is the exception: it
+        # holds for its own frames only, so a level with nothing to say after it (block_bin
+        # announces no subtask) records an empty row to end it.
         for level, prompt in prompts.items():
             changes = self._language.setdefault(level, [])
-            if prompt and prompt != (changes[-1][1] if changes else ""):
+            last = changes[-1][1] if changes else ""
+            if prompt != last and (prompt or last == self._transition_label):
                 changes.append((self._episode_frames, prompt))
         self._episode_frames += 1
         self._logger.info(

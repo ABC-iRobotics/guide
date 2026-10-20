@@ -389,6 +389,19 @@ class SceneManager:
                 state = scene.state
                 interval = max(1, int(f_sim // getattr(scene, "record_frequency", DEFAULT_FPS)))
 
+                # The camera transition moves camera prims, so it runs here, on the main
+                # thread: from start_recording's warm-up (the cameras jump onto `from`)
+                # through the recording's physics steps. Out of a recording, they are on
+                # their mounts.
+                if getattr(scene, "camera_transition", None):
+                    if state == SceneState.PREPARATION and getattr(scene, "transition_due", False):
+                        scene.transition_due = False
+                        scene.begin_camera_transition()
+                    elif state == SceneState.RECORDING:
+                        scene.step_camera_transition(current_step, f_sim)
+                    elif state != SceneState.PREPARATION:
+                        scene.end_camera_transition()
+
                 if state == SceneState.PREPARATION:
                     import omni.replicator.core as rep
 
@@ -446,7 +459,11 @@ class SceneManager:
 
     def start_recording(self, scene_id: int, path: str = ""):
         with self._locks[scene_id]:
-            self._scenes[scene_id].state = SceneState.PREPARATION
+            scene = self._scenes[scene_id]
+            # A new episode opens with the camera transition (step begins it on the main
+            # thread); a paused one resumes without.
+            scene.transition_due = scene.state != SceneState.PAUSED
+            scene.state = SceneState.PREPARATION
             # No render-product switching here: this runs on a ROS service thread, and
             # gate_render toggles the same hydra textures on the main thread every frame.
             # Doing both froze the sim's main loop (2026-10-03). gate_render alone owns

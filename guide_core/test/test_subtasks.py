@@ -82,6 +82,27 @@ def test_saved_episodes_resolve_every_frame_to_its_procedure_task_and_subtask(tm
     }
 
 
+def test_the_camera_transition_label_holds_for_its_own_frames_only(tmp_path):
+    transition = {"enabled": True, "duration": 2.0, "from": "base", "label": "Startup"}
+    recorder = SceneRecorder("pkg", "startup", {"cameras": {"base": {}}, "dataset": {"fps": 10, "camera_transition": transition}})
+    recorder._logger = logging.getLogger("test_subtasks")
+    recorder.LeRobotDataset = lerobot_dataset.LeRobotDataset
+    recorder.set_output_path(str(tmp_path))
+
+    put = "Put the red block in the left bin."
+    record(recorder, [(put, "Startup")] * 20 + [(put, "")] * 5)  # block_bin: no subtask of its own
+    recorder._finalize_episode()
+    record(recorder, [(put, "Startup")] * 20 + [(put, "Pick up the red cube.")] * 3)  # one announced before
+    recorder._finalize_episode()
+    root = recorder.dataset.root
+    recorder._finalize_dataset()
+
+    assert active(root, "subtask") == {
+        0: ["Startup"] * 20 + [""] * 5,
+        1: ["Startup"] * 20 + ["Pick up the red cube."] * 3,
+    }
+
+
 def test_every_dataset_of_one_recorder_gets_its_run_info(tmp_path):
     recorder = SceneRecorder("pkg", "runs", {"dataset": {"fps": 10}})
     recorder._logger = logging.getLogger("test_subtasks")
