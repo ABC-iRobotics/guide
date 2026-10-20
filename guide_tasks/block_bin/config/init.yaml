@@ -90,9 +90,10 @@ dataset:
   # Tracked objects: the prims marked in the instance-segmentation stream (a camera's
   # `instance: true`). The key is the object's label; the value is a prim-path pattern
   # relative to the scene root -- the same syntax reset.yaml and randomize.yaml use for
-  # `prim_path`. Each label is painted in a fixed colour, in this order (tab10 palette:
-  # blue, orange, green, red, purple, brown, pink, ...); everything untracked is black.
-  # The label -> colour legend is written to the dataset's meta/guide_info.json.
+  # `prim_path`. Each label is painted in a fixed colour: its dataset.segmentation colour
+  # below, or without one, in this order (tab10 palette: blue, orange, green, red, purple,
+  # brown, pink, ...); everything untracked is black. The label -> colour legend is written
+  # to the dataset's meta/guide_info.json.
   #
   # A pattern that matches several prims gives them all one label ('/blocks/*' would
   # label every block "block") and so one colour. Each block is named separately here so
@@ -106,6 +107,27 @@ dataset:
     bin_0: '/bin_0'
     bin_1: '/bin_1'
     robot: '/fr3'
+  # Segmentation colours of the tracked objects above, in place of tab10. Each key under
+  # `colors` is a tracked_objects label (anything else fails the registration); its value is
+  # an explicit [r, g, b] or <table>:<name>, the name looked up in that table's Name column:
+  # the whole ';'-joined cell first, then its first token, then any token -- a name that
+  # several rows share at the deciding step, or none has, fails the registration. A tracked
+  # object left out keeps its tab10 colour. Objects of one class share a colour, so the
+  # stream is a semantic mask. The legend (label -> path, source, RGB) goes into
+  # meta/guide_info.json under `segmentation`. Delete the section for the tab10 colours.
+  segmentation:
+    tables:              # name -> CSV with a Name and a Color_Code (R,G,B) column
+      ade20k: ade20k     # bare name: guide_core/config/segmentation_colors/<name>.csv; or a path (absolute, or relative to the task dir)
+    colors:
+      blue_block: ade20k:box
+      yellow_block: ade20k:box
+      green_block: ade20k:box
+      red_block: ade20k:box
+      bin_0: ade20k:basket
+      bin_1: ade20k:basket
+      robot: ade20k:computer
+      # table: [255, 6, 82]   # or an explicit RGB (for a tracked object labelled `table`)
+    background: [0, 0, 0]  # everything no tracked object covers
   # Capture rate, in Hz. One number for three things that used to disagree: the rate
   # SceneManager samples the scene at, the rate the ROS 2 camera topics are gated to
   # (they publish every rendered frame otherwise -- 60 Hz), and the fps stamped into
