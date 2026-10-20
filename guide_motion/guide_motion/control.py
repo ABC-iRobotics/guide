@@ -42,8 +42,8 @@ def enable_compilation_cache(path=CACHE_DIR) -> None:
 class Controller:
     """step(target, q, qd) -> joint torques (torque mode) or joint velocities (velocity mode)."""
 
-    def __init__(self, model, mode: str = "torque", gains=None, barriers=None, q_rest=None, obstacle_boxes=()):
-        """obstacle_boxes: boxes per obstacle, one barrier row each; set_obstacles places them."""
+    def __init__(self, model, mode: str = "torque", gains=None, barriers=None, q_rest=None, obstacle_boxes: int = 0):
+        """obstacle_boxes: how many obstacle boxes, one barrier row each; set_obstacles places them."""
         assert mode in GAINS, mode
         self.model, self.mode = model, mode
         self.gains = {**GAINS[mode], **(gains or {})}
@@ -51,9 +51,9 @@ class Controller:
         self.q_rest = np.asarray(model.home if q_rest is None else q_rest, float)
         self.limit = model.max_effort if mode == "torque" else model.max_velocity
         self.events = {"infeasible": 0}
-        self.obstacle_boxes = tuple(int(n) for n in obstacle_boxes)
+        self.obstacle_boxes = int(obstacle_boxes)
         # one row per box: rotation (9, row-major), centre (3), half extents (3), margin; far away until set
-        self.obstacles = np.zeros((sum(self.obstacle_boxes), 16))
+        self.obstacles = np.zeros((self.obstacle_boxes, 16))
         self.obstacles[:, [0, 4, 8]], self.obstacles[:, 9] = 1.0, 1e3
         self._fn, self._h, self.gravity = _build(model, mode, self.gains, self.barriers, self.obstacle_boxes)
 
@@ -123,7 +123,7 @@ def box_sdf(points, boxes):
     return outside + jnp.minimum(jnp.max(q, axis=-1), 0.0)
 
 
-def _barrier_fn(model, man, b, obstacle_boxes=()):
+def _barrier_fn(model, man, b):
     import jax
     import jax.numpy as jnp
 
@@ -140,18 +140,9 @@ def _barrier_fn(model, man, b, obstacle_boxes=()):
     moving = group >= 1  # the base's spheres never move
     rm = jnp.asarray(r[moving])
 
-    def spheres(q):
-        T = jnp.concatenate([jnp.eye(4)[None], man.joint_to_world_transforms(q)])  # [base, joint 1..7]
-        return jnp.einsum("sij,sj->si", T[group], C)[:, :3]
-
-    def nearest(q, o):
-        """Each moving sphere's nearest box of each obstacle at q, (obstacles, spheres): an input of h, never
-        differentiated, so h's derivatives run over one box per sphere (all pairs: 5x the cost, S2b obstacles report)."""
-        gap = box_sdf(spheres(q)[moving][:, None], o[None])
-        return o, jnp.stack([jnp.argmin(gap[:, e - n:e], axis=1) + e - n for n, e in zip(obstacle_boxes, np.cumsum(obstacle_boxes))])
-
     def h(q, *obstacles):
-        p = spheres(q)
+        T = jnp.concatenate([jnp.eye(4)[None], man.joint_to_world_transforms(q)])  # [base, joint 1..7]
+        p = jnp.einsum("sij,sj->si", T[group], C)[:, :3]
         # One barrier per pair of link groups: a smooth minimum of their sphere gaps (never above the true one).
         selfcol = [-jax.nn.logsumexp(-beta * (jnp.linalg.norm(p[i] - p[j], axis=1) - r[i] - r[j])) / beta for i, j in index]
         tool = man.ee_position(q)
@@ -162,15 +153,17 @@ def _barrier_fn(model, man, b, obstacle_boxes=()):
             tool - box[:, 0], box[:, 1] - tool,
             jnp.array([jnp.prod(sigma) - b["singularity"]]),
         ]
-        if obstacles:  # one barrier per obstacle: the same smooth minimum, over the moving spheres' gaps to it
-            o, i = obstacles
-            rows.append(-jax.nn.logsumexp(-beta * (box_sdf(p[moving][None], o[i]) - rm - o[i, 15]), axis=1) / beta)
+        if obstacles:  # one barrier per obstacle box, the same smooth minimum over the moving spheres' gaps to it.
+            # Never several boxes in one row: at a concave edge (a bin's wall and floor) its gradient jumps at the
+            # bisector, only one face is constrained, and the QP slides the hand along it into the other (S2b review).
+            (o,) = obstacles
+            rows.append(-jax.nn.logsumexp(-beta * (box_sdf(p[moving][:, None], o[None]) - rm[:, None] - o[None, :, 15]), axis=0) / beta)
         return jnp.concatenate(rows)
 
-    return h, nearest
+    return h
 
 
-def _build(model, mode, gains, barriers, obstacle_boxes=()):
+def _build(model, mode, gains, barriers, obstacle_boxes=0):
     import jax
     import jax.numpy as jnp
     import qpax
@@ -180,9 +173,8 @@ def _build(model, mode, gains, barriers, obstacle_boxes=()):
 
     man = model.manipulator
     n = man.num_joints
-    h, nearest = _barrier_fn(model, man, barriers, obstacle_boxes)
-    # cbfpy sizes the barrier rows with this seed of h's extra inputs
-    seed = nearest(np.zeros(n), np.zeros((sum(obstacle_boxes), 16))) if obstacle_boxes else ()
+    h = _barrier_fn(model, man, barriers)
+    seed = (np.zeros((obstacle_boxes, 16)),) if obstacle_boxes else ()  # cbfpy sizes the barrier rows with it
     z3 = jnp.zeros(3)
     if mode == "torque":
 
@@ -234,10 +226,9 @@ def _build(model, mode, gains, barriers, obstacle_boxes=()):
         z, u_nom = nominal(q, qd, p, R, v, w, des_q)
         # CBF.safety_filter's relaxed QP, spelled out so the step also reports how far the
         # solution breaks a row (the relaxed QP never says "infeasible" by itself).
-        P, c, _, _, G, hq = cbf.qp_data(z, u_nom, *(nearest(q, *obstacles) if obstacles else ()))
+        P, c, _, _, G, hq = cbf.qp_data(z, u_nom, *obstacles)
         penalty = jnp.asarray(cbf.constraint_relaxation_penalties)
         u = qpax.solve_qp_elastic_primal(P, c, G, hq, penalty=penalty, solver_tol=cbf.solver_tol)
         return u, jnp.max(G @ u - hq)
 
-    check = (lambda q, o: h(q, *nearest(q, o))) if obstacle_boxes else h  # h itself: the persistent cache's entry
-    return fn, jax.jit(check), jax.jit(man.gravity_vector)
+    return fn, jax.jit(h), jax.jit(man.gravity_vector)
