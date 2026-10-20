@@ -31,9 +31,16 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
                                    arm_action_type=ActionType.CARTESIAN_POSE, gripper_action_type=ActionType.JOINT_POSITION)
     robot._reentrant_callback_group = None
     moves, asked, slept = [], [], []
-    robot.send_action = lambda action, **kwargs: moves.append(action) or True
     robot.sleep = slept.append
-    robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[0.04])  # still: each gripper step settles at once
+    robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[0.04])
+
+    def send_action(action, **kwargs):
+        moves.append(action)
+        if isinstance(action, dict):  # the fingers jump to the goal: each gripper step settles at once
+            robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[action["fr3_finger_joint1.pos"]])
+        return True
+
+    robot.send_action = send_action
     for name in ("randomize", "pose", "collision", "is_success", "start_recording", "stop_recording", "set_prompt"):
         setattr(robot, name, SimpleNamespace(srv_name=name))
 

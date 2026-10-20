@@ -18,10 +18,38 @@ class SetGripperState(BaseNode):
     STILL_SAMPLES = 3  # polls over which the fingers must stay still
     STILL_M = 2e-4  # m: a smaller finger change over those polls is still (at the target, or stalled on the cube)
     RESIDUAL = 0.2  # s after the fingers stop, for the arm to absorb the contact forces
-    TIMEOUT = 2.0  # s to wait for still fingers before warning and going on
+    TIMEOUT = 2.0  # s of polls (TIMEOUT / POLL of them) to wait for still fingers before warning and going on
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("GripperControl", alias, dynamic_map, static_args, output_map)
+
+    def _settle(self, robot: ROS2Robot, goal: Dict[str, float]) -> None:
+        """Wait until the fingers stop (at the goal, or stalled on the cube), then RESIDUAL more."""
+        joints, clock = robot.config.gripper_joint_names, robot.node.get_clock()
+        start = clock.now().nanoseconds
+        window = deque(maxlen=self.STILL_SAMPLES + 1)  # STILL_SAMPLES polls apart, end to end
+        first, started = None, False
+        for poll in range(round(self.TIMEOUT / self.POLL) + 1):  # counted, so a restarted clock cannot stall it
+            if poll:
+                robot.sleep(self.POLL)
+            state = robot.joint_state  # not get_observation(): it also reads every camera, 5 s each while no image topic is up
+            if not all(joint in state.name for joint in joints):
+                continue  # an arm-only joint_state: skip it, the last finger reading stands
+            fingers = [state.position[state.name.index(joint)] for joint in joints]
+            first = first or fingers
+            window.append(fingers)
+            # Still counts only once the fingers have moved or sit at the goal: the first polls may predate the command.
+            started = started or any(abs(p - f) >= self.STILL_M for p, f in zip(fingers, first)) or all(
+                abs(p - goal[joint]) < self.STILL_M for joint, p in zip(joints, fingers) if joint in goal)
+            if started and len(window) == window.maxlen and max(max(p) - min(p) for p in zip(*window)) < self.STILL_M:
+                elapsed = (clock.now().nanoseconds - start) / 1e9
+                self.logger.info(f"Gripper settled after {elapsed:.2f} s of sim time at {dict(zip(joints, (round(p, 5) for p in fingers)))}")
+                break
+        else:
+            last = dict(zip(joints, (round(p, 5) for p in window[-1]))) if window else "no finger reading"
+            self.logger.warning(f"Gripper not settled after {poll} polls ({(clock.now().nanoseconds - start) / 1e9:.2f} s of sim time), "
+                                f"at {last}: going on")
+        robot.sleep(self.RESIDUAL)
 
     def run(self, robot: Robot, gripper_goal_pos: Dict[str, float]) -> ExecutionResult:
         """
@@ -44,30 +72,10 @@ class SetGripperState(BaseNode):
 
             action = {f"{joint}.pos": position for joint, position in gripper_goal_pos.items()}
             self.logger.info(f"Sending gripper control action: {action}")
-            robot.send_action(action=action, wait_for_execution=False)
             # wait_for_execution stays False: awaiting the gripper action deadlocked the node's executor for ~23 s
-            joints, clock = robot.config.gripper_joint_names, robot.node.get_clock()
-            start = clock.now().nanoseconds
-
-            def fingers():  # not get_observation(): it also reads every camera, 5 s each while no image topic is up
-                state = robot.joint_state
-                return [state.position[state.name.index(joint)] for joint in joints]
-
-            window = deque([fingers()], maxlen=self.STILL_SAMPLES + 1)  # STILL_SAMPLES polls apart, end to end
-            while True:
-                elapsed = (clock.now().nanoseconds - start) / 1e9
-                last = {joint: round(p, 5) for joint, p in zip(joints, window[-1])}
-                if len(window) == window.maxlen and max(max(p) - min(p) for p in zip(*window)) < self.STILL_M:
-                    self.logger.info(f"Gripper settled after {elapsed:.2f} s of sim time at {last}")
-                    break
-                if elapsed >= self.TIMEOUT:
-                    self.logger.warning(f"Gripper not settled after {elapsed:.2f} s of sim time, at {last}: going on")
-                    break
-                robot.sleep(self.POLL)
-                window.append(fingers())
-            robot.sleep(self.RESIDUAL)
-            # TODO: Proper success checking based on robot response
-            success = True
+            success = robot.send_action(action=action, wait_for_execution=False)
+            if success:  # never settle on fingers that were sent nowhere
+                self._settle(robot, gripper_goal_pos)
 
         else:
             robot.send_action(gripper_goal_pos)

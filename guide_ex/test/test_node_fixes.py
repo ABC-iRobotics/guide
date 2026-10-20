@@ -112,6 +112,62 @@ def test_set_gripper_state_gives_up_on_fingers_that_never_stop_with_one_warning(
     assert len(warnings) == 1 and "fr3_finger_joint1" in warnings[0].getMessage()
 
 
+def test_set_gripper_state_waits_for_fingers_that_start_late(caplog):
+    # the sim acts on the command only at 0.3 s: the stale polls before it are not a settle
+    robot, now = gripper_on_sim_time(lambda t: 0.04 if t < 0.3 else max(0.04 - 0.05 * (t - 0.3), 0.0205), [])
+
+    result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.01})
+
+    assert result.status == DemoStatus.PERFECT
+    assert 0.3 + 0.39 + 0.15 + 0.2 <= now() < 0.3 + 0.39 + 0.15 + 0.2 + 0.05  # stalled at 0.69 s
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+def test_set_gripper_state_skips_an_arm_only_joint_state(caplog):
+    robot, now = gripper_on_sim_time(lambda t: 0.04 * min(t / 0.6, 1.0), [])
+    sleep = robot.sleep
+
+    def sleep_then_maybe_arm_only(seconds):
+        sleep(seconds)
+        if round(now() / 0.05) % 2:  # every other message carries the arm joints only
+            robot.joint_state = SimpleNamespace(name=["fr3_joint1"], position=[0.0])
+
+    robot.sleep = sleep_then_maybe_arm_only
+
+    result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.04})
+
+    assert result.status == DemoStatus.PERFECT and now() < 2.0
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+def test_set_gripper_state_times_out_by_polls_across_a_clock_restart():
+    robot, _ = gripper_on_sim_time(lambda t: 0.04 - 0.01 * t, [])  # never stops
+    clock, sleep, slept = robot.node.get_clock(), robot.sleep, []
+    clock.ns = 5 * 10**9  # 5 s into the simulation
+
+    def sleep_then_maybe_restart(seconds):
+        slept.append(seconds)
+        sleep(seconds)
+        if len(slept) == 20:
+            clock.ns = 0  # the simulator restarts, and its clock with it
+
+    robot.sleep = sleep_then_maybe_restart
+
+    SetGripperState().run(robot, {"fr3_finger_joint1": 0.01})
+
+    assert sum(slept) <= 2.0 + 0.2 + 1e-9  # TIMEOUT / POLL polls, then the residual
+
+
+def test_set_gripper_state_fails_when_the_robot_refuses_the_action():
+    robot, now = gripper_on_sim_time(lambda t: 0.04, [])
+    robot.send_action = lambda action, **kwargs: False
+
+    result = SetGripperState().run(robot, {"fr3_finger_joint1": 0.01})
+
+    assert result.status == DemoStatus.FAILURE and result.error_message
+    assert now() == 0.0  # no settle on fingers that were never sent anywhere
+
+
 def test_set_gripper_state_on_another_robot_only_sends_the_goal():
     sent = []
     robot = SimpleNamespace(send_action=sent.append)  # no sleep, no observation: nothing else may be called
