@@ -291,9 +291,9 @@ node reads its inputs from the shared context (`dynamic_map`), takes fixed ones 
 a mapping of `position` and/or `orientation` is a pose) and writes results back (`output_map`); a
 `CompositeNode` runs its children in order on one layer of the procedure, checks a condition,
 and swaps a failing child for its fallback. `ref:` names a leaf class (registered with `@node`)
-or a recipe: guide_ex's library (`guide_ex/guide_ex/recipes/<level>/`) or the task's own
+or a recipe: guide_ex's library (the YAML files in `guide_ex/guide_ex/<level folder>/`, e.g. `subtasks/Pick.yaml`) or the task's own
 `config/recipes/`; `overrides` swap nested nodes by their dot path.
-`guide_ex/guide_ex/recipes/CATALOGUE.md` lists every leaf and library recipe with its inputs and
+`guide_ex/guide_ex/CATALOGUE.md` lists every leaf and library recipe with its inputs and
 outputs (`python -m guide_ex.recipe catalogue` regenerates it).
 
 block_bin's episode is the library's `PickAndPlace` with two of its nodes swapped

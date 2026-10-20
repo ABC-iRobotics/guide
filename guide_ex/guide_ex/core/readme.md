@@ -13,4 +13,4 @@ The GUIDE-EX execution model every node builds on:
 `guide_ex.recipe` builds these trees from YAML (the GUIDE-EX paper's recipes): `load()` turns a
 recipe into nodes, `@node` registers the leaf classes a recipe's `ref` names, and
 `python -m guide_ex.recipe catalogue` lists every leaf and library recipe in
-`recipes/CATALOGUE.md`.
+`CATALOGUE.md`.

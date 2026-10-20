@@ -10,7 +10,8 @@ from omegaconf import OmegaConf
 from guide_ex.core.states import Layer
 
 PACKAGE = Path(__file__).resolve().parents[1]  # guide_ex/guide_ex
-LIBRARY = PACKAGE / "recipes"  # the generic recipes, one node per <level>/<Name>.yaml
+LIBRARY = tuple(PACKAGE / d for d in ("steps", "sequences", "subtasks", "tasks", "utility"))  # the generic recipes sit
+# beside the leaves of their level, one node per <level folder>/<Name>.yaml
 LEAF_PACKAGES = ("steps", "utility", "sequences")  # where the @node leaf classes live
 
 
@@ -92,6 +93,7 @@ def load_defaults() -> Registry:
         for package in LEAF_PACKAGES:
             for file in sorted((PACKAGE / package).rglob("*.py")):
                 importlib.import_module(".".join(file.relative_to(PACKAGE.parent).with_suffix("").parts))
-        default_registry.add_search_path(LIBRARY)
+        for folder in LIBRARY:
+            default_registry.add_search_path(folder)
         _loaded = True  # only once everything imported: a failed import must not leave half a registry
     return default_registry

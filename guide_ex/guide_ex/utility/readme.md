@@ -10,3 +10,4 @@ an `output_map` they return only the outputs it names.
 - `recording.py`: `StartRecording`, `PauseRecording`, `StopRecording`, `SetPrompt` (task and
   subtask prompts)
 - `exception.py`: `NodeException`, which always fails, to trigger a fallback
+- YAML recipes: `StartEpisode`, `StopEpisode`, `CameraHold`; see `../CATALOGUE.md`

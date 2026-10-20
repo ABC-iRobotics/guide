@@ -34,11 +34,11 @@ def test_the_papers_fig3_loads_verbatim():
                        R.from_euler("z", 1.57).as_matrix())
 
 
-@pytest.mark.parametrize("path", sorted(LIBRARY.rglob("*.yaml")), ids=lambda p: p.stem)
+@pytest.mark.parametrize("path", sorted(p for folder in LIBRARY for p in folder.rglob("*.yaml")), ids=lambda p: p.stem)
 def test_every_library_recipe_loads_at_the_level_of_its_folder(path):
     node = load(path, values=VALUES)
 
-    assert node.level == Layer[path.parent.name.upper()]
+    assert node.level == Layer[path.parent.name.removesuffix("s").upper()]  # steps/ -> STEP, utility/ -> UTILITY
 
 
 def test_a_robot_profile_feeds_the_library():

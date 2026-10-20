@@ -8,3 +8,5 @@ basic software (PRIMITIVE: MoveIt, the gripper action, the simulator's ROS servi
 - `end_effector/gripper_control.py`: `SetGripperState`
 - `simulation/isaac/prim.py`: `GetPrimPose`, `GetPrimPoses`, `IsPrimClashing`
 - `simulation/success.py`: `IsTaskSuccessful`
+- YAML recipes (presets of the leaves above): `MoveHome`, `OpenGripper`, `CloseGripper`, `CheckSuccess`;
+  see `../CATALOGUE.md`

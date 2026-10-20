@@ -17,7 +17,7 @@
       "level": "TASK",
       "name": "PickAndPlace",
       "outputs": [],
-      "source": "recipes/task/PickAndPlace.yaml",
+      "source": "tasks/PickAndPlace.yaml",
       "used_by": []
     },
     {
@@ -37,7 +37,7 @@
       "outputs": [
         "grasp_success"
       ],
-      "source": "recipes/subtask/Pick.yaml",
+      "source": "subtasks/Pick.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -56,7 +56,7 @@
       "outputs": [
         "cube_pose"
       ],
-      "source": "recipes/subtask/PickRecovery.yaml",
+      "source": "subtasks/PickRecovery.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -73,7 +73,7 @@
       "level": "SUBTASK",
       "name": "Place",
       "outputs": [],
-      "source": "recipes/subtask/Place.yaml",
+      "source": "subtasks/Place.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -95,7 +95,7 @@
       "level": "SUBTASK",
       "name": "PlaceOn",
       "outputs": [],
-      "source": "recipes/subtask/PlaceOn.yaml",
+      "source": "subtasks/PlaceOn.yaml",
       "used_by": []
     },
     {
@@ -108,7 +108,7 @@
       "level": "SUBTASK",
       "name": "Return",
       "outputs": [],
-      "source": "recipes/subtask/Return.yaml",
+      "source": "subtasks/Return.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -123,7 +123,7 @@
       "level": "SUBTASK",
       "name": "Unclutch",
       "outputs": [],
-      "source": "recipes/subtask/Unclutch.yaml",
+      "source": "subtasks/Unclutch.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -143,7 +143,7 @@
       "level": "SEQUENCE",
       "name": "CarryToSupport",
       "outputs": [],
-      "source": "recipes/sequence/CarryToSupport.yaml",
+      "source": "sequences/CarryToSupport.yaml",
       "used_by": [
         "PlaceOn"
       ]
@@ -162,7 +162,7 @@
       "outputs": [
         "cube_pose"
       ],
-      "source": "recipes/sequence/GetTargetPose.yaml",
+      "source": "sequences/GetTargetPose.yaml",
       "used_by": [
         "PickAndPlace",
         "PickRecovery"
@@ -179,7 +179,7 @@
       "level": "SEQUENCE",
       "name": "Release",
       "outputs": [],
-      "source": "recipes/sequence/Release.yaml",
+      "source": "sequences/Release.yaml",
       "used_by": [
         "PlaceOn"
       ]
@@ -194,7 +194,7 @@
       "level": "SEQUENCE",
       "name": "RetreatViaRest",
       "outputs": [],
-      "source": "recipes/sequence/RetreatViaRest.yaml",
+      "source": "sequences/RetreatViaRest.yaml",
       "used_by": [
         "Pick"
       ]
@@ -213,7 +213,7 @@
         "task_reason",
         "task_success"
       ],
-      "source": "recipes/step/CheckSuccess.yaml",
+      "source": "steps/CheckSuccess.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -228,7 +228,7 @@
       "level": "STEP",
       "name": "CloseGripper",
       "outputs": [],
-      "source": "recipes/step/CloseGripper.yaml",
+      "source": "steps/CloseGripper.yaml",
       "used_by": [
         "Pick"
       ]
@@ -321,7 +321,7 @@
       "level": "STEP",
       "name": "MoveHome",
       "outputs": [],
-      "source": "recipes/step/MoveHome.yaml",
+      "source": "steps/MoveHome.yaml",
       "used_by": [
         "CarryToSupport",
         "Release"
@@ -390,7 +390,7 @@
       "level": "STEP",
       "name": "OpenGripper",
       "outputs": [],
-      "source": "recipes/step/OpenGripper.yaml",
+      "source": "steps/OpenGripper.yaml",
       "used_by": [
         "PickRecovery",
         "Place",
@@ -425,7 +425,7 @@
       "level": "UTILITY",
       "name": "CameraHold",
       "outputs": [],
-      "source": "recipes/utility/CameraHold.yaml",
+      "source": "utility/CameraHold.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -579,7 +579,7 @@
       "level": "UTILITY",
       "name": "StartEpisode",
       "outputs": [],
-      "source": "recipes/utility/StartEpisode.yaml",
+      "source": "utility/StartEpisode.yaml",
       "used_by": [
         "PickAndPlace"
       ]
@@ -614,7 +614,7 @@
       "level": "UTILITY",
       "name": "StopEpisode",
       "outputs": [],
-      "source": "recipes/utility/StopEpisode.yaml",
+      "source": "utility/StopEpisode.yaml",
       "used_by": [
         "PickAndPlace"
       ]
