@@ -43,18 +43,21 @@ class Model:
         self.ee_offset = self.pin_model.frames[self._tool].placement.homogeneous
 
         # Self-collision spheres, each in its parent joint's frame; group 0 = the fixed base.
-        centers, radii, groups, links = [], [], [], []
+        self.sphere_centers, self.sphere_radii, self.sphere_groups, self.sphere_links = np.zeros((0, 3)), np.zeros(0), np.zeros(0, int), []
         for link, sphere in self._spheres(xrdf["self_collision"]["geometry"]):
-            assert self.pin_model.existFrame(link), link
-            frame = self.pin_model.frames[self.pin_model.getFrameId(link)]
-            centers.append((frame.placement.homogeneous @ np.r_[sphere["center"], 1.0])[:3])
-            radii.append(float(sphere["radius"]))
-            groups.append(int(frame.parentJoint))
-            links.append(link)
-        self.sphere_centers, self.sphere_radii = np.array(centers), np.array(radii)
-        self.sphere_groups, self.sphere_links = np.array(groups), links
+            self.add_spheres(link, [sphere["center"]], [sphere["radius"]])
         ignore = xrdf["self_collision"].get("ignore", {})
         self.ignore = {frozenset((a, b)) for a, others in ignore.items() for b in others}
+
+    def add_spheres(self, link: str, centers, radii) -> None:
+        """Collision spheres on `link` (centres in its URDF frame); a controller built after sees them."""
+        assert self.pin_model.existFrame(link), link
+        frame = self.pin_model.frames[self.pin_model.getFrameId(link)]
+        centers = np.c_[np.reshape(centers, (-1, 3)), np.ones(len(radii))]
+        self.sphere_centers = np.r_[self.sphere_centers, (centers @ frame.placement.homogeneous.T)[:, :3]]
+        self.sphere_radii = np.r_[self.sphere_radii, np.asarray(radii, float)]
+        self.sphere_groups = np.r_[self.sphere_groups, np.full(len(radii), int(frame.parentJoint))]
+        self.sphere_links = self.sphere_links + [link] * len(radii)
 
     @classmethod
     def load(cls, robot) -> "Model":
