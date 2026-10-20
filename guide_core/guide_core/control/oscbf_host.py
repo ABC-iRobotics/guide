@@ -58,6 +58,8 @@ def _rotation(A, what):
     """A 3x3 linear map as (rotation, per-axis scale). A sheared one (a rotation under a non-uniform scale) has no
     box of that shape: it fails, `what` named."""
     scale = np.linalg.norm(A, axis=0)
+    if scale.min() <= 1e-12:
+        raise ValueError(f"{what}: zero scale on an axis, no box fits it")
     R = A / scale
     if np.abs(R.T @ R - np.eye(3)).max() > 1e-6:
         raise ValueError(f"{what}: sheared transform (a rotation under a non-uniform scale), no box fits it")
@@ -302,8 +304,8 @@ class OscbfHost:
         if not self._obstacles:
             return
         xforms = UsdGeom.XformCache()
-        to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4)) @ np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(self._base), self._base))
-        poses = [to_base @ _rigid(xforms.GetLocalToWorldTransform(prim), prim) @ boxes for prim, boxes, _, _ in self._obstacles]
+        to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4)) @ np.linalg.inv(_rigid(xforms.GetLocalToWorldTransform(self._base), self._base.GetPath()))
+        poses = [to_base @ _rigid(xforms.GetLocalToWorldTransform(prim), prim.GetPath()) @ boxes for prim, boxes, _, _ in self._obstacles]
         halves = [half for _, _, half, _ in self._obstacles]
         margins = [np.full(len(half), margin) for _, _, half, margin in self._obstacles]
         self._controller.set_obstacles(np.concatenate(poses), np.concatenate(halves), np.concatenate(margins))

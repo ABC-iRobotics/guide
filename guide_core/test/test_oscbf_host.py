@@ -838,6 +838,11 @@ def test_a_sheared_collider_fails_naming_it(host_module):
     UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
     with pytest.raises(ValueError, match="collider /Scene_0/bin_0/squashed/cube: sheared"):
         host_module.prim_boxes(stage, "/Scene_0/bin_0", "collision")
+    stage = klt(robot_stage())
+    UsdGeom.Xform.Define(stage, "/Scene_0/bin_0/flat").AddScaleOp().Set(Gf.Vec3d(1.0, 0.0, 1.0))
+    UsdPhysics.CollisionAPI.Apply(UsdGeom.Cube.Define(stage, "/Scene_0/bin_0/flat/cube").GetPrim())
+    with pytest.raises(ValueError, match="flat/cube: zero scale"):  # a NaN rotation would pass the shear check
+        host_module.prim_boxes(stage, "/Scene_0/bin_0", "collision")
 
 
 def test_a_refusal_names_the_obstacle_whose_barrier_q_rest_breaks(host_module, monkeypatch):
