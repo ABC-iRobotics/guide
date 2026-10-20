@@ -99,7 +99,8 @@
     2.7242096
    ],
    "fixed": null,
-   "relation": "on wooden_cabinet_1 main_table_cabinet_region"
+   "relation": "on wooden_cabinet_1 main_table_cabinet_region",
+   "on": "main_table"
   },
   {
    "instance": "flat_stove_1",
@@ -118,7 +119,8 @@
     0.0
    ],
    "fixed": null,
-   "relation": "on flat_stove_1 main_table_stove_region"
+   "relation": "on flat_stove_1 main_table_stove_region",
+   "on": "main_table"
   },
   {
    "instance": "akita_black_bowl_1",
@@ -137,7 +139,8 @@
     1.5707963
    ],
    "fixed": null,
-   "relation": "on akita_black_bowl_1 main_table_next_to_plate_region"
+   "relation": "on akita_black_bowl_1 main_table_next_to_plate_region",
+   "on": "main_table"
   },
   {
    "instance": "akita_black_bowl_2",
@@ -156,7 +159,8 @@
     1.5707963
    ],
    "fixed": null,
-   "relation": "on akita_black_bowl_2 main_table_next_to_ramekin_region"
+   "relation": "on akita_black_bowl_2 main_table_next_to_ramekin_region",
+   "on": "main_table"
   },
   {
    "instance": "cookies_1",
@@ -175,7 +179,8 @@
     1.5707963
    ],
    "fixed": null,
-   "relation": "on cookies_1 main_table_box_region"
+   "relation": "on cookies_1 main_table_box_region",
+   "on": "main_table"
   },
   {
    "instance": "glazed_rim_porcelain_ramekin_1",
@@ -194,7 +199,8 @@
     1.5707963
    ],
    "fixed": null,
-   "relation": "on glazed_rim_porcelain_ramekin_1 main_table_ramekin_region"
+   "relation": "on glazed_rim_porcelain_ramekin_1 main_table_ramekin_region",
+   "on": "main_table"
   },
   {
    "instance": "plate_1",
@@ -213,7 +219,8 @@
     1.5707963
    ],
    "fixed": null,
-   "relation": "on plate_1 main_table_plate_region"
+   "relation": "on plate_1 main_table_plate_region",
+   "on": "main_table"
   }
  ],
  "joint_states": [

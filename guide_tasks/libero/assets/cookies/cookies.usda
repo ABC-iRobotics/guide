@@ -26,8 +26,12 @@ def Xform "cookies" (
             delete apiSchemas = ["PhysicsRigidBodyAPI"]
         )
         {
-            over "object"
+            over "object" (
+                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+            )
             {
+                custom float physxRigidBody:maxDepenetrationVelocity = 0.1
+
                 over "Box"
                 {
                     uniform token purpose = "guide"

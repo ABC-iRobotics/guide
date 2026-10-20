@@ -70,11 +70,11 @@ place_akita_black_bowl_1:
               lower:
               - -0.2678105
               - -0.1430949
-              - 0.0254585
+              - 0.0404585
               upper:
               - -0.2678105
               - -0.1430949
-              - 0.0254585
+              - 0.0404585
               name: akita_black_bowl_1_position
           rotation:
             distribution.uniform:
@@ -129,11 +129,11 @@ place_akita_black_bowl_2:
               lower:
               - 0.0271036
               - -0.2930693
-              - 0.2263997
+              - 0.2168129
               upper:
               - 0.0271036
               - -0.2930693
-              - 0.2263997
+              - 0.2168129
               name: akita_black_bowl_2_position
           rotation:
             distribution.uniform:
