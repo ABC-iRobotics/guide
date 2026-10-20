@@ -96,8 +96,7 @@ git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 ```bash
 mkdir -p ~/ros2_ws/src/guide/modules && cd ~/ros2_ws/src/guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-# -b feat/oscbf-mode: until feat/oscbf-mode is merged into irob_lerobot_ros main
-git clone -b feat/oscbf-mode https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 ```
 
 **3. Create the Python 3.12 environment and install Isaac Sim 6.0.1 + dependencies:**
@@ -191,7 +190,7 @@ ros2 launch guide_core bringup.launch.py
 Register a task's scene with the simulator, then launch the task from `guide_tasks`. For
 example, the `block_bin` pick-and-place demonstration task (its launch file starts the task's
 solver node, under the `.venv` interpreter, for each scene, and MoveIt under
-`robots.franka.controller: moveit`, the shipped default; after changing that switch, rebuild
+`robots.franka.controller: moveit` (the shipped default is `oscbf`); after changing that switch, rebuild
 block_bin, restart GUIDE, register the scene, then launch):
 
 ```bash

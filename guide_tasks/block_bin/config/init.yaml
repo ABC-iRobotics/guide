@@ -35,13 +35,13 @@ robots:
       - 0.785398
       - 0.0
       - 0.0
-    # Motion layer (S2b). moveit: move_group + ros2_control over joint_command (the default).
-    # oscbf: guide_motion's OSCBF controller in Isaac's physics step, fed MotionTargets by
+    # Motion layer (S2b). moveit: move_group + ros2_control over joint_command.
+    # oscbf (the default): guide_motion's OSCBF controller in Isaac's physics step, fed MotionTargets by
     # ROS2Robot; the block_bin bring-up then starts no move_group. Under oscbf the arm's drives
     # are effort (torque) or velocity drives, so config/reset.yaml's drive-target homing does
     # not move it; GUIDE's Reset homes it through the OSCBF host instead (Ruling 2): a JOINTS
     # target at default_joint_states, held until the next MotionTarget arrives.
-    controller: moveit
+    controller: oscbf
     oscbf:
       robot: fr3       # guide_motion/guide_motion/robots/<robot>
       mode: torque     # torque | velocity; both run once per rendered frame (60 Hz, physics 120 Hz); rate: <Hz> overrides

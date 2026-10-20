@@ -30,24 +30,22 @@ git clone -b jazzy https://github.com/ABC-iRobotics/irob_franka_description.git 
 git clone https://github.com/PickNikRobotics/topic_based_ros2_control.git
 mkdir -p guide/modules && cd guide/modules
 git clone https://github.com/ABC-iRobotics/irob_pymoveit2.git pymoveit2
-# -b feat/oscbf-mode: until feat/oscbf-mode is merged into irob_lerobot_ros main
-git clone -b feat/oscbf-mode https://github.com/ABC-iRobotics/irob_lerobot_ros.git
+git clone https://github.com/ABC-iRobotics/irob_lerobot_ros.git
 ```
 
 | Repository | Gives GUIDE |
 |---|---|
 | `guide` | `guide_msgs`, `guide_core`, `guide_ex`, the tasks `block_bin` and `cube_stack` |
-| `irob_franka_ros2` (`jazzy`) | `franka_fr3_moveit_config/launch/guide_moveit.launch.py`, the FR3 MoveIt bring-up every task launch includes |
+| `irob_franka_ros2` (`jazzy`) | `franka_fr3_moveit_config/launch/guide_moveit.launch.py`, the FR3 MoveIt bring-up a task launch includes under `controller: moveit` |
 | `irob_franka_description` (`jazzy`) | the FR3 URDF/xacro |
 | `topic_based_ros2_control` | ros2_control over the joint topics Isaac publishes |
 | `modules/pymoveit2`, `modules/irob_lerobot_ros` | MoveIt from Python; the LeRobot robot (`ROS2Robot`) the solvers drive |
 
 **Why:** `modules/` is git-ignored. Of the submodules `.gitmodules` lists there, only
 `modules/lerobot` has a committed gitlink (section 2 initialises it); the two modules above are
-cloned by hand. GUIDE needs `irob_lerobot_ros`'s branch `feat/oscbf-mode` (until it is merged into
-its `main`): `send_action(speed=, min_fraction=)`, the `controller` field and the sim-time `sleep`
-that GUIDE-EX and block_bin call; with `main` every move fails with a `TypeError`. The branch
-includes `chore/lerobot-0.6.1`, the bump of its own nested lerobot submodule from 0b067df (v0.4.3)
+cloned by hand. GUIDE needs `irob_lerobot_ros` at 2eecb29 or later (its `main` since 2026-10-20):
+`send_action(speed=, min_fraction=)`, the `controller` field and the sim-time `sleep` that GUIDE-EX
+and block_bin call; an older checkout fails every move with a `TypeError`. That `main` includes the bump of its own nested lerobot submodule from 0b067df (v0.4.3)
 to v0.6.1. Do not initialise that submodule: `.venv` uses the rebuilt `modules/lerobot` (section 2)
 either way.
 
@@ -197,9 +195,9 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
 - Output: `<path>/dataset_<sim>_<scene>_<YYYY_MM_DD_HH_MM_SS>/`, a LeRobot v3.0 dataset plus
   `meta/guide_info.json` and `meta/guide_episodes.jsonl`. An empty `path` means `~/dataset`.
 - **Motion layer (S2b):** `robots.franka.controller` in `guide_tasks/block_bin/config/init.yaml` is
-  `moveit` (move_group + ros2_control; what the shipped file selects) or `oscbf` (guide_motion's OSCBF
+  `oscbf` (the shipped default: guide_motion's OSCBF
   controller in Isaac's physics step; ROS2Robot streams `guide_msgs/MotionTarget` at 20 Hz, and the
-  bring-up starts no move_group). GUIDE and the block_bin bring-up both read it: rebuild block_bin
+  bring-up starts no move_group) or `moveit` (move_group + ros2_control). GUIDE and the block_bin bring-up both read it: rebuild block_bin
   after changing it, then restart GUIDE, register the scene, and launch block_bin (registering again
   in a running GUIDE adds a second scene, which the bring-up does not drive).
 - **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
