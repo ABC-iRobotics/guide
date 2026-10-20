@@ -22,7 +22,7 @@ def generate_nodes(context, *args, **kwargs):
     # The motion layer: robots.franka.controller in config/init.yaml, the switch GUIDE reads when
     # it registers the scene (S2b). oscbf drives the arm from Isaac's physics step: no move_group.
     with open(os.path.join(get_package_share_directory("cube_stack"), "config", "init.yaml")) as f:
-        controller = yaml.safe_load(f)["robots"]["franka"].get("controller", "moveit")
+        controller = yaml.safe_load(f)["robots"]["franka"].get("controller", "oscbf")  # OSC only
 
     # Same-host DDS discovery needs guide_core's localhost cyclonedds config.
     if "CYCLONEDDS_URI" not in os.environ:

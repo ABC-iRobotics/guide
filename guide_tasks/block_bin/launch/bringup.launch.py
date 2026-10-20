@@ -23,7 +23,7 @@ def generate_nodes(context, *args, **kwargs):
     # no move_group or ros2_control is started for it.
     with open(os.path.join(get_package_share_directory("block_bin"), "config", "init.yaml")) as f:
         config = yaml.safe_load(f)
-    controller = config["robots"]["franka"].get("controller", "moveit")
+    controller = config["robots"]["franka"].get("controller", "oscbf")  # OSC only
     # dataset.camera_transition: GUIDE moves the cameras onto their mounts for `duration` s at the
     # start of every episode, and the solver holds the arm still for as long plus one frame period
     # at dataset.fps (GUIDE validates both).
