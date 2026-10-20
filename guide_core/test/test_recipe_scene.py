@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from guide_core.scene.recipe_scene import RecipeScene, separated_by_radii
+from guide_core.scene.recipe_scene import RecipeScene, load_task, separated_by_radii
 from guide_core.scene.scene_manager import SceneManager
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
 
@@ -53,7 +53,7 @@ def test_a_recipe_scene_is_all_data(tmp_path):
 def test_success_is_every_predicate(tmp_path, caplog):
     manager, sid, cfg = register(recipe_task(tmp_path))
     scene = manager._scenes[0]
-    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG)
     assert scene.is_success_postprocess([{"success": True, "reason": "a"}, {"success": True, "reason": "b"}])
     assert not scene.is_success_postprocess([{"success": True, "reason": "a"}, {"success": False, "reason": "xy 0.05 m"}])
     assert "xy 0.05 m" in caplog.text
@@ -77,7 +77,9 @@ def test_separation_is_libero_s_horizontal_test():
 
 
 def test_a_free_draw_is_redrawn_until_the_separation_holds(tmp_path, monkeypatch):
-    manager, sid, cfg = register(recipe_task(tmp_path, {**TASK, "separation": {"/objects/a": 0.06, "/objects/b": 0.06}}))
+    root = recipe_task(tmp_path, {**TASK, "separation": {"/objects/a": 0.06, "/objects/b": 0.06}})
+    (root / "config" / "randomize.yaml").write_text("events: {}\n")  # the Replicator dialect
+    manager, sid, cfg = register(root)
     assert sid == 0, cfg
     scene = manager._scenes[0]
     draws = []
@@ -89,3 +91,15 @@ def test_a_free_draw_is_redrawn_until_the_separation_holds(tmp_path, monkeypatch
     draws.clear()
     scene.randomize(arrangement="a")  # a fixed start is taken as it is
     assert len(draws) == 1 and draws[0]["arrangement"] == "a"
+
+
+def test_separation_needs_a_replicator_randomize_file(tmp_path):
+    _, sid, cfg = register(recipe_task(tmp_path, {**TASK, "separation": {"/objects/a": 0.06}}))
+    assert sid == -1 and "separation needs a Replicator randomize.yaml" in cfg["error"]
+
+
+def test_an_unquoted_on_goal_key_is_read_as_on(tmp_path):
+    root = recipe_task(tmp_path)
+    (root / "config" / "task.yaml").write_text(
+        "language: {task: put it}\ngoal:\n  - on: [/objects/plate, /marks/home]\n")
+    assert load_task(root / "config" / "task.yaml")["goal"] == [{"on": ["/objects/plate", "/marks/home"]}]

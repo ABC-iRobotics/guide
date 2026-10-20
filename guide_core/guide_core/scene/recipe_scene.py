@@ -32,7 +32,7 @@ def load_task(path) -> dict:
     return {
         "language": {"task": language["task"], "subtasks": list(language.get("subtasks") or [])},
         "target": doc.get("target"),
-        "goal": list(doc.get("goal") or []),
+        "goal": [{"on" if k is True else k: v for k, v in item.items()} for item in doc.get("goal") or []],
         "separation": {str(prim): float(radius) for prim, radius in (doc.get("separation") or {}).items()},
     }
 
@@ -55,6 +55,8 @@ class RecipeScene(SceneOrchestrator):
             raise ValueError(f"config/success.yaml must list success predicates only ({sorted(PREDICATE_PATHS)}); "
                              f"got {commands} (YAML reads a bare on as true: write 'on')")
         self.task = self.task_config["language"]["task"]
+        if self.task_config["separation"] and "randomize" not in self.replicator_files:
+            raise ValueError("separation needs a Replicator randomize.yaml")
 
     def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None):
         """A free draw is redrawn until task.yaml's separation holds (cube_stack's loop); a seed, an
@@ -93,7 +95,7 @@ class RecipeScene(SceneOrchestrator):
     def is_success_postprocess(self, result):
         failed = [r["reason"] for r in result if not r["success"]]
         for reason in failed:
-            self._logger.info(f"[RecipeScene] scene {self._scene_id} not done: {reason}")
+            self._logger.debug(f"[RecipeScene] scene {self._scene_id} not done: {reason}")
         return not failed
 
     def reset_preprocess(self, instructions):
