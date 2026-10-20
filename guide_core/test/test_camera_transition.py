@@ -283,6 +283,7 @@ def registration(stage, monkeypatch):
     scene = Scene.__new__(Scene)
     scene._config, scene._scene_id = {"cameras": CAMERAS, "dataset": {"camera_transition": ON}}, 0
     scene.camera_transition = camera_transition(scene._config)
+    scene.scene_recipe = None
     manager = SimpleNamespace(get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: None,
                               get_scene_camera_graphs=lambda i: None, _scenes=[scene])
     runtime = SimpleNamespace(

@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
 from guide_core.scene import robot_profile
+from guide_core.scene.predicates import PREDICATE_PATHS
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import replicator_guide
@@ -561,8 +562,9 @@ class SceneOrchestrator(ABC):
         instructions = file.get("instructions") or []
         instruction_list = []
         for instruction in instructions:
+            paths = PREDICATE_PATHS.get(instruction.get("cmd"), ())  # a success predicate's prim kwargs
             for key, value in instruction.get("kwargs", {}).items():
-                if key in relative_path_keywords:
+                if key in relative_path_keywords or key in paths:
                     if isinstance(value, list):
                         instruction["kwargs"][key] = [f"/Scene_{self._scene_id}{v}" for v in value]
                     else:
