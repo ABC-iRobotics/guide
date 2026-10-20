@@ -49,9 +49,9 @@ class SetGripperState(BaseNode):
             joints, clock = robot.config.gripper_joint_names, robot.node.get_clock()
             start = clock.now().nanoseconds
 
-            def fingers():
-                observation = robot.get_observation()
-                return [observation[f"{joint}.pos"] for joint in joints]
+            def fingers():  # not get_observation(): it also reads every camera, 5 s each while no image topic is up
+                state = robot.joint_state
+                return [state.position[state.name.index(joint)] for joint in joints]
 
             window = deque([fingers()], maxlen=self.STILL_SAMPLES + 1)  # STILL_SAMPLES polls apart, end to end
             while True:

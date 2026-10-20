@@ -33,7 +33,7 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
     moves, asked, slept = [], [], []
     robot.send_action = lambda action, **kwargs: moves.append(action) or True
     robot.sleep = slept.append
-    robot.get_observation = lambda: {"fr3_finger_joint1.pos": 0.04}  # still: each gripper step settles at once
+    robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[0.04])  # still: each gripper step settles at once
     for name in ("randomize", "pose", "collision", "is_success", "start_recording", "stop_recording", "set_prompt"):
         setattr(robot, name, SimpleNamespace(srv_name=name))
 

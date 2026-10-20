@@ -52,16 +52,26 @@ def test_a_cartesian_velocity_command_that_went_through_is_sent_once():
 
 
 def gripper_on_sim_time(finger, sent):
-    """A robot on sim time: only sleep advances its clock; finger(t) is fr3_finger_joint1's position at t s."""
+    """A robot on sim time: only sleep advances its clock, and its joint_state follows; finger(t) is
+    fr3_finger_joint1's position at t s."""
     clock = SimpleNamespace(ns=0)
     clock.now = lambda: SimpleNamespace(nanoseconds=clock.ns)
+
+    def sleep(seconds):
+        clock.ns += round(seconds * 1e9)
+        robot.joint_state = SimpleNamespace(name=["fr3_joint1", "fr3_finger_joint1"], position=[0.0, finger(clock.ns / 1e9)])
+
+    def get_observation():  # also reads every camera: 5 s of wall time each while no image topic is up
+        raise AssertionError("the settle read the cameras")
+
     robot = fake_robot(
         config=SimpleNamespace(gripper_action_type=ActionType.JOINT_POSITION, gripper_joint_names=["fr3_finger_joint1"]),
         send_action=lambda action, **kwargs: sent.append(action) or True,
-        sleep=lambda seconds: setattr(clock, "ns", clock.ns + round(seconds * 1e9)),
-        get_observation=lambda: {"fr3_finger_joint1.pos": finger(clock.ns / 1e9), "fr3_joint1.pos": 0.0},
+        sleep=sleep,
+        get_observation=get_observation,
     )
     robot.node.get_clock = lambda: clock
+    sleep(0)
     return robot, lambda: clock.ns / 1e9
 
 
