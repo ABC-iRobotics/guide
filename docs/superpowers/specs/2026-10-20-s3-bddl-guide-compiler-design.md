@@ -45,8 +45,8 @@ Three layers. Only the bottom one knows about LIBERO.
   ┌──────────────────────────────────────┐   ┌───────────────────────────────┐
   │ arrangements: named value sets that  │   │ tasks/pick_and_place.py       │
   │   Replicator loads into a recipe     │   │   (lifted from block_bin)     │
-  │ static fixtures: kinematic, placed   │   │ tasks/goal_task.py: builds a  │
-  │   by the recipe while playing        │   │   tree from a task description│
+  │ static fixtures: placed by weld frame│   │ tasks/goal_task.py: builds a  │
+  │   while playing; table kinematic     │   │   tree from a task description│
   │ joint states in recipes              │   └───────────────▲───────────────┘
   │ bake: recipe + arrangement → USD     │                   │ task.yaml
   │ RecipeScene: data-driven Scene       │                   │
@@ -96,27 +96,41 @@ LIBERO fixtures (table, cabinet, stove) must not move, yet each arrangement plac
 somewhere else (their poses differ per demo, F§2). S1 found that welded fixtures snap back during
 play.
 
-**Design:** a fixture becomes a **kinematic** rigid body with no weld. `modify.pose` with
-`write_to_usd` teleports it, and contacts can't push it. Jointed parts (drawers, knobs) stay
-dynamic bodies, jointed to the kinematic base and driven (S1's drive gains).
-**Spike K** (before the plan) proves this in Isaac 6.0.1 for the cabinet:
-- teleport it during play, with drawers attached;
-- the drawers follow;
-- the drive holds them.
-
-The fallback is S1's stopped-timeline placement (measured at 203 ms per fire).
+**Design (spike K done, `~/libero_assets/s3_inputs/spike_kj/findings.md`):**
+- **Articulated fixtures** (every converted LIBERO fixture: an articulation welded to the world)
+  keep their articulation and weld. The recipe places them by writing the weld's
+  `physics:localPos0` / `physics:localRot0` (`modify.attribute`).
+  - PhysX takes a runtime write as a **world** pose. It was exact in 1 s, three moves in a row,
+    and small moves are exact in 2 frames.
+  - The compiler keeps fixture roots at identity, so the parse-time and runtime readings agree.
+    GUIDE adds the scene origin.
+  - The weld pulls rather than teleports. A 105° jump flung an undriven drawer 9.5 cm, while
+    LIBERO's region-sized moves (≤ 2 cm, ≤ 4°) don't. So joint states are written after the
+    base has landed (4.3).
+- **Plain static bodies** (the table) are kinematic, moved by `modify.pose` / `write_to_usd`,
+  which was exact in 2 frames.
+- S1's holding drives on fixture joints (stiffness 1e4) are removed. LIBERO's drawers are damped
+  only, and the robot must be able to open them.
+- Rejected:
+  - kinematic bodies with maximal-coordinate joints: placement works, but a joint can only be
+    set by a holding drive (1 s), and writing a drawer body breaks PhysX's views;
+  - a floating articulation: it drifts 2 mm and sinks 5 mm.
 
 These are the same "objects that shouldn't move" as the new OSCBF obstacle list (tracker
 q-oscbf-obstacles). A compiled task lists its fixtures there.
 
 ### 4.3 Joint states in recipes
 
-Drawer and knob positions are a `modify.attribute` on the joint's drive target, plus its state
-attribute (`state:linear:physics:position` / `state:angular:physics:position`, UsdPhysics
-JointStateAPI), both fed from one named distribution `<joint>_state`.
+Drawer and knob positions are a `modify.attribute` on the joint's state attribute
+(`state:linear:physics:position` / `state:angular:physics:position`; PhysxSchema
+`JointStateAPI`, which the compiler applies to every fixture joint), fed from one named
+distribution `<joint>_state`.
 
-**Spike J** proves that writing both during play moves the joint there and holds it. If only the
-drive target works, the joint is driven there during the settle window.
+**Spike J (done):** each write was exact in 2 frames, repeatable, with no drive holding the
+joint.
+
+These writes go in a second randomizer that fires after the fixtures' weld writes have landed
+(4.2). `fire()` sends the joint group's event a few physics frames after the pose group.
 
 ### 4.4 Bake (standalone USD)
 
@@ -178,7 +192,7 @@ It's an installable Python package in the `.venv`.
 | `demos.py` | demo HDF5 → one arrangement per demo: movables from `states[0]` qpos (inner `object` frame), fixtures from the demo XML body pose, drawer and knob joints from qpos, the robot's start joints | F§2 probe code (mujoco + h5py, 2 path patches) |
 | `frames.py` | LIBERO world → GUIDE scene frame (table top z = 0: z − 0.9), robot base pose, default movable yaw π/2 | F§2, F§4 |
 | `assets.py` | asset type → converted USD (S1 table, extended per suite); applies S1's per-object fixes at build time | `spike_libero_convert.py`, `spike_libero_isaac.py` |
-| `emit/usd.py` | scene USD: table, fixtures (kinematic, 4.2), objects at `/objects/<inst>` (the inner `object` frame), robot and cameras | S1 `build_scene` |
+| `emit/usd.py` | scene USD: table (kinematic), fixtures (identity root, JointStateAPI, no holding drives; 4.2), objects at `/objects/<inst>` (the inner `object` frame), robot and cameras | S1 `build_scene` |
 | `emit/recipe.py` | `randomize.yaml`: one named position/rotation distribution per instance, bounds = its BDDL region for table-region facts (H2), at most 6 `with` blocks per trigger; `reset.yaml` | S1 `to_replicator_yaml` |
 | `emit/arrangements.py` | `config/arrangements/<demo>.yaml` from `demos.py` | — |
 | `emit/success.py`, `emit/task.py`, `emit/init.py` | 4.6, 5, and `init.yaml` (robot profile, cameras, dataset section, `tracked_objects` = `:obj_of_interest` + supports) | block_bin/cube_stack `init.yaml` |
@@ -222,7 +236,7 @@ At run time:
 - An asset type with no converted USD refuses the task.
 - **Run time:**
   - an arrangement naming a distribution the recipe lacks fails `Randomize` with the name;
-  - a fixture that isn't kinematic at registration fails `Register`;
+  - a fixture whose root isn't at identity, or a joint without JointStateAPI, fails `Register`;
   - success steps for an unsupported predicate fail at registration, not at episode end.
 
 ## 9. Testing
@@ -264,6 +278,6 @@ At run time:
 
 ## 12. Before the plan
 
-Spikes K (4.2) and J (4.3) run first, each about half a day in Isaac, and end in a
-recommendation. The plan's task order: core 4.1 → 4.3 → 4.2 → 4.4 → 4.5, then GUIDE-EX §5, then
-guide_libero §6, then the §1 validation.
+Spikes K and J are done (2026-10-20; results in 4.2 and 4.3). The plan's task order:
+core 4.1 → 4.3 → 4.2 → 4.4 → 4.5, then GUIDE-EX §5, then guide_libero §6, then the §1
+validation.
