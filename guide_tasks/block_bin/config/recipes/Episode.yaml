@@ -24,4 +24,6 @@ overrides:
   # neighbouring block stalled the hand over it. PickRecovery measures the same way, so its -90 deg turn
   # lands on the other finger axis whichever one the first attempt used.
   GetTargetPose: {ref: ClearanceTargetPose}
+  # ponytail: if the failed pick moved the target or a neighbour, the chooser may pick the other axis and
+  # recovery's turn then lands back on the failed one. Upgrade: let recovery reuse the first attempt's axis.
   PickRecovery.GetTargetPose: {ref: ClearanceTargetPose}

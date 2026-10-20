@@ -34,3 +34,12 @@ def test_unreachable_turn_keeps_the_yaw():
     green = pose(-0.3, -0.5, 0.0, flip=True)
     yellow = pose(-0.3, -0.45, 0.0)  # in the way of the pad on the y-axis finger line
     assert np.isclose(choose(green, [yellow]), 0.0)
+
+
+def test_turn_reachable_but_recovery_not_keeps_the_yaw():
+    # q1 = -69 deg: the turn gives q7 = 45 - 69 - 90 = -114 deg (ok), the recovery's extra +90 deg -204 deg (past 2.8 rad)
+    green = pose(0.181, -0.466, 0.0, flip=True)
+    yellow = pose(0.181, -0.416, 0.0)
+    assert np.isclose(choose(green, [yellow]), 0.0)
+    turned = ChooseClearanceYaw().run(green, [yellow], q7_limit=4.0).outputs["pose"]  # same case, wider limit: it turns
+    assert np.isclose(np.arctan2(*turned.orientation.to_scipy().as_matrix()[1::-1, 0]), np.pi / 2)

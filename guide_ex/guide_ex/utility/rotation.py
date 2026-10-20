@@ -169,12 +169,14 @@ class ChooseClearanceYaw(BaseNode):
     axes (the pose's yaw psi, or psi + 90 deg) whose finger pads stay farther from the other
     blocks.
 
-    The pads sit at +-(finger_gap / 2) along the finger axis (the hand's y axis), each
-    ``pad_depth`` deep and ``pad_width`` wide, centred on the grasp position. A pad over a
-    neighbouring block lands on it instead of beside the target. The turn to psi + 90 is
+    The pad centres sit at +-(finger_gap + pad_depth) / 2 along the finger axis (the hand's y
+    axis), each ``pad_depth`` deep and ``pad_width`` wide, centred on the grasp position. A pad
+    over a neighbouring block lands on it instead of beside the target. The turn to psi + 90 is
     kept only if the arm can make it: joint 7 follows ``q7 = q7_home + q1 - yaw`` for a
     down-pointing hand, q1 being the heading of the grasp from the base; |q7| must stay
-    within ``q7_limit``. Otherwise (and on a tie) the pose is returned unchanged.
+    within ``q7_limit``. block_bin's pick recovery then turns the hand another 90 deg in base
+    yaw (q7 - pi/2), so that must be reachable too. Otherwise (and on a tie) the pose is
+    returned unchanged.
     """
 
     level = Layer.UTILITY
@@ -230,9 +232,11 @@ class ChooseClearanceYaw(BaseNode):
                     for side in (1, -1)]
             return min([enough, *(_separation(p, b) for p in pads for b in blocks)])
 
-        q7 = q7_home + np.arctan2(xy[1], xy[0]) - (yaw + np.pi / 2)
-        q7 = (q7 + np.pi) % (2 * np.pi) - np.pi
+        # Wrap only the angle difference; wrapping q7 itself could fold an out-of-range q7 into range.
+        d = np.arctan2(xy[1], xy[0]) - (yaw + np.pi / 2)
+        q7 = q7_home + (d + np.pi) % (2 * np.pi) - np.pi
         keep, turn = clearance(yaw), clearance(yaw + np.pi / 2)
-        if abs(q7) <= q7_limit and turn > keep:
+        # The recovery turn (+90 deg base yaw, q7 - pi/2) must be reachable as well as the turn itself.
+        if abs(q7) <= q7_limit and abs(q7 - np.pi / 2) <= q7_limit and turn > keep:
             rot, keep = R.from_euler("z", np.pi / 2) * rot, turn
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": rebuild(rot), "clearance": float(keep)})
