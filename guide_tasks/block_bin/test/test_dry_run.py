@@ -57,4 +57,4 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch):
     assert xyz == [(0.3, 0.0, 0.5), (0.3, 0.0, 0.4), (0.5, 0.1, 0.112), (0.5, 0.1, 0.022), (0.5, 0.1, 0.292),
                    (0.45, -0.25, 0.137), (0.3, 0.0, 0.5)]
     settle = [SetGripperState.POLL] * SetGripperState.STILL_SAMPLES + [SetGripperState.RESIDUAL]
-    assert slept == [5, *settle, 2.0, *settle, 2.0, *settle, 2.0, 5.0]  # the post-Randomize pause, settles and WaitForSeconds
+    assert slept == [5, *settle, 0.5, *settle, 0.5, *settle, 0.5, 5.0]  # the post-Randomize pause, settles and WaitForSeconds

@@ -184,7 +184,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.01}},
             ),
-            WaitForSeconds(alias="WaitAfterClose", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterClose", dynamic_map={"timer": "robot"}, static_args={"seconds": 0.5}),
             # Lift 28 cm straight up before heading for the bin. 20 cm taught policies a
             # lift too shallow to clear the bin walls (their main failure mode).
             TransformPose(
@@ -271,7 +271,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}},
             ),
-            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 0.5}),
         ],
     )
 
@@ -334,7 +334,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                 dynamic_map={"robot": "robot"},
                 static_args={"gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}},
             ),
-            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
+            WaitForSeconds(alias="WaitAfterOpen", dynamic_map={"timer": "robot"}, static_args={"seconds": 0.5}),
         ],
     )
 
@@ -415,7 +415,7 @@ def solveTask(scene_id, robot, zone=None, path=""):
                             "gripper_goal_pos": {robot.config.gripper_joint_names[0]: 0.04}
                         },
                     ),
-                    WaitForSeconds(alias="WaitAfterOpenRecovery", dynamic_map={"timer": "robot"}, static_args={"seconds": 2.0}),
+                    WaitForSeconds(alias="WaitAfterOpenRecovery", dynamic_map={"timer": "robot"}, static_args={"seconds": 0.5}),
                     TransformPose(
                         alias="RotateCubePose",
                         dynamic_map={"l_pose": "cube_pose"},
