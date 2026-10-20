@@ -45,8 +45,8 @@ def is_replicator_yaml(path: Path) -> bool:
 
 
 def prefixed(doc: dict, scene_prefix: str) -> dict:
-    """Return a copy with every ``path_pattern`` made scene-absolute and every
-    ``event_name`` made scene-unique, so several scenes can share one task file."""
+    """Return a copy with every ``path_pattern`` and every absolute ``parent`` (scene.yaml's create.* calls)
+    made scene-absolute and every ``event_name`` made scene-unique, so several scenes can share one task file."""
     suffix = "_" + scene_prefix.strip("/")
 
     def walk(node):
@@ -54,6 +54,8 @@ def prefixed(doc: dict, scene_prefix: str) -> dict:
             out = {}
             for k, v in node.items():
                 if k == "path_pattern" and isinstance(v, str):
+                    out[k] = scene_prefix + v
+                elif k == "parent" and isinstance(v, str) and v.startswith("/"):
                     out[k] = scene_prefix + v
                 elif k == "event_name" and isinstance(v, str):
                     out[k] = v + suffix
@@ -286,6 +288,51 @@ def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
     # this scene's named distributions (the registry is global; names repeat across scenes)
     state["named"] = {k: v for k, v in NamedNodes._named_nodes.items() if before.get(k) is not v}
     return state
+
+
+def check_scene_recipe(doc, where) -> None:
+    """A scene recipe (config/scene.yaml) runs once, at registration, with no trigger: only create.*
+    calls build anything then. Any other call (trigger.*, with.*, modify.*, randomizer.*, guide.*,
+    distribution.*) raises, naming it, as does an instruction-list file."""
+    if not isinstance(doc, dict) or "instructions" in doc:
+        raise ValueError(f"{where}: a scene recipe is Replicator YAML (create.* groups), not an instruction list")
+
+    def keys(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield key
+                yield from keys(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from keys(value)
+
+    for key in keys(doc):
+        if isinstance(key, str) and "." in key and not key.startswith("create."):
+            raise ValueError(f"{where}: {key} -- a scene recipe runs once at registration and takes create.* "
+                             f"calls only; draw per episode in randomize.yaml")
+
+
+def run_scene_recipe(yaml_path: Path, scene_prefix: str) -> None:
+    """Build config/scene.yaml for one scene. Its create.* calls reference fixtures and objects under
+    the scene: ``parent: /objects`` -> /Scene_<i>/objects, defined as an Xform if missing (Replicator
+    refuses a missing parent); ``usd: {property: file_path, value: <relative path>}`` resolves against
+    config/ (Replicator YAML's own rule). create.from_usd(name: N, parent: P) lands at P/N_Xform/N."""
+    import omni.usd
+    from omni.replicator.replicator_yaml import parse
+    from pxr import UsdGeom
+
+    attach()
+    _stop_orchestrator()  # create.* adds group nodes to the graph
+    doc = prefixed(yaml.safe_load(Path(yaml_path).read_text()) or {}, scene_prefix)
+    check_scene_recipe(doc, yaml_path)
+    stage = omni.usd.get_context().get_stage()
+    for parent in {p for p in _find(doc, "parent") if isinstance(p, str)}:
+        if not stage.GetPrimAtPath(parent).IsValid():
+            UsdGeom.Xform.Define(stage, parent)
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        yaml.safe_dump(doc, f, sort_keys=False)
+        tmp = f.name
+    parse(yaml_path=tmp, root_dir=str(Path(yaml_path).parent))
 
 
 def events(doc: dict) -> tuple[str, str | None]:

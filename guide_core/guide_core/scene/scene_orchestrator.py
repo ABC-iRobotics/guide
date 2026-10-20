@@ -276,6 +276,12 @@ class SceneOrchestrator(ABC):
         # Getting randomize.yaml
         self.randomize_instructions = instructions("randomize", randomize_path)
 
+        # config/scene.yaml, the scene recipe: create.* calls build_stage runs once at registration.
+        recipe = Path(str(self._path)) / "config" / "scene.yaml"
+        self.scene_recipe = recipe if recipe.is_file() else None
+        if self.scene_recipe is not None:
+            replicator_guide.check_scene_recipe(yaml.safe_load(recipe.read_text()) or {}, recipe)
+
         # At most one grid-enabled instruction per scene (raises on a second).
         self._grid = single_grid(self.randomize_instructions)
 
@@ -713,9 +719,10 @@ class SceneOrchestrator(ABC):
 
     def build_stage(self) -> None:
         """At registration, once the scene USD is referenced and placed: each profile robot at its
-        mount with its wrist camera (robot_profile.mount). Waits for what that references to load."""
+        mount with its wrist camera (robot_profile.mount), then config/scene.yaml
+        (replicator_guide.run_scene_recipe). Waits for what they reference to load."""
         profiled = [r for r in (self._config.get("robots") or {}).values() if "profile" in r]
-        if not profiled:  # ponytail: plan C's scene recipe joins this check; no omni import for legacy tasks
+        if not profiled and self.scene_recipe is None:  # no omni import for legacy tasks
             return
         import omni.kit.app
         import omni.usd
@@ -725,6 +732,8 @@ class SceneOrchestrator(ABC):
         prefix = f"/Scene_{self._scene_id}"
         for robot in profiled:
             robot_profile.mount(stage, prefix, robot)
+        if self.scene_recipe is not None:
+            replicator_guide.run_scene_recipe(self.scene_recipe, prefix)
         app = omni.kit.app.get_app()
         app.update()
         while is_stage_loading():
