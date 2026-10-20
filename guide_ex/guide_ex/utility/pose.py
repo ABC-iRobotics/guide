@@ -3,8 +3,10 @@ import numpy as np
 from guide_core.types.geometry import Pose, Transform
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 
 
+@node()
 class TransformPose(BaseNode):
     level = Layer.UTILITY
 
@@ -26,6 +28,7 @@ class TransformPose(BaseNode):
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
 
 
+@node()
 class InvertPose(BaseNode):
     level = Layer.UTILITY
 
@@ -56,6 +59,7 @@ def is_at_offset(pose: Pose, reference: Pose, offset, tolerance) -> bool:
     return bool(np.all(np.abs(d) <= np.asarray(tolerance, float)))
 
 
+@node()
 class ChainLength(BaseNode):
     """
     How many of `poses`, from the first, follow one another at a fixed offset.

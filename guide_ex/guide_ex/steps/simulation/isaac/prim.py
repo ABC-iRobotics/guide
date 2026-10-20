@@ -4,10 +4,12 @@ from rclpy.node import Node
 from guide_core.types.geometry import Pose
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 from guide_msgs.srv import Collision
 from guide_msgs.srv import Pose as PoseSrv
 
 
+@node()
 class GetPrimPose(BaseNode):
     level = Layer.STEP
 
@@ -69,6 +71,7 @@ class GetPrimPose(BaseNode):
             )
 
 
+@node()
 class GetPrimPoses(BaseNode):
     level = Layer.STEP
 
@@ -99,6 +102,7 @@ class GetPrimPoses(BaseNode):
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"poses": poses})
 
 
+@node()
 class IsPrimClashing(BaseNode):
     level = Layer.STEP
 

@@ -1,8 +1,10 @@
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 from guide_msgs.srv import CheckSuccess
 
 
+@node()
 class IsTaskSuccessful(BaseNode):
     level = Layer.STEP
 

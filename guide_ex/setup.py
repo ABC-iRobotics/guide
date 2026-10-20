@@ -18,7 +18,7 @@ setup(
         for f in glob(os.path.join(f"{package_name}", "**", "*"), recursive=True)
         if os.path.isfile(f)
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "omegaconf"],
     zip_safe=True,
     maintainer="András Makány",
     maintainer_email="makany.andras@uni-obuda.hu",

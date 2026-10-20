@@ -105,8 +105,9 @@ for old, new in [('"numpy>=2.0.0,<2.3.0"', '"numpy>=2.0.0,<2.4.0"'),
     text = text.replace(old, new)
 path.write_text(text)
 EOF
-# (building the copy needs network access: uv fetches the setuptools build backend)
-uv pip install --python .venv/bin/python --no-sources $LEROBOT python-fcl "transformers>=5.4,<5.6" -c $PINS
+# (building the copy needs network access: uv fetches the setuptools build backend); omegaconf
+# loads guide_ex's YAML recipes:
+uv pip install --python .venv/bin/python --no-sources $LEROBOT python-fcl "transformers>=5.4,<5.6" omegaconf==2.4.0 -c $PINS
 rm -rf $LEROBOT
 git -C src/guide submodule update --init guide_motion/external/oscbf   # OSCBF (MIT) at its pinned commit
 uv pip install --python .venv/bin/python -c $PINS -e "src/guide/guide_motion[test]"   # S2b motion layer

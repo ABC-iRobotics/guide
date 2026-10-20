@@ -1,5 +1,6 @@
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 from guide_msgs import srv
 
 
@@ -37,6 +38,7 @@ def _call_recording_service(robot, service, srv_type, sim_namespace, request, ti
     return ExecutionResult(status=DemoStatus.PERFECT)
 
 
+@node()
 class StartRecording(BaseNode):
     level = Layer.UTILITY
 
@@ -73,6 +75,7 @@ class StartRecording(BaseNode):
         )
 
 
+@node()
 class PauseRecording(BaseNode):
     level = Layer.UTILITY
 
@@ -108,6 +111,7 @@ class PauseRecording(BaseNode):
         )
 
 
+@node()
 class StopRecording(BaseNode):
     level = Layer.UTILITY
 
@@ -148,6 +152,7 @@ class StopRecording(BaseNode):
         )
 
 
+@node()
 class SetPrompt(BaseNode):
     level = Layer.UTILITY
 

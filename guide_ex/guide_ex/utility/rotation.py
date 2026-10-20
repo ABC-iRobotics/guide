@@ -6,6 +6,7 @@ from scipy.spatial.transform.rotation import Rotation as R
 from guide_core.types.geometry import Pose, Rotation, Transform
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 
 _AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
 
@@ -53,6 +54,7 @@ def _base_yaw(rot: R, heading_axis: str) -> float:
     return float(np.arctan2(axis[1], axis[0]))
 
 
+@node()
 class ProjectRotationToBaseZ(BaseNode):
     """
     Project an object's full 3D orientation onto the pure Z-rotation of the base
@@ -95,6 +97,7 @@ class ProjectRotationToBaseZ(BaseNode):
         )
 
 
+@node()
 class ReduceRotationToSymmetry(BaseNode):
     """
     Collapse a Z rotation to the smallest-magnitude equivalent one under an

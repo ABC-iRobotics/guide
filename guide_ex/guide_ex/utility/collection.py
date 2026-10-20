@@ -1,7 +1,9 @@
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import node
 
 
+@node()
 class GetItem(BaseNode):
     """``items[index + shift]``: pick from a list by an index another node computed."""
 
