@@ -52,12 +52,12 @@ robots:
 
 # Objects that must not move, as OSCBF barriers of every robot with controller: oscbf. Each entry:
 #   path:      prim path relative to the scene root, as dataset.tracked_objects (one prim, no pattern)
-#   shape:     collision (one box per collider gprim under it: the bin's 9 Cubes keep its inside free) | obb (one box)
+#   shape:     collision (one box per collider gprim under it, one barrier each: the bin's 9 Cubes keep its inside free) | obb (one box)
 #   margin:    m kept clear of the boxes, default 0.01
 #   kinematic: true makes its rigid body kinematic at registration (never an articulation); default false
 # A bad entry, or a path with no prim, fails the registration. The poses are read at registration, on play,
 # and after every Randomize and Reset; obstacle_update_hz > 0 also reads them that often while playing
-# (2 bins: ~0.2 ms a read, S2b obstacles report).
+# (2 bins: 0.25-0.29 ms a read in Isaac, S2b obstacles report).
 obstacles:
   - {path: '/bin_0', shape: collision}
   - {path: '/bin_1', shape: collision}
