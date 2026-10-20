@@ -77,15 +77,15 @@ def test_the_zone_redraw_bounds():
 
 
 
-def test_a_failure_on_the_second_node_restores_the_first(monkeypatch):
+def test_a_failure_on_the_second_node_restores_both(monkeypatch):
     nodes = named()
     before = {name: dict(node.attrs) for name, node in nodes.items()}
     monkeypatch.setattr(rg, "_get", lambda node, attr: node.attrs[attr])
 
     def write(node, attr, value):
-        if node is nodes["cabinet_top_state"] and value == [-0.12]:
-            raise RuntimeError("write failed")
         node.attrs[attr] = value
+        if node is nodes["cabinet_top_state"] and attr == "inputs:upper":
+            raise RuntimeError("write failed")  # after inputs:lower was written: it must come back too
 
     monkeypatch.setattr(rg, "_set", write)
     with pytest.raises(RuntimeError, match="write failed"):

@@ -68,7 +68,9 @@ class Scene(SceneOrchestrator):
 
     colors = ["red", "yellow", "green", "blue"]
 
-    def randomize(self, *, seed=None, inject=None, zone=None):
+    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None):
+        if arrangement is not None:
+            raise ValueError("cube_stack does not support arrangements")
         # Draw until no two cubes are too close to grasp. Each draw advances the episode
         # counter, i.e. takes the next seed, so the sequence is still reproducible from
         # the master seed. A fixed seed or injected values give the same layout every

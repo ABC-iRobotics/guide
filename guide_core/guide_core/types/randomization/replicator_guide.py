@@ -291,10 +291,13 @@ def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
 def events(doc: dict) -> tuple[str, str | None]:
     """The file's (already scene-suffixed) custom-event names: the pose event and, if the file has
     one, the guide_randomize_joints event."""
-    names = [g["trigger.on_custom_event"]["event_name"] for g in doc.values()
-             if isinstance(g, dict) and "trigger.on_custom_event" in g]
-    main = [n for n in names if not n.startswith(JOINT_EVENT)]
-    joint = [n for n in names if n.startswith(JOINT_EVENT)]
+    names = {g["trigger.on_custom_event"]["event_name"] for g in doc.values()
+             if isinstance(g, dict) and "trigger.on_custom_event" in g}  # reset.yaml repeats its one name
+    joint = sorted(n for n in names if re.fullmatch(rf"{JOINT_EVENT}(_Scene_\d+)?", n))
+    main = sorted(names - set(joint))
+    for kind, found in (("pose", main), ("joint", joint)):
+        if len(found) > 1:
+            raise ValueError(f"randomize.yaml has several {kind} events: {', '.join(found)}")
     if not main:
         raise ValueError("randomize.yaml needs a trigger.on_custom_event group")
     return main[0], (joint[0] if joint else None)
@@ -416,8 +419,8 @@ def fire(
 ) -> dict:
     """Seed (if given), pin an arrangement's ``values`` (if given), aim the zone randomizer, fire the
     file's trigger and let it run; then place the guide.fixture_pose fixtures by their welds and,
-    JOINT_DELAY_FRAMES physics frames later, fire guide_randomize_joints and write the
-    guide.joint_state joints. Returns the named samples. Used for randomize (seeded, zoned,
+    JOINT_DELAY_FRAMES physics frames after the pose event's weld write, fire guide_randomize_joints
+    and write the guide.joint_state joints. Returns the named samples. Used for randomize (seeded, zoned,
     arranged) and reset (none). ``values`` = {named distribution: value}, pinned to lower = upper =
     value for this fire only (restored after, on error too); a bad name, node or value raises before
     anything is sent."""

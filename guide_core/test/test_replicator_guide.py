@@ -141,3 +141,14 @@ def test_guide_nodes_take_uniform_distributions_only(og):
     two = Node({"inputs:lower": [0.0, 0.0], "inputs:upper": [1.0, 1.0]})
     with pytest.raises(ValueError, match="one or three"):
         rg.attribute_type(two)
+
+
+def test_events_match_exact_names_and_refuse_a_second_event_of_a_class():
+    def group(name):
+        return {"trigger.on_custom_event": {"event_name": name}}
+
+    # a pose event whose name merely starts like the joint event is still a pose event
+    assert rg.events({"e": group("guide_randomize_joints_extra_Scene_1")}) == ("guide_randomize_joints_extra_Scene_1", None)
+    with pytest.raises(ValueError, match="guide_other_Scene_1, guide_randomize_Scene_1"):
+        rg.events({"a": group("guide_randomize_Scene_1"), "b": group("guide_other_Scene_1")})
+    assert rg.events({"a": group("guide_reset_Scene_2"), "b": group("guide_reset_Scene_2")})[0] == "guide_reset_Scene_2"
