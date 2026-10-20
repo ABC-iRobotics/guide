@@ -510,8 +510,8 @@ def scene_num_zones() -> int:
 
 
 def zoned_request(zone_counts: dict, path: str = "") -> Demonstration.Request:
-    """Build a Demonstration request: ``zoned_request({2: 4, 16: 10})`` -> 4 demos
-    with the cube in zone 2 and 10 in zone 16."""
+    """Build a Demonstration request: ``zoned_request({2: 4, 10: 10})`` -> 4 demos
+    with the cube in zone 2 and 10 in zone 10."""
     zones = [int(z) for z in zone_counts]
     counts = [int(zone_counts[z]) for z in zones]
     return Demonstration.Request(path=path, zones=zones, counts=counts)

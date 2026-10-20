@@ -207,12 +207,12 @@ parallel arrays saying how many successful episodes to record per zone:
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
   "{path: '~/dataset/block_bin', zones: [], counts: [5]}"
 
-# 4 demonstrations with the target cube in zone 2, and 10 in zone 16
+# 4 demonstrations with the target cube in zone 2, and 10 in zone 10
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
-  "{path: '~/dataset/block_bin', zones: [2, 16], counts: [4, 10]}"
+  "{path: '~/dataset/block_bin', zones: [2, 10], counts: [4, 10]}"
 
 # 5 demonstrations in EVERY zone — zone -1 sweeps the whole grid
-# (block_bin has 20 zones, so this records 100 episodes)
+# (block_bin has 12 zones, so this records 60 episodes)
 ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstration \
   "{path: '~/dataset/block_bin', zones: [-1], counts: [5]}"
 ```
@@ -336,7 +336,7 @@ node after the group randomizer tiles a named uniform position distribution; `bl
     guide.zone:
       distribution: blocks_position     # region = that distribution's lower/upper
       path_pattern: '/blocks/[^/]+$'    # narrowed to the zone target per episode
-      resolution: 0.1                   # 0.1 m cells -> 5 columns x 4 rows = 20 zones
+      resolution: 0.1                   # 0.1 m cells -> 3 columns x 4 rows = 12 zones
 ```
 
 In an instruction-list file, the grid goes on the position spec:

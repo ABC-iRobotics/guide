@@ -12,7 +12,7 @@ up and drops it into that bin through MoveIt 2.
 | `block_bin/scene.py` | `Scene`: draws the colour and the side, answers Randomize with the target block, the goal bin (`/bin_0` left, `/bin_1` right) and the task, makes the drawn block the zone target, and narrows the success check to that block in that bin. |
 | `block_bin/solve_task.py` | The GUIDE-EX tree (`PickAndPlace` TASK: Unclutch, StartRecording, GetTargetPose, WaitForCameras, Pick, Place, Return, CheckSuccess, StopRecording, with a regrasp and a retreat-via-rest recovery) and the `generate_demonstration` service. |
 | `config/init.yaml` | USD, robot, cameras (top, base, wrist: RGB, depth, instance segmentation), dataset features, 10 fps, `dataset.segmentation` (ADE20K colours: blocks `box`, bins `basket`, the robot `computer`, on black), and `dataset.camera_transition`: every episode opens with every camera on `base`'s pose, easing onto its own mount over 2 s while the arm holds still; those 20 frames carry the subtask `Startup`. |
-| `config/randomize.yaml` | Replicator YAML: the blocks uniform over the table with any yaw, the bins fixed, a 0.1 m zone grid (5 x 4 = 20 zones) for the drawn block. |
+| `config/randomize.yaml` | Replicator YAML: the blocks uniform over the table with any yaw, the bins fixed, a 0.1 m zone grid (3 x 4 = 12 zones) for the drawn block. |
 | `config/reset.yaml` | Replicator YAML for the Reset service: blocks in a row, bins, arm and fingers at home. |
 | `config/success.yaml` | `is_prim_contained`: the block inside the bin. |
 | `launch/bringup.launch.py` | Per scene (`num_env`, default 1): MoveIt (`franka_fr3_moveit_config`'s `guide_moveit.launch.py`) and the `solve_task` node under the `.venv` Python, given the controller, the camera transition's duration and `dataset.fps` from `config/init.yaml`; WaitForCameras holds the arm for the duration plus one frame period. |
@@ -28,7 +28,7 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
   "{path: '', zones: [-1], counts: [5]}"
 ```
 
-`zones: [-1]` records `counts[0]` successful episodes in each of the 20 zones, `zones: []`
+`zones: [-1]` records `counts[0]` successful episodes in each of the 12 zones, `zones: []`
 draws the block anywhere; an empty `path` writes under `~/dataset`.
 
 Policy-evaluation tools for this task are in the separate `block_bin_eval` package, outside

@@ -21,8 +21,11 @@ place_blocks:
             distribution.uniform:                # absolute bounds, metres
               # z: the 5.15 cm cube resting on the table top (0.0153) is at 0.041;
               # 1 mm above that it drops into place instead of popping out of it.
-              lower: [-0.25, 0.0, 0.042]
-              upper: [ 0.25, 0.4, 0.042]
+              # x (/blocks is turned -90 deg: x is the robot's lateral axis) stops at +-0.15:
+              # out to +-0.25, a block near a bin wall left the hand or the wrist camera
+              # pushing the bin under OSCBF on a quarter of the grasps.
+              lower: [-0.15, 0.0, 0.042]
+              upper: [ 0.15, 0.4, 0.042]
               name: blocks_position              # named: samples are recorded per episode
           rotation:
             distribution.uniform:                # Euler XYZ, degrees
@@ -53,4 +56,4 @@ with_episode:
     guide.zone:                                  # after place_blocks: re-draws the zone target in its cell
       distribution: blocks_position              # region = that node's lower/upper
       path_pattern: '/blocks/[^/]+$'             # narrowed to the target prim per episode
-      resolution: 0.1                            # 5 x 4 = 20 cells, row-major from the min corner
+      resolution: 0.1                            # 3 x 4 = 12 cells, row-major from the min corner
