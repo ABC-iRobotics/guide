@@ -10,7 +10,8 @@ up and drops it into that bin through MoveIt 2.
 | Path | Contents |
 |---|---|
 | `block_bin/scene.py` | `Scene`: draws the colour and the side, answers Randomize with the target block, the goal bin (`/bin_0` left, `/bin_1` right) and the task, makes the drawn block the zone target, and narrows the success check to that block in that bin. |
-| `block_bin/solve_task.py` | The GUIDE-EX tree (`PickAndPlace` TASK: Unclutch, StartRecording, GetTargetPose, WaitForCameras, Pick, Place, Return, CheckSuccess, StopRecording, with a regrasp and a retreat-via-rest recovery) and the `generate_demonstration` service. |
+| `block_bin/solve_task.py` | Each episode: randomizes the scene, builds the context, loads the GUIDE-EX tree from `config/recipes/Episode.yaml` (the gripper joint and the camera transition's hold as recipe values) and runs it; serves `generate_demonstration`. |
+| `config/recipes/Episode.yaml` | The tree: guide_ex's `PickAndPlace` TASK (`guide_ex/guide_ex/recipes/`: Unclutch, StartRecording, GetTargetPose, WaitForCameras, Pick, Place, Return, CheckSuccess, StopRecording, with a regrasp and a retreat-via-rest recovery) with block_bin's 28 cm lift and -90° regrasp turn as overrides. |
 | `config/init.yaml` | USD, robot, cameras (top, base, wrist: RGB, depth, instance segmentation), dataset features, 10 fps, `dataset.segmentation` (ADE20K colours: blocks `box`, bins `basket`, the robot `computer`, on black), and `dataset.camera_transition`: every episode opens with every camera on `base`'s pose, easing onto its own mount over 2 s while the arm holds still; those 20 frames carry the subtask `Startup`. |
 | `config/randomize.yaml` | Replicator YAML: the blocks uniform over the table with any yaw, the bins fixed, a 0.1 m zone grid (3 x 4 = 12 zones) for the drawn block. |
 | `config/reset.yaml` | Replicator YAML for the Reset service: blocks in a row, bins, arm and fingers at home. |

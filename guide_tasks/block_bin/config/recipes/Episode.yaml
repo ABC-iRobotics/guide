@@ -1,0 +1,22 @@
+# block_bin's episode: guide_ex's PickAndPlace, cube into bin, with block_bin's two numbers.
+ref: PickAndPlace
+overrides:
+  # Lift 28 cm, not 20, before heading for the bin: 20 cm taught policies a lift too shallow to
+  # clear the bin walls (their main failure mode).
+  Pick.TransformCubeRetreatPose:
+    ref: TransformPose
+    alias: TransformCubeRetreatPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.28]}
+    output_map: {pose: cube_retreat_pose}
+  # Turn the grasp -90 deg, not +90: the same pair of faces with the hand turned 180 deg. From the
+  # FR3's home wrist (q7 = +45 deg) +90 pushed joint 7 into its limit for left-of-centre cubes
+  # (offline sweep: 25/25 reached at -90 vs 19/25 at +90).
+  PickRecovery.RotateCubePose:
+    ref: TransformPose
+    alias: RotateCubePose
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['z', -1.5707963267948966]}}
+    output_map: {pose: cube_pose}
