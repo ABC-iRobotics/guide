@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from guide_ex.recipe.solve import context, dataset_path, recipe_values
+from guide_ex.recipe.solve import context, dataset_path, episodes_saved, recipe_values
 
 REPLY = json.dumps({"task": "put the bowl on the plate", "target": "/objects/b", "goal": [{"on": ["/objects/b", "/objects/p"]}],
                     "subtasks": ["Pick up the bowl.", "Place it on the plate."]})
@@ -40,3 +40,13 @@ def test_recipe_values_from_a_profile_entry():
         "episode": {"camera_hold": False, "hold_seconds": 0.0}}
     held = recipe_values(entry, {"dataset": {"fps": 20, "camera_transition": {"enabled": True, "duration": 2.0}}})
     assert held["episode"] == {"camera_hold": True, "hold_seconds": 2.05}
+
+
+def test_episodes_saved_counts_what_the_recorder_wrote(tmp_path):
+    assert episodes_saved(str(tmp_path / "none")) == 0  # no dataset dir: nothing written
+    for name, n in (("dataset_0_0_a", 2), ("dataset_0_0_b", 1)):
+        (tmp_path / name / "meta").mkdir(parents=True)
+        (tmp_path / name / "meta/info.json").write_text(json.dumps({"total_episodes": n}))
+    (tmp_path / "dataset_0_0_c/meta").mkdir(parents=True)
+    (tmp_path / "dataset_0_0_c/meta/info.json").write_text("{")  # unreadable: skipped
+    assert episodes_saved(str(tmp_path)) == 3

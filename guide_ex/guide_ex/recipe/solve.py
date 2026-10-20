@@ -68,6 +68,18 @@ def dataset_path(task: Path, given: str) -> str:
     return str(Path(given or f"~/dataset/{task.name}").expanduser())
 
 
+def episodes_saved(dataset: str) -> int:
+    """Episodes on disk under the dataset dir: the recorder nests dataset_<sim>_<scene>_<ts> there and
+    LeRobot rewrites meta/info.json on every saved episode. 0 when nothing was ever written."""
+    total = 0
+    for info in Path(dataset).glob("dataset_*/meta/info.json"):
+        try:
+            total += int(json.loads(info.read_text()).get("total_episodes", 0))
+        except (OSError, ValueError):
+            pass
+    return total
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--task", type=Path, required=True)
@@ -116,12 +128,15 @@ def main(argv=None) -> int:
                                       timeout_sec=600.0)
             robot.sleep(SETTLE_S)
             ctx = context(args.namespace, robot, entry, dataset, reply.message)
+            saved = episodes_saved(dataset)
             try:
                 result = load(recipes / "Episode.yaml", values=values, search_paths=[recipes]).execute(ctx)
                 ok = result.status == DemoStatus.PERFECT and bool(result.outputs.get("task_success"))  # as block_bin's solver
                 why = result.outputs.get("task_reason") or result.error_message
             except Exception as e:  # a failed attempt, not a failed run (block_bin's generator)
                 ok, why = False, repr(e)
+            if ok and episodes_saved(dataset) <= saved:  # Plan C Task 18: a solved episode the recorder never wrote
+                ok, why = False, "solved, but no episode was written to the dataset"
             done += ok
             robot.node.get_logger().info(f"[solve] attempt {attempts}: {'SUCCESS' if ok else f'FAILURE {why}'}")
             # an attempt that broke off leaves its episode open: drop it (a no-op when nothing is open)
