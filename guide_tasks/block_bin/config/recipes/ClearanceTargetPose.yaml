@@ -1,0 +1,37 @@
+# The library's GetTargetPose, then the finger axis (the grasp yaw, or +90 deg) with more room to the
+# other blocks: a finger landing on a neighbouring block 5 cm away stalled the hand over its top.
+# Every block is measured; the target itself is the one at the grasp position and is skipped.
+node_type: CompositeNode
+name: ClearanceTargetPose
+level: SEQUENCE
+dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, target: target}
+children:
+  - ref: GetPrimPose
+    alias: GetCubePose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: target}
+    output_map: {pose: cube_pose}
+  - ref: ProjectRotationToBaseZ
+    alias: ProjectCubeToBaseZ
+    dynamic_map: {pose: cube_pose}
+    output_map: {pose: cube_pose}
+  - ref: ReduceRotationToSymmetry
+    alias: MinimizeCubeRotation
+    dynamic_map: {pose: cube_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: cube_pose}
+  - ref: TransformPose
+    alias: TransformCubePoseForGripper
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
+    output_map: {pose: cube_pose}
+  - ref: GetPrimPoses
+    alias: GetBlockPoses
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args:
+      prim_paths: [/blocks/blue_block, /blocks/yellow_block, /blocks/green_block, /blocks/red_block]
+    output_map: {poses: block_poses}
+  - ref: ChooseClearanceYaw
+    dynamic_map: {pose: cube_pose, others: block_poses}
+    output_map: {pose: cube_pose}
+output_map: {cube_pose: cube_pose}

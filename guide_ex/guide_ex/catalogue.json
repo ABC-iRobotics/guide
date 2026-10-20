@@ -475,6 +475,30 @@
       "used_by": []
     },
     {
+      "doc": "Pick, for a top-down grasp of a square-footprint block, the one of its two distinct finger axes (the pose's yaw psi, or psi + 90 deg) whose finger pads stay farther from the other blocks.",
+      "inputs": [
+        "pose",
+        "others",
+        "block_size=0.0515",
+        "finger_gap=0.08",
+        "pad_depth=0.018",
+        "pad_width=0.02",
+        "q7_home=0.7853981633974483",
+        "q7_limit=2.8",
+        "same_block=0.01",
+        "enough=0.02"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "ChooseClearanceYaw",
+      "outputs": [
+        "clearance",
+        "pose"
+      ],
+      "source": "utility/rotation.py",
+      "used_by": []
+    },
+    {
       "doc": "``items[index + shift]``: pick from a list by an index another node computed.",
       "inputs": [
         "items",

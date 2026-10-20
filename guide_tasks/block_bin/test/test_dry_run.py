@@ -62,7 +62,10 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, st
 
     assert st.solveTask(0, robot)
 
-    assert asked == [("/Scene_0/blocks/red_block", "fr3_link0"), ("/Scene_0/bin_0", "fr3_link0")]
+    # the target, then all four blocks (ClearanceTargetPose looks for neighbours to keep the fingers off;
+    # here each answers CUBE, i.e. is the target itself, so the grasp keeps its yaw), then the bin
+    blocks = [f"/Scene_0/blocks/{c}_block" for c in ("blue", "yellow", "green", "red")]
+    assert asked == [(p, "fr3_link0") for p in ["/Scene_0/blocks/red_block", *blocks, "/Scene_0/bin_0"]]
     xyz = [tuple(round(v, 3) for v in (m.position.x, m.position.y, m.position.z)) for m in moves if hasattr(m, "position")]
     # rest, unclutch, cube approach / grasp / retreat, bin approach, rest: all in fr3_link0
     assert xyz == [(0.3, 0.0, 0.5), (0.3, 0.0, 0.4), (0.5, 0.1, 0.112), (0.5, 0.1, 0.022), (0.5, 0.1, 0.292),

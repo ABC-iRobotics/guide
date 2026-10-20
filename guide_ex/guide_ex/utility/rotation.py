@@ -143,3 +143,96 @@ class ReduceRotationToSymmetry(BaseNode):
             status=DemoStatus.PERFECT,
             outputs={"pose": rebuild(z_only), "yaw": reduced},
         )
+
+
+def _rect(centre, yaw: float, half_x: float, half_y: float):
+    c, s = np.cos(yaw), np.sin(yaw)
+    return np.asarray(centre, float), np.array([[c, s], [-s, c]]), (half_x, half_y)
+
+
+def _separation(a, b) -> float:
+    """Signed gap between two rectangles (separating-axis test): the largest gap along any
+    edge normal, negative when they overlap (minus the shallowest overlap)."""
+    (ca, axa, ha), (cb, axb, hb) = a, b
+    d = cb - ca
+    gaps = [
+        abs(u @ d) - sum(h * abs(u @ v) for v, h in zip(axa, ha)) - sum(h * abs(u @ v) for v, h in zip(axb, hb))
+        for u in (*axa, *axb)
+    ]
+    return max(gaps)
+
+
+@node()
+class ChooseClearanceYaw(BaseNode):
+    """
+    Pick, for a top-down grasp of a square-footprint block, the one of its two distinct finger
+    axes (the pose's yaw psi, or psi + 90 deg) whose finger pads stay farther from the other
+    blocks.
+
+    The pads sit at +-(finger_gap / 2) along the finger axis (the hand's y axis), each
+    ``pad_depth`` deep and ``pad_width`` wide, centred on the grasp position. A pad over a
+    neighbouring block lands on it instead of beside the target. The turn to psi + 90 is
+    kept only if the arm can make it: joint 7 follows ``q7 = q7_home + q1 - yaw`` for a
+    down-pointing hand, q1 being the heading of the grasp from the base; |q7| must stay
+    within ``q7_limit``. Otherwise (and on a tie) the pose is returned unchanged.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("ChooseClearanceYaw", alias, dynamic_map, static_args, output_map)
+
+    def run(
+        self,
+        pose: Pose,
+        others: list,
+        block_size: float = 0.0515,
+        finger_gap: float = 0.08,
+        pad_depth: float = 0.018,
+        pad_width: float = 0.02,
+        q7_home: float = np.pi / 4,
+        q7_limit: float = 2.8,
+        same_block: float = 0.01,
+        enough: float = 0.02,
+    ) -> ExecutionResult:
+        """
+        Args:
+            pose: The grasp pose (a top-down pose in the base frame, e.g. Rz(psi) Rx(pi)).
+            others: Poses of the blocks to keep clear of, in the same frame; any within
+                ``same_block`` metres of the grasp position is the target itself and ignored.
+            block_size: Edge of the (square) blocks, metres.
+            finger_gap: Opening between the pads, metres.
+            pad_depth: Pad thickness along the finger axis, metres.
+            pad_width: Pad width across the finger axis, metres.
+            q7_home: Joint 7 when the hand's yaw is 0 with q1 = 0 (FR3 home: pi/4).
+            q7_limit: Largest |q7| allowed, radians (FR3: 2.8973, less a margin).
+            same_block: Distance under which a pose in ``others`` is the target.
+            enough: Clearance (metres) past which more room is no better, so that distant
+                blocks never turn the hand.
+        Returns:
+            ExecutionResult with ``pose`` (same position, yaw psi or psi + 90 deg) and the
+            ``clearance`` (metres, signed) of the pads at the chosen yaw.
+        """
+        rot, rebuild = _decompose(pose)
+        yaw = _base_yaw(rot, "x")
+        xy = np.asarray(pose.position.to_numpy(), float)[:2]
+        blocks = []
+        for other in others:
+            centre = np.asarray(other.position.to_numpy(), float)[:2]
+            if np.linalg.norm(centre - xy) > same_block:
+                blocks.append(_rect(centre, _base_yaw(other.orientation.to_scipy(), "auto"),
+                                    block_size / 2, block_size / 2))
+
+        def clearance(theta: float) -> float:
+            ey = np.array([-np.sin(theta), np.cos(theta)])
+            reach = (finger_gap + pad_depth) / 2
+            pads = [_rect(xy + side * reach * ey, theta + np.pi / 2, pad_depth / 2, pad_width / 2)
+                    for side in (1, -1)]
+            return min([enough, *(_separation(p, b) for p in pads for b in blocks)])
+
+        q7 = q7_home + np.arctan2(xy[1], xy[0]) - (yaw + np.pi / 2)
+        q7 = (q7 + np.pi) % (2 * np.pi) - np.pi
+        keep, turn = clearance(yaw), clearance(yaw + np.pi / 2)
+        if abs(q7) <= q7_limit and turn > keep:
+            rot, keep = R.from_euler("z", np.pi / 2) * rot, turn
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": rebuild(rot), "clearance": float(keep)})
