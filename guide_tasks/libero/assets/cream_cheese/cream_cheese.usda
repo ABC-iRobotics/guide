@@ -27,9 +27,13 @@ def Xform "cream_cheese" (
         )
         {
             over "object" (
-                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
+                point3f physics:centerOfMass = (0.000072195755, 0.00006739321, -0.000054813678)
+                float3 physics:diagonalInertia = (0.000008653936, 0.000007173229, 0.0000021563912)
+                float physics:mass = 0.012395264
+                quatf physics:principalAxes = (-0.003986648, 0.7074628, -0.0023572764, 0.70673543)
                 custom float physxRigidBody:maxDepenetrationVelocity = 0.1
 
                 over "Box"

@@ -27,9 +27,13 @@ def Xform "akita_black_bowl" (
         )
         {
             over "object" (
-                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
+                point3f physics:centerOfMass = (0.00066729606, -0.00018921234, 0.027746834)
+                float3 physics:diagonalInertia = (0.00005493069, 0.000033967848, 0.000033598066)
+                float physics:mass = 0.045899782
+                quatf physics:principalAxes = (0.036437996, 0.70208234, -0.03639281, 0.71023107)
                 custom float physxRigidBody:maxDepenetrationVelocity = 0.1
 
                 over "Box"

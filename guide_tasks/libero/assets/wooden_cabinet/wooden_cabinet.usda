@@ -120,6 +120,15 @@ def Xform "wooden_cabinet" (
                             uniform token purpose = "guide"
                         }
 
+                        over "top_level" (
+                            prepend apiSchemas = ["PhysicsDriveAPI:linear"]
+                        )
+                        {
+                            float drive:linear:physics:damping = 50
+                            float drive:linear:physics:stiffness = 0
+                            float drive:linear:physics:targetVelocity = 0
+                        }
+
                         over "wooden_cabinet_top_vis" (
                             prepend apiSchemas = ["MaterialBindingAPI"]
                         )
@@ -182,6 +191,15 @@ def Xform "wooden_cabinet" (
                             uniform token purpose = "guide"
                         }
 
+                        over "middle_level" (
+                            prepend apiSchemas = ["PhysicsDriveAPI:linear"]
+                        )
+                        {
+                            float drive:linear:physics:damping = 50
+                            float drive:linear:physics:stiffness = 0
+                            float drive:linear:physics:targetVelocity = 0
+                        }
+
                         over "wooden_cabinet_middle_vis" (
                             prepend apiSchemas = ["MaterialBindingAPI"]
                         )
@@ -242,6 +260,15 @@ def Xform "wooden_cabinet" (
                         over "Box_8"
                         {
                             uniform token purpose = "guide"
+                        }
+
+                        over "bottom_level" (
+                            prepend apiSchemas = ["PhysicsDriveAPI:linear"]
+                        )
+                        {
+                            float drive:linear:physics:damping = 50
+                            float drive:linear:physics:stiffness = 0
+                            float drive:linear:physics:targetVelocity = 0
                         }
 
                         over "wooden_cabinet_bottom_vis" (

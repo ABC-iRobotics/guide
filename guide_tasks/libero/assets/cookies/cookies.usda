@@ -27,9 +27,13 @@ def Xform "cookies" (
         )
         {
             over "object" (
-                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
+                point3f physics:centerOfMass = (-0.0000698567, 0.0002435232, 0.00013419826)
+                float3 physics:diagonalInertia = (0.000016670501, 0.000011258249, 0.0000065416816)
+                float physics:mass = 0.01905736
+                quatf physics:principalAxes = (0.50214654, 0.4980303, -0.50016856, 0.49964598)
                 custom float physxRigidBody:maxDepenetrationVelocity = 0.1
 
                 over "Box"

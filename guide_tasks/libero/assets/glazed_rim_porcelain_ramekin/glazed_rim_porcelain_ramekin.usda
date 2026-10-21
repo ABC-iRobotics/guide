@@ -27,9 +27,13 @@ def Xform "glazed_rim_porcelain_ramekin" (
         )
         {
             over "object" (
-                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
+                point3f physics:centerOfMass = (-0.00059400185, -0.00010528831, 0.019304277)
+                float3 physics:diagonalInertia = (0.00003675552, 0.000023239152, 0.000022557413)
+                float physics:mass = 0.038049944
+                quatf physics:principalAxes = (-0.019318715, 0.7032387, 0.021813376, 0.7103564)
                 custom float physxRigidBody:maxDepenetrationVelocity = 0.1
 
                 over "Box"

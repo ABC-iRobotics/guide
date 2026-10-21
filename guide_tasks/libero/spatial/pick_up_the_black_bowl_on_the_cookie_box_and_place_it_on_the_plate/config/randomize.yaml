@@ -68,23 +68,23 @@ place_akita_black_bowl_1:
           position:
             distribution.uniform:
               lower:
-              - 0.0764816
-              - 0.0253612
-              - 0.0169197
+              - 0.0764815
+              - 0.025361
+              - 0.0171199
               upper:
-              - 0.0764816
-              - 0.0253612
-              - 0.0169197
+              - 0.0764815
+              - 0.025361
+              - 0.0171199
               name: akita_black_bowl_1_position
           rotation:
             distribution.uniform:
               lower:
-              - 0.0001
-              - 0.003
+              - -0.0
+              - 0.0021
               - 90.0
               upper:
-              - 0.0001
-              - 0.003
+              - -0.0
+              - 0.0021
               - 90.0
               name: akita_black_bowl_1_rotation
           write_to_usd: true
@@ -129,11 +129,11 @@ place_akita_black_bowl_2:
               lower:
               - 0.0441694
               - -0.2711731
-              - 0.2168129
+              - 0.2168132
               upper:
               - 0.0441694
               - -0.2711731
-              - 0.2168129
+              - 0.2168132
               name: akita_black_bowl_2_position
           rotation:
             distribution.uniform:
@@ -187,22 +187,22 @@ place_cookies_1:
             distribution.uniform:
               lower:
               - 0.0764821
-              - 0.0253769
-              - 0.0091425
+              - 0.0253767
+              - 0.0093101
               upper:
               - 0.0764821
-              - 0.0253769
-              - 0.0091425
+              - 0.0253767
+              - 0.0093101
               name: cookies_1_position
           rotation:
             distribution.uniform:
               lower:
-              - 0.0001
-              - 0.0029
+              - 0.0
+              - 0.0021
               - 90.0
               upper:
-              - 0.0001
-              - 0.0029
+              - 0.0
+              - 0.0021
               - 90.0
               name: cookies_1_rotation
           write_to_usd: true

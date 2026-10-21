@@ -150,6 +150,15 @@ def Xform "flat_stove" (
                             uniform token purpose = "guide"
                         }
 
+                        over "button" (
+                            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+                        )
+                        {
+                            float drive:angular:physics:damping = 0.017453292
+                            float drive:angular:physics:stiffness = 0
+                            float drive:angular:physics:targetVelocity = 0
+                        }
+
                         over "stove_knob_button_vis" (
                             prepend apiSchemas = ["MaterialBindingAPI"]
                         )

@@ -27,9 +27,13 @@ def Xform "plate" (
         )
         {
             over "object" (
-                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
             )
             {
+                point3f physics:centerOfMass = (0.00019482894, 0.0018705128, 0.007571184)
+                float3 physics:diagonalInertia = (0.00006499961, 0.000033801683, 0.000031966196)
+                float physics:mass = 0.03048326
+                quatf physics:principalAxes = (0.49387708, 0.49932933, -0.5007634, 0.5059562)
                 custom float physxRigidBody:maxDepenetrationVelocity = 0.1
 
                 over "Box"

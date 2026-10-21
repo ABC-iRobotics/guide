@@ -18,23 +18,23 @@ flat_stove_1_rotation:
 akita_black_bowl_1_position:
 - -0.075
 - -0.006165
-- -0.001842
+- -0.001614
 akita_black_bowl_1_rotation:
-- -0.001
+- -0.0012
 - 0.0008
 - 90.0
 akita_black_bowl_2_position:
 - 0.000213
-- 0.325029
-- -0.00174
+- 0.325033
+- -0.001607
 akita_black_bowl_2_rotation:
-- -0.0116
-- 0.1158
+- -0.002
+- 0.0092
 - 82.1205
 cookies_1_position:
 - 0.059327
 - 0.034504
-- 0.00921
+- 0.009359
 cookies_1_rotation:
 - -0.0002
 - -0.0001
@@ -42,18 +42,18 @@ cookies_1_rotation:
 glazed_rim_porcelain_ramekin_1_position:
 - -0.207834
 - 0.211274
-- -0.00084
+- -0.000672
 glazed_rim_porcelain_ramekin_1_rotation:
 - 0.0
-- 0.0003
+- 0.0004
 - 90.0
 plate_1_position:
-- 0.089501
-- 0.180907
-- 0.002443
+- 0.089502
+- 0.180903
+- 0.002495
 plate_1_rotation:
-- -0.021
-- 0.1068
+- -0.0004
+- 0.0101
 - 89.296
 wooden_cabinet_1_top_level_state: 0.0
 wooden_cabinet_1_middle_level_state: 0.0
