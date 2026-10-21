@@ -1,5 +1,5 @@
 # Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle
-# horizontally, pull back in 3 cm steps until the part has slid 15 cm from where it started (read from
+# horizontally, pull back in 3 cm steps until the part has slid 14 cm from where it started (read from
 # the part's pose, so the stop follows the drawer's joint value), let go and back away.
 # HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the
 # drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar;
@@ -7,7 +7,8 @@
 # wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411;
 # a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the
 # fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the
-# grasp slips), and the 3 cm step / 15 cm stop (the success is 14 cm).
+# grasp slips), and the 3 cm step / 14 cm stop (the success; 15 cm let a float sum a hair short of
+# 5 x 3 cm ask for a 6th step into the drawer's end stop, Isaac pilot 2026-10-21).
 node_type: CompositeNode
 name: Pull
 level: SUBTASK
@@ -59,13 +60,13 @@ children:
     dynamic_map: {timer: robot}
     static_args: {seconds: 0.5}
   # Each pass moves the hand 3 cm further back (handle_pose accumulates in the loop's context) and
-  # measures the part; 8 passes (24 cm) without reaching 15 cm fail the subtask.
+  # measures the part; 8 passes (24 cm) without reaching 14 cm fail the subtask.
   - node_type: CompositeNode
     name: PullUntilOpen
     level: SEQUENCE
     mode: loop
     max_loops: 8
-    condition_expr: part_travel >= 0.15
+    condition_expr: part_travel >= 0.14
     dynamic_map:
       robot: robot
       sim_namespace: sim_namespace
@@ -91,6 +92,8 @@ children:
         alias: MeasurePartTravel
         dynamic_map: {pose: part_now, reference: part_start}
         output_map: {distance: part_travel}
+    fallbacks:
+      PullStep: {ref: PullEndStop}
   - ref: OpenGripper
     alias: OpenOnHandle
   - ref: WaitForSeconds

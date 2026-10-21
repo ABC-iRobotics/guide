@@ -148,7 +148,7 @@
       ]
     },
     {
-      "doc": "Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle horizontally, pull back in 3 cm steps until the part has slid 15 cm from where it started (read from the part's pose, so the stop follows the drawer's joint value), let go and back away. HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar; the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411; a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the grasp slips), and the 3 cm step / 15 cm stop (the success is 14 cm).",
+      "doc": "Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle horizontally, pull back in 3 cm steps until the part has slid 14 cm from where it started (read from the part's pose, so the stop follows the drawer's joint value), let go and back away. HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar; the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411; a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the grasp slips), and the 3 cm step / 14 cm stop (the success; 15 cm let a float sum a hair short of 5 x 3 cm ask for a 6th step into the drawer's end stop, Isaac pilot 2026-10-21).",
       "inputs": [
         "part",
         "pull",
@@ -271,6 +271,20 @@
         "PickAndPlace",
         "PickRecovery",
         "PutOn"
+      ]
+    },
+    {
+      "doc": "Pull's fallback when a pull step stalls: the drawer has reached its end stop (the hand holds it there), so settle and resume at the travel measurement; PullUntilOpen's 14 cm check then judges, and a drawer stuck short of it fails after the retries (Isaac pilot 2026-10-21: the top drawer's 6th step ran into its 16 cm stop).",
+      "inputs": [
+        "robot"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "PullEndStop",
+      "outputs": [],
+      "source": "sequences/PullEndStop.yaml",
+      "used_by": [
+        "Pull"
       ]
     },
     {
@@ -889,6 +903,7 @@
         "PickRecovery",
         "Place",
         "Pull",
+        "PullEndStop",
         "Release",
         "Return",
         "Unclutch"

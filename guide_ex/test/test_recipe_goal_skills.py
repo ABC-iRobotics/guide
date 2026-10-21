@@ -73,7 +73,7 @@ def test_the_handle_pose_has_the_hand_pointing_into_the_drawer_face_and_fingers_
 
 
 class Stub(BaseNode):
-    """Stands in for a leaf that needs the simulator: `run` is the function given."""
+    """Stands in for a leaf that needs the simulator: `run` is the function given (None fails the leaf)."""
     level = Layer.STEP
 
     def __init__(self, like, fn):
@@ -81,10 +81,11 @@ class Stub(BaseNode):
         self.fn = fn
 
     def run(self, **kw):
-        return ExecutionResult(status=DemoStatus.PERFECT, outputs=self.fn(**kw))
+        out = self.fn(**kw)
+        return ExecutionResult(status=DemoStatus.FAILURE if out is None else DemoStatus.PERFECT, outputs=out or {})
 
 
-def test_pull_stops_when_the_drawer_has_slid_15_cm():
+def test_pull_stops_when_the_drawer_has_slid_14_cm():
     """The hand backs off 3 cm a pass along the hand's -z (the drawer's -y), the stand-in drawer follows it."""
     loop = child(load({"ref": "Pull"}, values=VALUES), "PullUntilOpen")
     start = pose([0.6, 0.0, 0.3])
@@ -99,8 +100,28 @@ def test_pull_stops_when_the_drawer_has_slid_15_cm():
     hand = Pose.from_numpy(np.array([0.6, -0.1, 0.3]), R.from_euler("ZX", [np.pi, np.pi / 2]))
     result = loop.run(robot=None, sim_namespace="/Sim_0", scene_namespace="/Scene_0", part="p", part_start=start, handle_pose=hand)
 
-    assert result.status == DemoStatus.PERFECT and result.outputs["part_travel"] >= 0.15
-    assert len(goals) in (5, 6)  # 5 x 3 cm, a 6th if the float sum falls a hair short of 15 cm
+    assert result.status == DemoStatus.PERFECT and result.outputs["part_travel"] >= 0.14
+    assert len(goals) == 5  # 5 x 3 cm; never a 6th, which runs into the drawer's end stop (16 cm)
+
+
+def test_a_pull_step_stalled_on_the_end_stop_still_opens_the_drawer():
+    """A drawer lagging the hand by 1.2 cm is short after 5 passes; the 6th stalls at its 16 cm stop, PullEndStop
+    measures it there and the loop ends."""
+    loop = child(load({"ref": "Pull"}, values=VALUES), "PullUntilOpen")
+    start, goals = pose([0.6, 0.0, 0.3]), []
+
+    def step(target_pose, **kw):
+        goals.append(target_pose.position.to_numpy())
+        return None if -(goals[-1][1] + 0.1) > 0.16 else {}
+
+    loop.children[1] = Stub(loop.children[1], step)
+    loop.children[2] = Stub(loop.children[2], lambda **kw: {"part_now": pose(start.position.to_numpy() + [0, -min(-(goals[-1][1] + 0.1) - 0.012, 0.16), 0])})
+    end_stop = loop.fallbacks["PullStep"]
+    end_stop.children[0] = Stub(end_stop.children[0], lambda **kw: {})
+    hand = Pose.from_numpy(np.array([0.6, -0.1, 0.3]), R.from_euler("ZX", [np.pi, np.pi / 2]))
+    result = loop.run(robot=None, sim_namespace="/Sim_0", scene_namespace="/Scene_0", part="p", part_start=start, handle_pose=hand)
+
+    assert result.status == DemoStatus.PERFECT and result.outputs["part_travel"] >= 0.14 and len(goals) == 6
     np.testing.assert_allclose(goals[-1] - [0.6, -0.1, 0.3], [0, -0.03 * len(goals), 0], atol=1e-9)
 
 

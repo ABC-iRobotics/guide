@@ -1,0 +1,13 @@
+# Pull's fallback when a pull step stalls: the drawer has reached its end stop (the hand holds it there), so
+# settle and resume at the travel measurement; PullUntilOpen's 14 cm check then judges, and a drawer stuck
+# short of it fails after the retries (Isaac pilot 2026-10-21: the top drawer's 6th step ran into its 16 cm stop).
+node_type: RecoveryNode
+name: PullEndStop
+level: SEQUENCE
+dynamic_map: {robot: robot}
+resume_target: GetPartNow
+children:
+  - ref: WaitForSeconds
+    alias: WaitAtEndStop
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.2}
