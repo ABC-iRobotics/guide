@@ -117,7 +117,7 @@ def _cmd_check_bounding_box_collision(
 
 
 def _cmd_is_prim_clashing(
-    self, prim_path: str, scope: str | None = None, tolerance: float | None = None
+    self, prim_path: str, scope: str | None = None, tolerance: float | None = None, mesh_only: bool = False
 ) -> bool:
     # Force PhysX simulated transforms to write back to USD stage so ClashDetector sees current poses
     try:
@@ -153,9 +153,13 @@ def _cmd_is_prim_clashing(
         except Exception as e:
             self._logger.debug(f"[CLASH_DEBUG]   No xformOp:translate attribute: {e}")
 
+    if mesh_only and self._cd is None:
+        raise RuntimeError("mesh_only clash query needs isaacsim.util.clash_detection (Isaac Sim 6.0)")
     if self._cd is not None:
         res = self._cd.is_prim_clashing(prim)
         self._logger.debug(f"[CLASH_DEBUG]   is_prim_clashing returned: {res}")
+        if mesh_only:
+            return bool(res)
     else:
         # No mesh-level detector (extension not loaded): defer entirely to the
         # bounding-box overlap check below.
