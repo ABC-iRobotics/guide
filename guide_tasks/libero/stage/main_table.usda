@@ -65,6 +65,15 @@ def DomeLight "dome_light"
     token inputs:texture:format = "latlong"
     bool visibleInPrimaryRay = 1
 }
+def Cube "stove_front_region"
+{
+    double size = 1
+    token visibility = "invisible"
+    uniform token purpose = "guide"
+    double3 xformOp:translate = (-0.05, 0.21, -0.005)
+    float3 xformOp:scale = (0.08, 0.08, 0.014)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+}
 def Camera "agentview"
 {
     float focalLength = 25.294923
