@@ -66,14 +66,26 @@ dataset:
     colors:
       wooden_cabinet_1: ade20k:cabinet
       flat_stove_1: ade20k:stove
-      akita_black_bowl_1: ade20k:basket
-      akita_black_bowl_2:
-      - 140
+      akita_black_bowl_1:
       - 255
+      - 220
       - 0
-      cookies_1: ade20k:box
-      glazed_rim_porcelain_ramekin_1: ade20k:vase
-      plate_1: ade20k:plate
+      akita_black_bowl_2:
+      - 255
+      - 128
+      - 0
+      cookies_1:
+      - 128
+      - 128
+      - 128
+      glazed_rim_porcelain_ramekin_1:
+      - 255
+      - 255
+      - 255
+      plate_1:
+      - 0
+      - 80
+      - 255
       main_table: ade20k:table
       robot: ade20k:computer
     background:
