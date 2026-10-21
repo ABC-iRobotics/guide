@@ -4,7 +4,10 @@ values the GUIDE-EX library reads (Plan A contract addition 7, ruling 20). Task-
 ship no solver. FR3 only: irob_lerobot_ros has no Panda config (Plan C ruling R18).
 
     python -m guide_ex.recipe.solve --task <task dir> [--namespace /Sim_0/Scene_0] [--episodes 1]
-        [--attempts 3] [--dataset ~/dataset/<task>] [--arrangement demo_0]
+        [--attempts 3] [--dataset ~/dataset/<task>] [--arrangement demo_0 | --arrangements demo_0,demo_1,...]
+
+--arrangements records one episode per listed arrangement (--attempts each); one that fails them all is
+recorded from a free draw instead (--attempts more, log "fallback <id> -> free draw").
 """
 from __future__ import annotations
 
@@ -90,14 +93,35 @@ def draw(robot, request, timeout_sec: float = 600.0) -> tuple[str, str]:
     return reply.message, "" if reply.success else f"Randomize failed: {reply.message}"
 
 
+def run_episodes(arrangements, attempts: int, try_once, log=print) -> tuple[int, int, int]:
+    """One episode per arrangement, ``attempts`` tries each, then ``attempts`` tries from a free draw ("").
+    try_once(arrangement) -> bool. Returns (episodes done, tries made, fallbacks used)."""
+    done = tries = fallbacks = 0
+    for arr in arrangements:
+        for start in ([arr, ""] if arr else [""]):
+            if start != arr:
+                fallbacks += 1
+                log(f"[solve] fallback {arr} -> free draw")
+            ok = False
+            for _ in range(attempts):
+                tries += 1
+                if ok := try_once(start):
+                    break
+            if ok:
+                break
+        done += ok
+    return done, tries, fallbacks
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--task", type=Path, required=True)
     ap.add_argument("--namespace", default="/Sim_0/Scene_0")
     ap.add_argument("--episodes", type=int, default=1, help="successful episodes wanted")
-    ap.add_argument("--attempts", type=int, default=0, help="attempts allowed (default: 3 x episodes)")
+    ap.add_argument("--attempts", type=int, default=3, help="attempts allowed per episode")
     ap.add_argument("--dataset", default="", help="dataset directory (default: ~/dataset/<task dir name>)")
     ap.add_argument("--arrangement", default="", help="config/arrangements/<id> to start from (default: a free draw)")
+    ap.add_argument("--arrangements", default="", help="comma list of arrangement ids, one episode each (overrides --episodes)")
     args = ap.parse_args(argv)
 
     from irob_lerobot_ros.config import ActionType, FR3RobotConfig
@@ -129,33 +153,39 @@ def main(argv=None) -> int:
     values = recipe_values(entry, init)
     dataset = dataset_path(task, args.dataset)
     scene_id = context(args.namespace, robot, entry, dataset, "")["scene_id"]  # the one parse of the namespace
-    done = attempts = 0
+    log = robot.node.get_logger().info
+    count = 0
+
+    def try_once(arrangement: str) -> bool:
+        nonlocal count
+        count += 1
+        # 600 s: a Randomize on a recipe scene runs Replicator draws and settles the physics
+        reply, why = draw(robot, srv.Randomize.Request(id=scene_id, arrangement=arrangement))
+        if why:
+            log(f"[solve] attempt {count} ({arrangement or 'free'}): FAILURE {why}")
+            return False
+        robot.sleep(SETTLE_S)
+        ctx = context(args.namespace, robot, entry, dataset, reply)
+        saved = episodes_saved(dataset)
+        try:
+            result = load(recipes / "Episode.yaml", values=values, search_paths=[recipes]).execute(ctx)
+            ok = result.status == DemoStatus.PERFECT and bool(result.outputs.get("task_success"))  # as block_bin's solver
+            why = result.outputs.get("task_reason") or result.error_message
+        except Exception as e:  # a failed attempt, not a failed run (block_bin's generator)
+            ok, why = False, repr(e)
+        if ok and episodes_saved(dataset) <= saved:  # Plan C Task 18: a solved episode the recorder never wrote
+            ok, why = False, "solved, but no episode was written to the dataset"
+        log(f"[solve] attempt {count} ({arrangement or 'free'}): {'SUCCESS' if ok else f'FAILURE {why}'}")
+        # an attempt that broke off leaves its episode open: drop it (a no-op when nothing is open)
+        try:  # a stalled recorder costs this attempt, not the run (block_bin's solver)
+            robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False), timeout_sec=300.0)
+        except Exception as e:
+            robot.node.get_logger().error(f"Cleanup stop_recording failed: {e}")
+        return ok
+
+    wanted = [a for a in args.arrangements.split(",") if a] or [args.arrangement] * args.episodes
     try:
-        while done < args.episodes and attempts < (args.attempts or 3 * args.episodes):
-            attempts += 1
-            # 600 s: a Randomize on a recipe scene runs Replicator draws and settles the physics
-            reply, why = draw(robot, srv.Randomize.Request(id=scene_id, arrangement=args.arrangement))
-            if why:
-                robot.node.get_logger().info(f"[solve] attempt {attempts}: FAILURE {why}")
-                continue
-            robot.sleep(SETTLE_S)
-            ctx = context(args.namespace, robot, entry, dataset, reply)
-            saved = episodes_saved(dataset)
-            try:
-                result = load(recipes / "Episode.yaml", values=values, search_paths=[recipes]).execute(ctx)
-                ok = result.status == DemoStatus.PERFECT and bool(result.outputs.get("task_success"))  # as block_bin's solver
-                why = result.outputs.get("task_reason") or result.error_message
-            except Exception as e:  # a failed attempt, not a failed run (block_bin's generator)
-                ok, why = False, repr(e)
-            if ok and episodes_saved(dataset) <= saved:  # Plan C Task 18: a solved episode the recorder never wrote
-                ok, why = False, "solved, but no episode was written to the dataset"
-            done += ok
-            robot.node.get_logger().info(f"[solve] attempt {attempts}: {'SUCCESS' if ok else f'FAILURE {why}'}")
-            # an attempt that broke off leaves its episode open: drop it (a no-op when nothing is open)
-            try:  # a stalled recorder costs this attempt, not the run (block_bin's solver)
-                robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False), timeout_sec=300.0)
-            except Exception as e:
-                robot.node.get_logger().error(f"Cleanup stop_recording failed: {e}")
+        done, attempts, fallbacks = run_episodes(wanted, args.attempts, try_once, log)
     finally:
         try:  # saved episodes stay unreadable until finalized
             robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=300.0)
@@ -163,8 +193,8 @@ def main(argv=None) -> int:
             robot.node.get_logger().error(f"Finalize failed: {e}")
         finally:
             robot.disconnect()
-    print(f"[solve] {done}/{args.episodes} episodes in {attempts} attempts", flush=True)
-    return 0 if done == args.episodes else 1
+    print(f"[solve] {done}/{len(wanted)} episodes in {attempts} attempts, {fallbacks} fallbacks", flush=True)
+    return 0 if done == len(wanted) else 1
 
 
 if __name__ == "__main__":

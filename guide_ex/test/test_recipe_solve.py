@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from guide_ex.recipe.solve import context, dataset_path, draw, episodes_saved, recipe_values
+from guide_ex.recipe.solve import context, dataset_path, draw, episodes_saved, recipe_values, run_episodes
 
 REPLY = json.dumps({"task": "put the bowl on the plate", "target": "/objects/b", "goal": [{"on": ["/objects/b", "/objects/p"]}],
                     "subtasks": ["Pick up the bowl.", "Place it on the plate."]})
@@ -81,3 +81,20 @@ def test_a_failed_draw_is_a_failed_attempt_with_its_message():
 def test_a_randomize_timeout_is_a_failed_attempt_not_a_crash():
     _, why = draw(DrawRobot(error=TimeoutError("timed out after 600s")), None)
     assert "timed out" in why
+
+
+def test_run_episodes_falls_back_to_a_free_draw_after_the_arrangement_fails():
+    calls, logs = [], []
+
+    def try_once(start):  # demo_1 never settles; the free draw works on its 2nd try
+        calls.append(start)
+        return start == "demo_0" or (start == "" and calls.count("") == 2)
+
+    assert run_episodes(["demo_0", "demo_1"], 2, try_once, logs.append) == (2, 5, 1)
+    assert calls == ["demo_0", "demo_1", "demo_1", "", ""]
+    assert logs == ["[solve] fallback demo_1 -> free draw"]
+
+
+def test_run_episodes_counts_an_episode_lost_when_the_free_draw_fails_too_and_plain_free_has_no_fallback():
+    assert run_episodes(["demo_0"], 2, lambda s: False, lambda m: None) == (0, 4, 1)
+    assert run_episodes(["", ""], 2, lambda s: False, lambda m: None) == (0, 4, 0)
