@@ -81,3 +81,17 @@ def test_the_same_extra_link_twice_keeps_the_compiled_model(fr3_dir):
     (masses, coms, inertias, extra), _ = with_camera(mass=0.3)  # a heavier camera replaces it, not adds to it
     assert model.set_mass_properties(masses, coms, inertias, extra_links=extra)
     assert model.urdf_text.count('<link name="camera"') == 1 and model.manipulator is not man
+
+
+def test_tcp_twist_is_the_tool_frames_finite_difference_velocity(fr3_model):
+    """J(q) qd against the tool pose moved by qd dt: linear velocity of the TCP point, angular velocity, base axes."""
+    dt = 1e-6
+    for q in random_q(fr3_model):
+        qd = RNG.uniform(-1, 1, len(q))
+        p0, R0 = fr3_model.ee_pose(q)
+        p1, R1 = fr3_model.ee_pose(q + qd * dt)
+        twist = fr3_model.tcp_twist(q, qd)
+        assert twist.shape == (6,)
+        np.testing.assert_allclose(twist[:3], (p1 - p0) / dt, atol=1e-5)
+        np.testing.assert_allclose(twist[3:], pin.log3(R1 @ R0.T) / dt, atol=1e-5)
+        assert np.isclose(fr3_model.ee_speed(q, qd), np.linalg.norm(twist[:3]))

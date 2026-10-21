@@ -14,6 +14,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
 from guide_core.scene import robot_profile
+from guide_core.scene.extra_features import extra_features, tcp_wrench
 from guide_core.scene.predicates import PREDICATE_PATHS
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
@@ -1111,6 +1112,73 @@ class SceneOrchestrator(ABC):
         self._logger.info(f"obs_masks: {self.obs_masks}")
         self._logger.info(f"act_masks: {self.act_masks}")
 
+        self._extras = self._setup_extras(dataset_cfg) if extra_features(dataset_cfg) else None
+
+    def _setup_extras(self, dataset_cfg: dict) -> dict:
+        """The readers behind dataset.velocity / dataset.tcp_wrench (extra_features.py): the robot
+        they read, guide_motion's model of it, and, for the wrench, the hand link and the bodies below it."""
+        from guide_motion.model import Model
+
+        r = dataset_cfg.get("cartesian_velocity_robot") or next(iter(self.ee_views), None)
+        if r not in self.robots_views or r not in self.ee_views:
+            raise ValueError(f"dataset.velocity / tcp_wrench: robot {r!r} has no articulation view and end_effector_name")
+        cfg = self._config["robots"][r]
+        model = Model.load((cfg.get("oscbf") or {}).get("robot") or cfg.get("profile") or "fr3")
+        view = self.robots_views[r]
+        ex = {"robot": r, "model": model, "arm": [view.dof_names.index(j) for j in model.arm_joints]}
+        if dataset_cfg.get("velocity"):
+            pos = self.obs_masks.get(r, {}).get("pos")
+            if not pos:
+                raise ValueError(f"dataset.velocity: no <joint>.pos observations of robot {r!r}")
+            ex["state_dofs"] = pos["indices"]
+        if dataset_cfg.get("tcp_wrench"):
+            from isaacsim.core.experimental.prims import Articulation
+
+            prefix = model.arm_joints[0].rsplit("_joint", 1)[0]
+            path = f"/Scene_{self._scene_id}{cfg.get('path', f'/{r}')}"
+            art = Articulation(path)
+            names = list(art.link_names)
+            hand = cfg["end_effector_name"].removesuffix("_tcp")
+            if hand not in names:
+                raise ValueError(f"dataset.tcp_wrench: no link {hand!r} in {path}; links: {names}")
+            # the hand and everything below it: every link but the arm's own chain
+            below = [n for n in names if n not in {f"{prefix}_link{i}" for i in range(8)}]
+            idx = art.get_link_indices(below).numpy().astype(int).reshape(-1).tolist()
+            links = [self._named_xform(path, n) for n in below]
+            if None in links:
+                raise ValueError(f"dataset.tcp_wrench: no prim for link(s) {[n for n, v in zip(below, links) if v is None]}")
+            ex.update(
+                art=art, hand=names.index(hand), hand_i=below.index(hand), links=links,
+                mass=art.get_link_masses(link_indices=idx).numpy()[0],
+                com=art.get_link_coms(link_indices=idx)[0].numpy()[0],
+            )
+            self._logger.info(f"tcp_wrench: joint force at {hand}, tare from {below}, {ex['mass'].sum():.3f} kg")
+        return ex
+
+    def _record_extras(self) -> dict:
+        """This tick's observation.velocity / tcp_twist / tcp_wrench, keyed by feature name."""
+        ex = self._extras
+        view, out = self.robots_views[ex["robot"]], {}
+        flat = lambda v: np.asarray(v, float).reshape(-1)  # noqa: E731
+        if "state_dofs" in ex:
+            out["observation.velocity"] = flat(view.get_joint_velocities(joint_indices=ex["state_dofs"])).astype(np.float32)
+            q = flat(view.get_joint_positions(joint_indices=ex["arm"]))
+            qd = flat(view.get_joint_velocities(joint_indices=ex["arm"]))
+            out["observation.tcp_twist"] = ex["model"].tcp_twist(q, qd).astype(np.float32)
+        if "art" in ex:
+            f, tau = (flat(a.numpy()[0, 0]) for a in ex["art"].get_link_incoming_joint_force(link_indices=[ex["hand"]]))
+            world = lambda v: tuple(np.asarray(x, float).reshape(-1) for x in v.get_world_poses())  # noqa: E731
+            poses = [world(v) for v in ex["links"]]
+            rots = [R.from_quat(q, scalar_first=True) for _, q in poses]
+            coms = np.array([p + r.apply(c) for (p, _), r, c in zip(poses, rots, ex["com"])])
+            m = ex["mass"]
+            out["observation.tcp_wrench"] = tcp_wrench(
+                f, tau, rots[ex["hand_i"]].as_matrix(), poses[ex["hand_i"]][0], world(self.ee_views[ex["robot"]])[0],
+                R.from_quat(world(self.base_views[ex["robot"]])[1], scalar_first=True).as_matrix(),
+                m.sum(), (m[:, None] * coms).sum(0) / m.sum(),
+            ).astype(np.float32)
+        return out
+
     def record_step(self, current_step: int):
         observation = {"x": 0.0, "y": 0.0, "z": 0.0, "wx": 0.0, "wy": 0.0, "wz": 0.0}
         action = {"x": 0.0, "y": 0.0, "z": 0.0, "wx": 0.0, "wy": 0.0, "wz": 0.0}
@@ -1269,10 +1337,12 @@ class SceneOrchestrator(ABC):
                     action["wy"] = float(obs_delta_rotvec[1])
                     action["wz"] = float(obs_delta_rotvec[2])
 
+        extras = self._record_extras() if getattr(self, "_extras", None) else {}
         return {
             "timestamp": current_step,
             "observation": observation,
             "action": action,
+            **({"extras": extras} if extras else {}),
             # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
             # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
             # go in as language prompts; a camera transition's frames carry its label as subtask.

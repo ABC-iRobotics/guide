@@ -97,10 +97,15 @@ class Model:
         T = self.pin_data.oMf[self._tool]
         return T.translation.copy(), T.rotation.copy()
 
+    def tcp_twist(self, q, qd) -> np.ndarray:
+        """J(q) qd at the tool frame, (6,): linear velocity of the TCP point (m/s), then the angular
+        velocity (rad/s), both in the base frame (world-aligned axes)."""
+        J = pin.computeFrameJacobian(self.pin_model, self.pin_data, np.asarray(q, float), self._tool, pin.LOCAL_WORLD_ALIGNED)
+        return J @ np.asarray(qd, float)
+
     def ee_speed(self, q, qd) -> float:
         """Linear tool speed, m/s."""
-        J = pin.computeFrameJacobian(self.pin_model, self.pin_data, np.asarray(q, float), self._tool, pin.LOCAL_WORLD_ALIGNED)
-        return float(np.linalg.norm(J[:3] @ np.asarray(qd, float)))
+        return float(np.linalg.norm(self.tcp_twist(q, qd)[:3]))
 
     def set_mass_properties(self, masses: dict, coms: dict, inertias: dict, extra_links: dict | None = None) -> bool:
         """Use the simulator's mass properties (COM and inertia in USD body frames, keyed by link).

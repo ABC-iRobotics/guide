@@ -12,6 +12,8 @@ from threading import Event, Thread
 
 import numpy as np
 
+from guide_core.scene.extra_features import extra_features
+
 # Schema version for the GUIDE metadata sidecar (guide_info.json / guide_episodes.jsonl).
 GUIDE_META_SCHEMA = 1
 
@@ -157,6 +159,10 @@ class SceneRecorder(Thread):
         self._saved_language: dict = {}
         # The camera transition's label, which ends with its frames (see _process_frame).
         self._transition_label = (camera_transition(config) or {}).get("label")
+
+        # dataset.velocity / dataset.tcp_wrench: features the orchestrator fills (item["extras"]),
+        # which build_dataset_frame, reading observation.* from item["observation"], must not see.
+        self._extra_features = extra_features(config.get("dataset", {}))
 
         self.dataset = None
         self.LeRobotDataset = None
@@ -377,7 +383,8 @@ class SceneRecorder(Thread):
 
         obs_features = hw_to_dataset_features(obs_features, "observation", use_video=True)
         action_features = hw_to_dataset_features(action_features, "action", use_video=True)
-        features = {**action_features, **obs_features}
+        # dataset.velocity / dataset.tcp_wrench: their own features, not part of observation.state.
+        features = {**action_features, **obs_features, **self._extra_features}
 
         self._logger.info(f"Creating LeRobotDataset with features: {list(features)}")
 
@@ -414,16 +421,17 @@ class SceneRecorder(Thread):
 
         from lerobot.utils.feature_utils import build_dataset_frame
 
+        own = {k: v for k, v in self.dataset.features.items() if k not in self._extra_features}
         observation_frame = build_dataset_frame(
-            self.dataset.features, item.get("observation", {}), prefix="observation"
+            own, item.get("observation", {}), prefix="observation"
         )
         action_frame = build_dataset_frame(
-            self.dataset.features, item.get("action", {}), prefix="action"
+            own, item.get("action", {}), prefix="action"
         )
 
         task_str = item.pop("task", self.task_name)
         prompts = item.pop("prompts", {})
-        frame = {**observation_frame, **action_frame, "task": task_str}
+        frame = {**observation_frame, **action_frame, **item.pop("extras", {}), "task": task_str}
 
         self.dataset.add_frame(frame)
         # LeRobot numbers an episode's frames 0, 1, ... in the order they are added. A
