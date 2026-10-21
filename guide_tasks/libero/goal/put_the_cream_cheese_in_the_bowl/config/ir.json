@@ -11758,7 +11758,21 @@
     "cream_cheese_1",
     "akita_black_bowl_1"
    ],
-   "params": {},
+   "params": {
+    "grasp": {
+     "position": [
+      0.0,
+      0.0,
+      -0.01
+     ],
+     "orientation": {
+      "euler": [
+       "x",
+       3.141592653589793
+      ]
+     }
+    }
+   },
    "region": null
   }
  ],

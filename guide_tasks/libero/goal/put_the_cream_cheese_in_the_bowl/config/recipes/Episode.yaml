@@ -24,3 +24,21 @@ children:
 - ref: Return
 - ref: CheckSuccess
 - ref: StopEpisode
+overrides:
+  PutOn.GetTargetPose.TransformCubePoseForGripper:
+    ref: TransformPose
+    alias: TransformCubePoseForGripper
+    dynamic_map:
+      l_pose: cube_pose
+    static_args:
+      r_pose:
+        position:
+        - 0.0
+        - 0.0
+        - -0.01
+        orientation:
+          euler:
+          - x
+          - 3.141592653589793
+    output_map:
+      pose: cube_pose
