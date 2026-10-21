@@ -103,3 +103,23 @@ def test_an_unquoted_on_goal_key_is_read_as_on(tmp_path):
     (root / "config" / "task.yaml").write_text(
         "language: {task: put it}\ngoal:\n  - on: [/objects/plate, /marks/home]\n")
     assert load_task(root / "config" / "task.yaml")["goal"] == [{"on": ["/objects/plate", "/marks/home"]}]
+
+
+JOINT_GOAL = {"joint": "/objects/cab/top_level", "body": "/objects/cab/base/cabinet_top", "value": -0.14, "direction": -1}
+
+
+def test_goal_items_name_the_skills_inputs(tmp_path):
+    root = tmp_path / "t.yaml"
+    goal = [{"on": ["/a", "/b"]}, {"in": ["/a", "/region"]}, {"on_region": {"obj": "/a", "region": "", "center": [0, 0, 0], "half": [1, 1, 1]}},
+            {"open": JOINT_GOAL}, {"turn_on": {**JOINT_GOAL, "inclusive": True}}]
+    root.write_text(yaml.safe_dump({"language": {"task": "x"}, "goal": goal}))
+    assert load_task(root)["goal"] == goal
+
+
+@pytest.mark.parametrize("item", [{"open": ["/a"]}, {"open": {"joint": "/j"}}, {"on": ["/a"]}, {"on_region": {"obj": "/a"}},
+                                  {"spin": ["/a", "/b"]}, {"in": {"a": 1}}])
+def test_a_malformed_goal_item_is_refused(tmp_path, item):
+    root = tmp_path / "t.yaml"
+    root.write_text(yaml.safe_dump({"language": {"task": "x"}, "goal": [item]}))
+    with pytest.raises(ValueError, match="goal item"):
+        load_task(root)

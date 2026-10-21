@@ -4,7 +4,12 @@
 
 config/task.yaml gives the language, the zone target, the goal (handed to the solver in the Randomize
 reply) and, optionally, the free draw's separation radii. config/success.yaml lists success predicates
-(on, in_region, joint_above, joint_below; guide_core.scene.predicates), which must all hold.
+(on, on_region, in_region, joint_above, joint_below; guide_core.scene.predicates), which must all hold.
+
+The goal items name the skills' inputs: {on: [obj, support]}, {in: [obj, region]}, {on_region: {obj, region[, center,
+half]}} and {open | close | turn_on | turn_off: {joint, body, value, direction[, inclusive]}}; the solver reads them
+from the Randomize reply (guide_ex.recipe.solve.context). A task may list a joint item its success does not test
+(the drawer to pull before putting something in it).
 """
 import itertools
 import json
@@ -17,6 +22,9 @@ from guide_core.scene.predicates import PREDICATE_PATHS
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
 
 TASK_KEYS = {"language", "target", "goal", "separation"}
+GOAL_LISTS = {"on", "in"}  # [a, b]
+GOAL_DICTS = {"on_region": {"obj", "region"}, "open": {"joint", "body", "value", "direction"}}  # required keys
+GOAL_DICTS |= {k: GOAL_DICTS["open"] for k in ("close", "turn_on", "turn_off")}
 MAX_LAYOUT_DRAWS = 200  # as cube_stack: a free draw is redrawn until the separation holds
 
 
@@ -29,10 +37,19 @@ def load_task(path) -> dict:
     language = doc.get("language") or {}
     if not isinstance(language.get("task"), str) or not language["task"]:
         raise ValueError(f"{path}: language.task must be the task's sentence")
+    goal = [{"on" if k is True else k: v for k, v in item.items()} for item in doc.get("goal") or []]
+    for item in goal:
+        ((kind, value),) = item.items()
+        if kind in GOAL_LISTS and isinstance(value, list) and len(value) == 2:
+            continue
+        if kind in GOAL_DICTS and isinstance(value, dict) and GOAL_DICTS[kind] <= set(value):
+            continue
+        raise ValueError(f"{path}: goal item {item}: one of {sorted(GOAL_LISTS)} as [a, b] or {sorted(GOAL_DICTS)} as a mapping with "
+                         f"the keys {sorted(GOAL_DICTS.get(kind, ()))} (YAML reads a bare on as true: write 'on')")
     return {
         "language": {"task": language["task"], "subtasks": list(language.get("subtasks") or [])},
         "target": doc.get("target"),
-        "goal": [{"on" if k is True else k: v for k, v in item.items()} for item in doc.get("goal") or []],
+        "goal": goal,
         "separation": {str(prim): float(radius) for prim, radius in (doc.get("separation") or {}).items()},
     }
 

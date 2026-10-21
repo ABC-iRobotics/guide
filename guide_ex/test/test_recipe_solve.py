@@ -98,3 +98,34 @@ def test_run_episodes_falls_back_to_a_free_draw_after_the_arrangement_fails():
 def test_run_episodes_counts_an_episode_lost_when_the_free_draw_fails_too_and_plain_free_has_no_fallback():
     assert run_episodes(["demo_0"], 2, lambda s: False, lambda m: None) == (0, 4, 1)
     assert run_episodes(["", ""], 2, lambda s: False, lambda m: None) == (0, 4, 0)
+
+
+def _reply(goal, subtasks, target="/objects/b"):
+    return json.dumps({"task": "t", "target": target, "goal": goal, "subtasks": subtasks})
+
+
+JOINT = {"joint": "/objects/c/base/cabinet_top/top_level", "body": "/objects/c/base/cabinet_top", "value": -0.14, "direction": -1}
+ZONE = {"obj": "/objects/p", "region": "", "center": [-0.05, 0.21, -0.005], "half": [0.04, 0.04, 0.007]}
+
+
+def test_context_for_pull_turn_push_put_in_and_put_on_a_region():
+    ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", _reply([{"open": JOINT}], ["Open the top drawer."], "/objects/c/base/cabinet_top"))
+    assert (ctx["joint"], ctx["joint_body"], ctx["joint_value"], ctx["direction"]) == (JOINT["joint"], JOINT["body"], -0.14, -1)
+    assert (ctx["subtask"], ctx["pick"], ctx["place"], ctx["top"], ctx["zone"]) == ("Open the top drawer.", "", "", None, None)
+    # Pull then PutIn: the drawer's open goal rides along the success's `in`; the first label is Pull's
+    ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", _reply([{"in": ["/objects/b", "/objects/c/r"]}, {"open": JOINT}],
+                                                            ["Open the top drawer.", "Pick up the bowl.", "Put it in the drawer."]))
+    assert (ctx["subtask"], ctx["pick"], ctx["place"]) == ("Open the top drawer.", "Pick up the bowl.", "Put it in the drawer.")
+    assert (ctx["top"], ctx["support"], ctx["goal"], ctx["direction"]) == ("/objects/b", "/objects/c/r", "/objects/c/r", -1)
+    ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", _reply([{"turn_on": {**JOINT, "direction": 1, "value": 0.5}}], ["Turn on the stove."]))
+    assert (ctx["direction"], ctx["joint_value"], ctx["subtask"]) == (1, 0.5, "Turn on the stove.")
+    ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", _reply([{"on_region": ZONE}], ["Push the plate to the front of the stove."]))
+    assert (ctx["top"], ctx["support"], ctx["zone"], ctx["subtask"]) == ("/objects/p", None, ZONE, "Push the plate to the front of the stove.")
+    ctx = context("/Sim_0/Scene_0", "R", ENTRY, "", _reply([{"on_region": {"obj": "/objects/b", "region": "/objects/c/top_side"}}],
+                                                            ["Pick up the bowl.", "Place it on the wooden cabinet."]))
+    assert (ctx["top"], ctx["support"], ctx["zone"], ctx["subtask"], ctx["pick"]) == ("/objects/b", "/objects/c/top_side", None, "", "Pick up the bowl.")
+
+
+def test_a_plain_on_task_keeps_its_keys_and_has_no_joint_or_zone():
+    ctx = context("/Sim_0/Scene_2", "R", ENTRY, "", REPLY)
+    assert (ctx["pick"], ctx["place"], ctx["subtask"], ctx["joint"], ctx["zone"]) == ("Pick up the bowl.", "Place it on the plate.", "", None, None)
