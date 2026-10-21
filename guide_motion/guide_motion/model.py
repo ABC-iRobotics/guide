@@ -99,8 +99,8 @@ class Model:
 
     def tcp_twist(self, q, qd) -> np.ndarray:
         """J(q) qd at the tool frame, (6,): linear velocity of the TCP point (m/s), then the angular
-        velocity (rad/s), both in the base frame (world-aligned axes)."""
-        J = pin.computeFrameJacobian(self.pin_model, self.pin_data, np.asarray(q, float), self._tool, pin.LOCAL_WORLD_ALIGNED)
+        velocity (rad/s), both in the TCP's own axes (pin.LOCAL)."""
+        J = pin.computeFrameJacobian(self.pin_model, self.pin_data, np.asarray(q, float), self._tool, pin.LOCAL)
         return J @ np.asarray(qd, float)
 
     def ee_speed(self, q, qd) -> float:

@@ -1130,7 +1130,9 @@ class SceneOrchestrator(ABC):
             pos = self.obs_masks.get(r, {}).get("pos")
             if not pos:
                 raise ValueError(f"dataset.velocity: no <joint>.pos observations of robot {r!r}")
-            ex["state_dofs"] = pos["indices"]
+            from guide_core.scene.extra_features import check_velocity_dofs
+
+            ex["state_dofs"] = check_velocity_dofs(pos["indices"], dataset_cfg)
         if dataset_cfg.get("tcp_wrench"):
             from isaacsim.core.experimental.prims import Articulation
 
@@ -1144,11 +1146,8 @@ class SceneOrchestrator(ABC):
             # the hand and everything below it: every link but the arm's own chain
             below = [n for n in names if n not in {f"{prefix}_link{i}" for i in range(8)}]
             idx = art.get_link_indices(below).numpy().astype(int).reshape(-1).tolist()
-            links = [self._named_xform(path, n) for n in below]
-            if None in links:
-                raise ValueError(f"dataset.tcp_wrench: no prim for link(s) {[n for n, v in zip(below, links) if v is None]}")
             ex.update(
-                art=art, hand=names.index(hand), hand_i=below.index(hand), links=links,
+                art=art, path=path, hand=names.index(hand), hand_i=below.index(hand), link_idx=idx,
                 mass=art.get_link_masses(link_indices=idx).numpy()[0],
                 com=art.get_link_coms(link_indices=idx)[0].numpy()[0],
             )
@@ -1166,15 +1165,23 @@ class SceneOrchestrator(ABC):
             qd = flat(view.get_joint_velocities(joint_indices=ex["arm"]))
             out["observation.tcp_twist"] = ex["model"].tcp_twist(q, qd).astype(np.float32)
         if "art" in ex:
-            f, tau = (flat(a.numpy()[0, 0]) for a in ex["art"].get_link_incoming_joint_force(link_indices=[ex["hand"]]))
+            art = ex["art"]
+            if not art.is_physics_tensor_entity_valid():  # physics was stopped and replayed: rebuild the view
+                from isaacsim.core.experimental.prims import Articulation
+
+                art = ex["art"] = Articulation(ex["path"])
+            f, tau = (flat(a.numpy()[0, 0]) for a in art.get_link_incoming_joint_force(link_indices=[ex["hand"]]))
             world = lambda v: tuple(np.asarray(x, float).reshape(-1) for x in v.get_world_poses())  # noqa: E731
-            poses = [world(v) for v in ex["links"]]
+            # link poses from the physics tensor, the same step as the force. ponytail: the experimental
+            # Articulation (6.0.1) has no get_link_poses, so read the tensor view under it (x y z qx qy qz qw).
+            tf = art._physics_articulation_view.get_link_transforms().numpy().reshape(-1, 7)[ex["link_idx"]].astype(float)
+            poses = [(t[:3], np.r_[t[6], t[3:6]]) for t in tf]  # quaternion to wxyz
             rots = [R.from_quat(q, scalar_first=True) for _, q in poses]
             coms = np.array([p + r.apply(c) for (p, _), r, c in zip(poses, rots, ex["com"])])
             m = ex["mass"]
             out["observation.tcp_wrench"] = tcp_wrench(
                 f, tau, rots[ex["hand_i"]].as_matrix(), poses[ex["hand_i"]][0], world(self.ee_views[ex["robot"]])[0],
-                R.from_quat(world(self.base_views[ex["robot"]])[1], scalar_first=True).as_matrix(),
+                R.from_quat(world(self.ee_views[ex["robot"]])[1], scalar_first=True).as_matrix(),
                 m.sum(), (m[:, None] * coms).sum(0) / m.sum(),
             ).astype(np.float32)
         return out

@@ -165,9 +165,9 @@ dataset:
     - wrist: wrist
   # Opt-in extra modalities, off when left out (this dataset's features stay as they are):
   #   velocity: true    adds observation.velocity (joint velocities, observation.state's joints, ".vel") and
-  #                     observation.tcp_twist (J(q) qd at the TCP: vx vy vz m/s, wx wy wz rad/s, base frame)
+  #                     observation.tcp_twist (J(q) qd at the TCP: vx vy vz m/s, wx wy wz rad/s, in the TCP's own axes)
   #   tcp_wrench: true  adds observation.tcp_wrench (fx fy fz N, tx ty tz N m: the wrench the environment applies
-  #                     to the TCP, base frame, moments about the TCP; PhysX's hand-link joint force, gravity-tared)
+  #                     to the TCP, in the TCP's own axes, moments about the TCP; PhysX's hand-link joint force, gravity-tared)
   # Both need robots.<r>.oscbf.robot (the guide_motion model) and the cartesian_velocity_robot below.
   cartesian_velocity_robot: franka
   observations:

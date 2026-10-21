@@ -5,9 +5,8 @@ import logging
 import numpy as np
 import pinocchio as pin
 import pytest
-from scipy.spatial.transform import Rotation
 
-from guide_core.scene.extra_features import extra_features, tcp_wrench
+from guide_core.scene.extra_features import check_velocity_dofs, extra_features, tcp_wrench
 from guide_core.scene.scene_recorder import SceneRecorder
 
 OBS = [{"joint1.pos": "franka.fr3_joint1.pos"}, {"joint2.pos": "franka.fr3_joint2.pos"}, {"gripper.pos": "franka.fr3_finger_joint1.pos"},
@@ -33,10 +32,9 @@ def test_feature_shapes_and_names():
         extra_features({"velocity": True})
 
 
-@pytest.mark.parametrize("base", [np.eye(3), Rotation.from_euler("xyz", [0.3, -0.5, 1.2]).as_matrix()])
-def test_wrench_recovers_a_known_force_at_the_tcp(base):
+def test_wrench_recovers_a_known_force_at_the_tcp():
     """Static FR3: Pinocchio's RNEA with a force at the TCP gives the force through the last joint (gravity
-    and the hand's weight included); the pipeline must hand the TCP force back."""
+    and the hand's weight included); the pipeline must hand the TCP force back, in the TCP axes."""
     from guide_motion.model import Model
 
     model = Model.load("fr3")
@@ -52,9 +50,9 @@ def test_wrench_recovers_a_known_force_at_the_tcp(base):
         pin.rnea(pm, data, q, np.zeros(7), np.zeros(7), fext)
         f7, oMi = data.f[7], data.oMi[7]
         body = pm.inertias[7]  # link 7, the hand and the locked fingers
-        got = tcp_wrench(f7.linear, f7.angular, oMi.rotation, oMi.translation, T_tcp.translation, base,
+        got = tcp_wrench(f7.linear, f7.angular, oMi.rotation, oMi.translation, T_tcp.translation, T_tcp.rotation,
                          body.mass, oMi.act(body.lever))
-        np.testing.assert_allclose(got, np.r_[base.T @ w[:3], base.T @ w[3:]], atol=1e-9)
+        np.testing.assert_allclose(got, np.r_[T_tcp.rotation.T @ w[:3], T_tcp.rotation.T @ w[3:]], atol=1e-9)
 
 
 def test_free_space_reads_zero_after_the_tare():
@@ -67,7 +65,7 @@ def test_free_space_reads_zero_after_the_tare():
     pin.framesForwardKinematics(pm, data, q)
     oMi, body = data.oMi[7], pm.inertias[7]
     w = tcp_wrench(data.f[7].linear, data.f[7].angular, oMi.rotation, oMi.translation, data.oMf[pm.getFrameId(model.tool_frame)].translation,
-                   np.eye(3), body.mass, oMi.act(body.lever))
+                   data.oMf[pm.getFrameId(model.tool_frame)].rotation, body.mass, oMi.act(body.lever))
     np.testing.assert_allclose(w, 0, atol=1e-9)
 
 
@@ -95,3 +93,17 @@ def test_the_recorder_writes_the_extra_features(tmp_path):
     assert "environment applies" in ds.features["observation.tcp_wrench"]["info"]["sign"]  # survives info.json
     np.testing.assert_allclose(ds[2]["observation.tcp_wrench"].numpy(), np.arange(6) + 2)
     np.testing.assert_allclose(ds[1]["observation.velocity"].numpy(), [1])
+
+
+def test_zero_joint_force_records_zero_not_the_tare():
+    """Right after a Reset PhysX's joint force can be exactly 0: no spurious +m g."""
+    args = (np.eye(3), np.zeros(3), np.zeros(3), np.eye(3), 0.65, np.zeros(3))
+    assert not tcp_wrench(np.zeros(3), np.zeros(3), *args).any()
+    assert tcp_wrench([0, 0, 1.0], np.zeros(3), *args).any()
+
+
+def test_velocity_dofs_must_match_state_joints():
+    cfg = {"observations": OBS}
+    assert check_velocity_dofs([0, 1, 8], cfg) == [0, 1, 8]
+    with pytest.raises(ValueError, match="3 <joint>.pos names"):
+        check_velocity_dofs([0, 1], cfg)
