@@ -3,7 +3,7 @@
 The files under `assets/` are **not part of GUIDE and are not covered by GUIDE's GPL-3.0 licence.** They are under licences different from GUIDE's.
 
 - Each asset keeps the licence of its source. The licences are listed below and in the `LICENSE` file in each asset's folder.
-- The assets ship beside GUIDE as an aggregate, converted for Isaac Sim, so that the LIBERO tasks under `spatial/` run without a LIBERO checkout.
+- The assets (except the TurboSquid models `wine_rack` and `wine_bottle`, see below) ship beside GUIDE as an aggregate, converted for Isaac Sim, so that the LIBERO tasks under `spatial/` run without a LIBERO checkout.
 - Check an asset's licence before you redistribute it or use it commercially: `cookies` is non-commercial and share-alike, and the terms of `wooden_cabinet` and `flat_stove` are unverified.
 - This file is a record of provenance, not legal advice.
 
@@ -32,10 +32,14 @@ The wood of the cabinet (carcass and drawers), the metal of its handles and the 
 | `glazed_rim_porcelain_ramekin` | as above | as above | as above |
 | `cookies` | NVIDIA HOPE dataset (Tyree et al., IROS 2022), https://github.com/swtyree/hope-dataset | CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode | NonCommercial and ShareAlike: not usable commercially, adaptations stay CC BY-NC-SA 4.0; likely incompatible with GPL terms, so kept as a separately licensed file. BOP lists CC BY-SA 4.0; the stricter is assumed. |
 | `cream_cheese` | NVIDIA HOPE dataset (Tyree et al., IROS 2022), https://github.com/swtyree/hope-dataset; whether LIBERO's mesh is HOPE verbatim or modified is unverified | CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode | As `cookies`: NonCommercial and ShareAlike, kept as a separately licensed file. |
+| `wine_rack` | TurboSquid purchase by LIBERO (class `TurbosquidObjects`); which model is unverified | TurboSquid Royalty Free licence: giving away the model files themselves is not allowed. LIBERO's "Datasets: CC BY 4.0" line cannot grant more than TurboSquid did | **The model is not included.** `assets/wine_rack/` holds only GUIDE's own physics and material definition; the mesh data and textures are converted locally from your own LIBERO checkout into `goal/models/wine_rack/` (git-ignored, see `goal/models/README.md`). |
+| `wine_bottle` | as above | as above | as above |
 | `wooden_cabinet` | LIBERO (Lifelong Robot Learning); origin of meshes and textures unknown | No licence file for LIBERO's assets; LIBERO's code is MIT and its README lists "Datasets: CC BY 4.0", whose scope (demos only, or also assets) is unclear | Origin and redistribution terms unverified. |
 | `flat_stove` | as above | as above | as above |
 
-`wine_rack` and `wine_bottle` (LIBERO-Goal) are TurboSquid purchases (Royalty Free licence: giving away the model files themselves is not allowed). They are **not shipped**: `assets/wine_rack/` and `assets/wine_bottle/` are git-ignored and derived locally from your own LIBERO checkout with `guide-bench assets`.
+
+
+The TurboSquid assets `wine_rack` and `wine_bottle` are the exception to the aggregate above: their models are not part of this repository.
 
 Attribution:
 - "Google Scanned Objects, Google LLC, CC BY 4.0" (https://arxiv.org/abs/2204.11918);

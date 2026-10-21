@@ -76,3 +76,25 @@ def test_build_stage_runs_the_scene_recipe_after_the_robots(tmp_path, monkeypatc
     monkeypatch.setattr(rg, "run_scene_recipe", lambda path, prefix: calls.append(("recipe", path.name, prefix)))
     manager._scenes[0].build_stage()
     assert calls == [("mount", "/Scene_0"), ("recipe", "scene.yaml", "/Scene_0")]
+
+
+def test_a_scene_asset_with_a_missing_model_is_named(tmp_path):
+    pytest.importorskip("pxr")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "a.usda").write_text('#usda 1.0\n(\n    subLayers = [@./models/Geometry.usda@]\n)\n')
+    doc = {"g": {"create.from_usd": {"usd": {"property": "file_path", "value": "../a.usda"}, "name": "x"}}}
+    with pytest.raises(FileNotFoundError, match=r"models/Geometry.usda.*README.md"):
+        rg.check_scene_assets(doc, tmp_path / "config")
+    (tmp_path / "models").mkdir()
+    (tmp_path / "models/Geometry.usda").write_text('#usda 1.0\n')
+    rg.check_scene_assets(doc, tmp_path / "config")
+    gone = {"g": {"create.from_usd": {"usd": {"property": "file_path", "value": "../nope.usda"}}}}
+    with pytest.raises(FileNotFoundError, match="nope.usda"):
+        rg.check_scene_assets(gone, tmp_path / "config")
+
+
+def test_the_shipped_libero_assets_pass_the_asset_check(tmp_path):
+    pytest.importorskip("pxr")
+    asset = Path(__file__).resolve().parents[2] / "guide_tasks/libero/assets/wooden_cabinet/wooden_cabinet.usda"  # MDL materials by URL
+    doc = {"g": {"create.from_usd": {"usd": {"property": "file_path", "value": str(asset)}, "name": "x"}}}
+    rg.check_scene_assets(doc, tmp_path)

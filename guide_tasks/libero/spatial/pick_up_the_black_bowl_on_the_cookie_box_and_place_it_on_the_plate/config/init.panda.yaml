@@ -102,6 +102,8 @@ dataset:
   - agentview: agentview
   - wrist: wrist
   cartesian_velocity_robot: franka
+  velocity: true
+  tcp_wrench: true
   observations:
   - joint1.pos: franka.panda_joint1.pos
   - joint2.pos: franka.panda_joint2.pos

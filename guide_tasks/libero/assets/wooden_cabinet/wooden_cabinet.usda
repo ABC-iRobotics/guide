@@ -26,8 +26,15 @@ def Xform "wooden_cabinet" (
         {
             over "object"
             {
-                over "base"
+                over "base" (
+                    prepend apiSchemas = ["PhysicsMassAPI"]
+                )
                 {
+                    point3f physics:centerOfMass = (0.0038191043, 0.029464005, 0.10596312)
+                    float3 physics:diagonalInertia = (0.020423394, 0.01609629, 0.014572548)
+                    float physics:mass = 2.2409196
+                    quatf physics:principalAxes = (0.50732577, 0.4936427, 0.5059921, 0.4928584)
+
                     over "Box"
                     {
                         uniform token purpose = "guide"
@@ -73,8 +80,15 @@ def Xform "wooden_cabinet" (
                         uniform token purpose = "guide"
                     }
 
-                    over "cabinet_top"
+                    over "cabinet_top" (
+                        prepend apiSchemas = ["PhysicsMassAPI"]
+                    )
                     {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
                         over "Box"
                         {
                             uniform token purpose = "guide"
@@ -144,8 +158,15 @@ def Xform "wooden_cabinet" (
                         }
                     }
 
-                    over "cabinet_middle"
+                    over "cabinet_middle" (
+                        prepend apiSchemas = ["PhysicsMassAPI"]
+                    )
                     {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
                         over "Box"
                         {
                             uniform token purpose = "guide"
@@ -215,8 +236,15 @@ def Xform "wooden_cabinet" (
                         }
                     }
 
-                    over "cabinet_bottom"
+                    over "cabinet_bottom" (
+                        prepend apiSchemas = ["PhysicsMassAPI"]
+                    )
                     {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
                         over "Box"
                         {
                             uniform token purpose = "guide"

@@ -316,6 +316,29 @@ def check_scene_recipe(doc, where) -> None:
                              f"calls only; draw per episode in randomize.yaml")
 
 
+def check_scene_assets(doc: dict, config_dir: Path) -> None:
+    """Every ``usd: {property: file_path, value: <path>}`` of a scene recipe must exist with all it depends on (sublayers,
+    references, payloads, textures); a USD reference to a missing file otherwise loads as an empty prim and the scene
+    looks fine until the render. Raises FileNotFoundError naming each missing file, and the models/ folder a git-ignored
+    model (a LIBERO suite's guide_tasks/<suite>/models/README.md) is meant to be put in."""
+    from pxr import UsdUtils
+
+    missing = []
+    for usd in _find(doc, "usd"):
+        path = (config_dir / str(usd["value"])).resolve() if isinstance(usd, dict) and usd.get("property") == "file_path" else None
+        if path is None:
+            continue
+        if not path.is_file():
+            missing.append(str(path))
+        else:
+            # MDL materials are found by the renderer by module name or URL (OmniPBR.mdl, NVIDIA's Base materials), not by the file system
+            missing += [u for u in UsdUtils.ComputeAllDependencies(str(path))[2] if not u.endswith(".mdl") and u not in missing]
+    if missing:
+        raise FileNotFoundError("scene recipe asset files are missing: " + ", ".join(missing) + ". An asset whose model is not "
+                                "shipped (TurboSquid wine_rack/wine_bottle) is filled by `guide-bench assets --libero <LIBERO>`: "
+                                "see the README.md in the suite's models/ folder (guide_tasks/libero/goal/models/)")
+
+
 def run_scene_recipe(yaml_path: Path, scene_prefix: str) -> None:
     """Build config/scene.yaml for one scene. Its create.* calls reference fixtures and objects under
     the scene: ``parent: /objects`` -> /Scene_<i>/objects, defined as an Xform if missing (Replicator
@@ -329,6 +352,7 @@ def run_scene_recipe(yaml_path: Path, scene_prefix: str) -> None:
     _stop_orchestrator()  # create.* adds group nodes to the graph
     doc = prefixed(yaml.safe_load(Path(yaml_path).read_text()) or {}, scene_prefix)
     check_scene_recipe(doc, yaml_path)
+    check_scene_assets(doc, Path(yaml_path).parent)
     stage = omni.usd.get_context().get_stage()
     for parent in {p for p in _find(doc, "parent") if isinstance(p, str)}:
         if not stage.GetPrimAtPath(parent).IsValid():

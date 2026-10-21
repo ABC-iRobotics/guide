@@ -1,0 +1,65 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wine_rack"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wine_rack"
+{
+    def Scope "Materials"
+    {
+        def Material "wine_rack_planes" (
+            prepend references = @../../../goal/models/wine_rack/MaterialsLibrary.usdc@</Materials/wine_rack_planes>
+        )
+        {
+        }
+
+        def Material "wine_rack_stoppers" (
+            prepend references = @../../../goal/models/wine_rack/MaterialsLibrary.usdc@</Materials/wine_rack_stoppers>
+        )
+        {
+        }
+
+        def Material "wine_rack_stand" (
+            prepend references = @../../../goal/models/wine_rack/MaterialsLibrary.usdc@</Materials/wine_rack_stand>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "wine_rack_planes_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/wine_rack_planes>
+                }
+
+                over "wine_rack_stoppers_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/wine_rack_stoppers>
+                }
+
+                over "wine_rack_stand_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/wine_rack_stand>
+                }
+            }
+        }
+    }
+}
+

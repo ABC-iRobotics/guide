@@ -1,0 +1,6 @@
+wine_bottle: from LIBERO (https://github.com/Lifelong-Robot-Learning/LIBERO @ 8f1084e, libero/libero/assets).
+Origin: TurboSquid purchase (LIBERO class TurbosquidObjects); which model is unverified.
+Licence: TurboSquid Royalty Free licence: 'Giving away the 3D Model file itself is not allowed'; a model may ship incorporated in a larger creation, not in an open format others can download. LIBERO's 'Datasets: CC BY 4.0' line cannot grant more than TurboSquid did
+UNVERIFIED, redistribution likely prohibited. GUIDE does not distribute the model: this folder holds only GUIDE's own physics and material definition (collision boxes, mass, material bindings); the mesh data and textures are converted locally from your own LIBERO checkout into guide_tasks/libero/goal/models/ (see its README.md; per the licence report 2026-10-19 (tracker doc libero-licences)).
+Changes: MuJoCo MJCF/OBJ/MSH converted to USD with mujoco_usd_converter (guide_core/scripts/spike_libero_convert.py); physics overrides authored by guide_bench (assets.py).
+Not covered by GUIDE's GPL-3.0 licence: see ../../LICENSE-ASSETS.md.

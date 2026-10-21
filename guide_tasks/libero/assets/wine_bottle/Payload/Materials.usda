@@ -1,0 +1,65 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wine_bottle"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wine_bottle"
+{
+    def Scope "Materials"
+    {
+        def Material "wine_bottle_red_main" (
+            prepend references = @../../../goal/models/wine_bottle/MaterialsLibrary.usdc@</Materials/wine_bottle_red_main>
+        )
+        {
+        }
+
+        def Material "wine_bottle_red_cork" (
+            prepend references = @../../../goal/models/wine_bottle/MaterialsLibrary.usdc@</Materials/wine_bottle_red_cork>
+        )
+        {
+        }
+
+        def Material "wine_bottle_red_logo" (
+            prepend references = @../../../goal/models/wine_bottle/MaterialsLibrary.usdc@</Materials/wine_bottle_red_logo>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "wine_bottle_red_main_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/wine_bottle_red_main>
+                }
+
+                over "wine_bottle_red_cork_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/wine_bottle_red_cork>
+                }
+
+                over "wine_bottle_red_logo_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/wine_bottle_red_logo>
+                }
+            }
+        }
+    }
+}
+

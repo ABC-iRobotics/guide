@@ -1,0 +1,239 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wine_bottle"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wine_bottle" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "wine_bottle"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.02156, -0.022048697, 0), (0.021930512, 0.02219083, 0.1587665), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.005, -0.005, -0.065), (0.03, 0.03, 0.044999998)]
+
+    over "Geometry"
+    {
+        over "Body" (
+            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "object" (
+                prepend apiSchemas = ["PhysxRigidBodyAPI", "PhysicsMassAPI"]
+            )
+            {
+                point3f physics:centerOfMass = (0.000058182097, -0.0004680989, 0.05030889)
+                float3 physics:diagonalInertia = (0.000057746172, 0.000057376314, 0.000009436322)
+                float physics:mass = 0.050916295
+                quatf physics:principalAxes = (0.9999108, -0.0027978215, -0.00016797418, -0.013062323)
+                custom float physxRigidBody:maxDepenetrationVelocity = 0.1
+
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_1"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_2"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_3"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_4"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_5"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_6"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_7"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_8"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_9"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_10"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_11"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_12"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_13"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_14"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_15"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_16"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_17"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_18"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_19"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_20"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "PhysicsFixedJoint"
+                {
+                    bool physics:jointEnabled = 0
+                }
+
+                over "wine_bottle_red_main_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/guide_glass>
+                }
+
+                over "wine_bottle_red_cork_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/guide_cork>
+                }
+
+                over "wine_bottle_red_logo_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_bottle/Materials/guide_label>
+                }
+            }
+
+            over "PhysicsFixedJoint"
+            {
+                bool physics:jointEnabled = 0
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_glass"
+        {
+            token outputs:mdl:displacement.connect = </wine_bottle/Materials/guide_glass/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_bottle/Materials/guide_glass/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_bottle/Materials/guide_glass/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR_ClearCoat.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR_ClearCoat"
+                float inputs:clearcoat_reflection_roughness = 0.03
+                float inputs:clearcoat_weight = 0.8
+                color3f inputs:diffuse_color_constant = (0.01, 0.07, 0.02)
+                bool inputs:enable_clearcoat = 1
+                float inputs:reflection_roughness_constant = 0.08
+                token outputs:out
+            }
+        }
+
+        def Material "guide_cork"
+        {
+            token outputs:mdl:displacement.connect = </wine_bottle/Materials/guide_cork/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_bottle/Materials/guide_cork/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_bottle/Materials/guide_cork/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @../../goal/models/wine_bottle/Textures/cork_texture.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.8
+                float inputs:specular_level = 0.3
+                token outputs:out
+            }
+        }
+
+        def Material "guide_label"
+        {
+            token outputs:mdl:displacement.connect = </wine_bottle/Materials/guide_label/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_bottle/Materials/guide_label/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_bottle/Materials/guide_label/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @../../goal/models/wine_bottle/Textures/label_wine.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.6
+                float inputs:specular_level = 0.3
+                token outputs:out
+            }
+        }
+    }
+}
+

@@ -28,8 +28,15 @@ def Xform "flat_stove" (
             {
                 over "base"
                 {
-                    over "burner"
+                    over "burner" (
+                        prepend apiSchemas = ["PhysicsMassAPI"]
+                    )
                     {
+                        point3f physics:centerOfMass = (0, 0, 0.000308642)
+                        float3 physics:diagonalInertia = (0.017593335, 0.009204021, 0.009204021)
+                        float physics:mass = 2.9241
+                        quatf physics:principalAxes = (0.5, 0.5, -0.5, 0.5)
+
                         over "base"
                         {
                             uniform token purpose = "guide"
@@ -40,8 +47,15 @@ def Xform "flat_stove" (
                             uniform token purpose = "guide"
                         }
 
-                        over "burner_plate"
+                        over "burner_plate" (
+                            prepend apiSchemas = ["PhysicsMassAPI"]
+                        )
                         {
+                            point3f physics:centerOfMass = (1.3448855e-8, -3.930371e-8, 0.022129612)
+                            float3 physics:diagonalInertia = (0.00029584995, 0.00014831593, 0.00014831593)
+                            float physics:mass = 0.18497829
+                            quatf physics:principalAxes = (0.5, 0.5, -0.5, 0.5)
+
                             over "burner" (
                                 prepend apiSchemas = ["MaterialBindingAPI"]
                             )
@@ -58,8 +72,15 @@ def Xform "flat_stove" (
                         }
                     }
 
-                    over "button"
+                    over "button" (
+                        prepend apiSchemas = ["PhysicsMassAPI"]
+                    )
                     {
+                        point3f physics:centerOfMass = (0, 0, 0)
+                        float3 physics:diagonalInertia = (1, 1, 1)
+                        float physics:mass = 3
+                        quatf physics:principalAxes = (1, 0, 0, 0)
+
                         over "Box"
                         {
                             uniform token purpose = "guide"

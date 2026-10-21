@@ -1,0 +1,164 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "wine_rack"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "wine_rack" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "wine_rack"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.13499999, -0.1314756, -0.0021890164), (0.13499999, 0.1341486, 0.3282406), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.10087, -0.09241486, -0.065), (0.10087, 0.03, 0.23812322)]
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object" (
+                prepend apiSchemas = ["PhysicsMassAPI"]
+            )
+            {
+                point3f physics:centerOfMass = (-0.000001251772, -0.023744289, 0.14107601)
+                float3 physics:diagonalInertia = (0.006994435, 0.0060689845, 0.0035917591)
+                float physics:mass = 0.61639816
+                quatf physics:principalAxes = (0.70632863, -0.017291447, 0.016217884, 0.70748705)
+
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_1"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_2"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_3"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_4"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_5"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_6"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_7"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "Box_8"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "wine_rack_planes_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/guide_planes>
+                }
+
+                over "wine_rack_stand_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/guide_stand>
+                }
+
+                over "wine_rack_stoppers_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </wine_rack/Materials/guide_stoppers>
+                }
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_planes"
+        {
+            token outputs:mdl:displacement.connect = </wine_rack/Materials/guide_planes/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_rack/Materials/guide_planes/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_rack/Materials/guide_planes/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @../../goal/models/wine_rack/Textures/light-wood.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.55
+                float inputs:specular_level = 0.3
+                token outputs:out
+            }
+        }
+
+        def Material "guide_stand"
+        {
+            token outputs:mdl:displacement.connect = </wine_rack/Materials/guide_stand/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_rack/Materials/guide_stand/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_rack/Materials/guide_stand/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @../../goal/models/wine_rack/Textures/mahogany.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.5
+                float inputs:specular_level = 0.3
+                token outputs:out
+            }
+        }
+
+        def Material "guide_stoppers"
+        {
+            token outputs:mdl:displacement.connect = </wine_rack/Materials/guide_stoppers/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wine_rack/Materials/guide_stoppers/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wine_rack/Materials/guide_stoppers/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                color3f inputs:diffuse_color_constant = (0, 0.345, 0.545)
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.4
+                token outputs:out
+            }
+        }
+    }
+}
+
