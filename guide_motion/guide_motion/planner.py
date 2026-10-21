@@ -132,4 +132,9 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
         elif (np.linalg.norm(T.translation - goal.position) < POS_TOL
               and Rotation.from_matrix(T.rotation @ goal.rotation.T).magnitude() < ROT_TOL):
             return targets + [replace(goal, joints=configuration.q.copy())]
-    raise PlanningError(f"IK did not reach the goal within {EXTRA_STEPS} steps (reach or joint limits)")
+    raise PlanningError(
+        f"IK did not reach the goal within {EXTRA_STEPS} steps (reach or joint limits): "
+        f"goal p={np.round(goal.position, 4).tolist()} "
+        f"quat_xyzw={np.round(Rotation.from_matrix(goal.rotation).as_quat(), 4).tolist()}, "
+        f"reached p={np.round(T.translation, 4).tolist()}, q0={np.round(q, 4).tolist()}"
+    )
