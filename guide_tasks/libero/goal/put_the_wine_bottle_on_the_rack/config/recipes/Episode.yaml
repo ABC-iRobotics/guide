@@ -35,7 +35,7 @@ overrides:
         position:
         - 0.0
         - 0.0
-        - 0.105
+        - 0.115
         orientation:
           euler:
           - x
@@ -50,7 +50,7 @@ overrides:
     static_args:
       r_pose:
         position:
-        - 0.036
+        - 0.046
         - 0.03994
         - -0.00357
         orientation:

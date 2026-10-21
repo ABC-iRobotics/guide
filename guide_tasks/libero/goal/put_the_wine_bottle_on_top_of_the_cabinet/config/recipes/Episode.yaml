@@ -35,7 +35,7 @@ overrides:
         position:
         - 0.0
         - 0.0
-        - 0.105
+        - 0.115
         orientation:
           euler:
           - x
@@ -52,7 +52,7 @@ overrides:
         position:
         - 0.0
         - 0.0
-        - 0.0535
+        - 0.0635
         orientation:
           euler:
           - x
