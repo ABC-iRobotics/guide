@@ -399,8 +399,8 @@ Each frame of a shipped task (10 fps, three cameras: `top`, `base`, `wrist`):
 
 | Feature | Shape | Content |
 |---|---|---|
-| `observation.state` | 14 | `x y z wx wy wz` — the end effector relative to the robot's base (position, rotation vector); `joint1.pos … joint7.pos`, `gripper.pos` |
-| `action` | 14 | `x … wz` — the end-effector motion since the previous frame; `joint1.pos … gripper.pos` — the joint command |
+| `observation.state` | 14 | `x y z rx ry rz` — the end effector relative to the robot's base (position in m, rotation vector in rad); `joint1.pos … joint7.pos`, `gripper.pos`. A task can list more keys: `<joint>.vel`, `<joint>.eff` (joint velocity, measured effort), `vx … wz` (TCP twist), `fx … tz` (TCP wrench), see `guide_core/scene/extra_features.py` |
+| `action` | 14 | `x y z rx ry rz` — the end-effector motion since the previous frame (`rx ry rz` a rotation vector); the extra keys above are copies of the measured value; `joint1.pos … gripper.pos` — the joint command |
 | `observation.images.<camera>` | 480×640×3 | RGB (AV1) |
 | `observation.images.<camera>_depth` | 480×640×1 | depth in millimetres (12-bit, log-quantized, HEVC) |
 | `observation.images.<camera>_instance` | 480×640×3 | instance segmentation, one colour per tracked object (AV1) |

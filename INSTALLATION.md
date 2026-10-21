@@ -213,7 +213,7 @@ ros2 service call /Sim_0/Scene_0/generate_demonstration guide_msgs/srv/Demonstra
   bring-up starts no move_group) or `moveit` (move_group + ros2_control). GUIDE and the block_bin bring-up both read it: rebuild block_bin
   after changing it, then restart GUIDE, register the scene, and launch block_bin (registering again
   in a running GUIDE adds a second scene, which the bring-up does not drive).
-- **Coordinates:** `observation.state` x..wz is the end effector **relative to the robot's
+- **Coordinates:** `observation.state` x y z rx ry rz is the end effector **relative to the robot's
   base**: the prim named by `robots.<name>.base_name` in the task's `config/init.yaml`
   (`fr3_link0` for both FR3 tasks; the robot prim when unset), whatever the scene index.
   One cartesian robot per scene; several are on `TODO.md`. Datasets recorded before

@@ -23,7 +23,7 @@ robots:
   franka :
     path: '/fr3'
     end_effector_name: 'fr3_hand_tcp'
-    # The recorded end-effector pose (observation.state x..wz) is relative to this prim.
+    # The recorded end-effector pose (observation.state x y z rx ry rz) is relative to this prim.
     base_name: 'fr3_link0'
     default_joint_states:
       - 0.0
@@ -163,12 +163,13 @@ dataset:
     - top: top
     - base: base
     - wrist: wrist
-  # Opt-in extra modalities, off when left out (this dataset's features stay as they are):
-  #   velocity: true    adds observation.velocity (joint velocities, observation.state's joints, ".vel") and
-  #                     observation.tcp_twist (J(q) qd at the TCP: vx vy vz m/s, wx wy wz rad/s, in the TCP's own axes)
-  #   tcp_wrench: true  adds observation.tcp_wrench (fx fy fz N, tx ty tz N m: the wrench the environment applies
-  #                     to the TCP, in the TCP's own axes, moments about the TCP; PhysX's hand-link joint force, gravity-tared)
-  # Both need robots.<r>.oscbf.robot (the guide_motion model) and the cartesian_velocity_robot below.
+  # Opt-in extra keys of observation.state and action, listed like joint1.pos (nothing extra is recorded when left out):
+  #   joint1.vel: franka.fr3_joint1.vel   joint velocity; joint1.eff: franka.fr3_joint1.eff  measured joint effort
+  #   vx vy vz (m/s) wx wy wz (rad/s)     J(q) qd at the TCP, in the TCP's own axes
+  #   fx fy fz (N) tx ty tz (N m)         wrench the environment applies to the TCP, TCP axes, moments about the TCP
+  #                                       (PhysX's hand-link joint force, gravity-tared)
+  # In the action each is a copy of the measured value. vx..wz and fx..tz need robots.<r>.oscbf.robot (the
+  # guide_motion model) and the cartesian_velocity_robot below; the wrench is computed only when an fx..tz key is listed.
   cartesian_velocity_robot: franka
   observations:
     - joint1.pos: franka.fr3_joint1.pos
@@ -182,9 +183,9 @@ dataset:
     - x: x
     - y: y
     - z: z
-    - wx: wx
-    - wy: wy
-    - wz: wz
+    - rx: rx
+    - ry: ry
+    - rz: rz
   action:
     - joint1.pos: joint_command.fr3_joint1.pos
     - joint2.pos: joint_command.fr3_joint2.pos
@@ -197,9 +198,9 @@ dataset:
     - x: x
     - y: y
     - z: z
-    - wx: wx
-    - wy: wy
-    - wz: wz
+    - rx: rx
+    - ry: ry
+    - rz: rz
 
 # Scene extent around origin, metres: [[x_min, x_max], [y_min, y_max], [z_min, z_max]].
 # Scenes are tiled along y by this box when several are registered.

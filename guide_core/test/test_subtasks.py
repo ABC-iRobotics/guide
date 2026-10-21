@@ -17,7 +17,7 @@ from guide_core.scene.scene_recorder import SceneRecorder, register_guide_styles
 lerobot_dataset = pytest.importorskip("lerobot.datasets.lerobot_dataset")
 language_render = pytest.importorskip("lerobot.datasets.language_render")
 
-POSE = {k: 0.0 for k in ("x", "y", "z", "wx", "wy", "wz")}
+POSE = {k: 0.0 for k in ("x", "y", "z", "rx", "ry", "rz")}
 PROCEDURE = "Stack the cubes."
 
 

@@ -15,7 +15,7 @@ from guide_core.scene.scene_recorder import SceneRecorder
 
 lerobot_dataset = pytest.importorskip("lerobot.datasets.lerobot_dataset")
 
-POSE = {k: 0.0 for k in ("x", "y", "z", "wx", "wy", "wz")}
+POSE = {k: 0.0 for k in ("x", "y", "z", "rx", "ry", "rz")}
 
 
 def record(recorder, frames):

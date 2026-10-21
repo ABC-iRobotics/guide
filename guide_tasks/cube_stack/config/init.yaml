@@ -25,7 +25,7 @@ robots:
   franka :
     path: '/fr3'
     end_effector_name: 'fr3_hand_tcp'
-    # The recorded end-effector pose (observation.state x..wz) is relative to this prim.
+    # The recorded end-effector pose (observation.state x y z rx ry rz) is relative to this prim.
     base_name: 'fr3_link0'
     default_joint_states:
       - 0.0
@@ -129,9 +129,9 @@ dataset:
     - x: x
     - y: y
     - z: z
-    - wx: wx
-    - wy: wy
-    - wz: wz
+    - rx: rx
+    - ry: ry
+    - rz: rz
   action:
     - joint1.pos: joint_command.fr3_joint1.pos
     - joint2.pos: joint_command.fr3_joint2.pos
@@ -144,9 +144,9 @@ dataset:
     - x: x
     - y: y
     - z: z
-    - wx: wx
-    - wy: wy
-    - wz: wz
+    - rx: rx
+    - ry: ry
+    - rz: rz
 
 # Scene extent around origin, metres: [[x_min, x_max], [y_min, y_max], [z_min, z_max]].
 # Scenes are tiled along y by this box when several are registered.

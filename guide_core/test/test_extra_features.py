@@ -1,4 +1,4 @@
-"""dataset.velocity / dataset.tcp_wrench: features, the recorder, and the wrench pipeline against Pinocchio."""
+"""Named keys in observation.state / action (.vel, .eff, vx..wz, fx..tz), the recorder, and the wrench pipeline against Pinocchio."""
 
 import logging
 
@@ -6,30 +6,28 @@ import numpy as np
 import pinocchio as pin
 import pytest
 
-from guide_core.scene.extra_features import check_velocity_dofs, extra_features, tcp_wrench
+from guide_core.scene.extra_features import TWIST, WRENCH, key_info, listed, tcp_wrench, with_info
 from guide_core.scene.scene_recorder import SceneRecorder
 
-OBS = [{"joint1.pos": "franka.fr3_joint1.pos"}, {"joint2.pos": "franka.fr3_joint2.pos"}, {"gripper.pos": "franka.fr3_finger_joint1.pos"},
-       {"x": "x"}, {"wz": "wz"}]
+OBS = [{"joint1.pos": "franka.fr3_joint1.pos"}, {"joint1.vel": "franka.fr3_joint1.vel"}, {"x": "x"}, {"vz": "vz"}, {"fx": "fx"}]
+ACT = [{"joint1.pos": "joint_command.fr3_joint1.pos"}, {"gripper.eff": "franka.fr3_finger_joint1.eff"}, {"wz": "wz"}]
 
 
-def test_off_by_default_leaves_the_features_unchanged():
-    assert extra_features({"observations": OBS}) == {}
-    assert extra_features({"observations": OBS, "velocity": False, "tcp_wrench": False}) == {}
+def test_listed_picks_the_keys_a_section_names_in_canonical_order():
+    cfg = {"observations": OBS, "action": ACT}
+    assert listed(cfg, TWIST) == ["vz", "wz"]  # wz from the action list: twist is shared
+    assert listed(cfg, WRENCH) == ["fx"]
+    assert listed({"observations": OBS[:3]}, TWIST + WRENCH) == []
 
 
-def test_feature_shapes_and_names():
-    f = extra_features({"observations": OBS, "velocity": True, "tcp_wrench": True})
-    assert list(f) == ["observation.velocity", "observation.tcp_twist", "observation.tcp_wrench"]
-    assert f["observation.velocity"]["names"] == ["joint1.vel", "joint2.vel", "gripper.vel"]  # observation.state's joints
-    assert f["observation.velocity"]["shape"] == (3,)
-    assert f["observation.tcp_twist"]["names"] == ["vx_m_s", "vy_m_s", "vz_m_s", "wx_rad_s", "wy_rad_s", "wz_rad_s"]
-    assert f["observation.tcp_wrench"]["names"] == ["fx_N", "fy_N", "fz_N", "tx_Nm", "ty_Nm", "tz_Nm"]
-    assert all(v["dtype"] == "float32" and v["info"]["frame"] for k, v in f.items() if k != "observation.velocity")
-    assert "environment applies" in f["observation.tcp_wrench"]["info"]["sign"]
-    assert list(extra_features({"observations": OBS, "tcp_wrench": True})) == ["observation.tcp_wrench"]
-    with pytest.raises(ValueError):
-        extra_features({"velocity": True})
+def test_key_info_gives_units_and_frames():
+    assert key_info("joint1.vel") == ("rad/s", "") and key_info("gripper.eff") == ("N", "") and key_info("gripper.pos")[0] == "m"
+    assert key_info("joint3.eff")[0] == "N m" and key_info("rx") == ("rad", "base frame; rotation vector")
+    assert key_info("x", action=True)[1].startswith("per-frame") and key_info("rx", action=True)[1].startswith("per-frame")
+    assert key_info("vx") == ("m/s", key_info("wx")[1]) and key_info("wx")[0] == "rad/s" and "TCP" in key_info("wx")[1]
+    assert key_info("fz")[0] == "N" and key_info("tz")[0] == "N m" and "environment applies" in key_info("tx")[1]
+    info = with_info({"dtype": "float32", "shape": (3,), "names": ["x", "joint1.vel", "tz"]})["info"]
+    assert info["unit"] == {"x": "m", "joint1.vel": "rad/s", "tz": "N m"} and set(info["frame"]) == {"x", "tz"}
 
 
 def test_wrench_recovers_a_known_force_at_the_tcp():
@@ -69,30 +67,35 @@ def test_free_space_reads_zero_after_the_tare():
     np.testing.assert_allclose(w, 0, atol=1e-9)
 
 
-def test_the_recorder_writes_the_extra_features(tmp_path):
+def test_the_recorder_writes_the_named_keys_into_state_and_action(tmp_path):
     lerobot_dataset = pytest.importorskip("lerobot.datasets.lerobot_dataset")
-    cfg = {"fps": 10, "velocity": True, "tcp_wrench": True, "observations": OBS[:1]}
-    recorder = SceneRecorder("pkg", "extras", {"dataset": cfg})
+    recorder = SceneRecorder("pkg", "extras", {"dataset": {"fps": 10}})
     recorder._logger = logging.getLogger("test_extra_features")
     recorder.LeRobotDataset = lerobot_dataset.LeRobotDataset
     recorder.set_output_path(str(tmp_path))
-    pose = {k: 0.0 for k in ("x", "y", "z", "wx", "wy", "wz")}
+    pose = dict.fromkeys(["x", "y", "z"], 0.0)
     start = None
     for i in range(3):
-        extras = {"observation.velocity": np.array([i], np.float32), "observation.tcp_twist": np.full(6, i, np.float32),
-                  "observation.tcp_wrench": np.arange(6, dtype=np.float32) + i}
-        start = recorder._process_frame({"timestamp": i, "observation": {"joint1.pos": 0.0, **pose}, "action": {"joint1.pos": 0.0, **pose},
-                                         "task": "t", "extras": extras}, start)
+        obs = {**pose, "rx": 0.0, "ry": 0.0, "rz": 0.0, "joint1.pos": 0.0, "joint1.vel": float(i), "vz": 2.0 * i, "fx": -float(i)}
+        act = {**pose, "rx": 0.0, "ry": 0.0, "rz": 0.0, "joint1.pos": 0.0, "joint1.vel": float(i), "vz": 2.0 * i}
+        start = recorder._process_frame({"timestamp": i, "observation": obs, "action": act, "task": "t"}, start)
     recorder._finalize_episode()
     root = recorder.dataset.root
     recorder._finalize_dataset()
     ds = lerobot_dataset.LeRobotDataset("pkg", root=root)
-    assert ds.features["observation.state"]["names"][0] == "joint1.pos" and "observation.velocity" not in ds.features["observation.state"]["names"]
-    assert ds.features["observation.tcp_wrench"]["shape"] == (6,)
-    assert ds.features["observation.tcp_wrench"]["names"][0] == "fx_N"
-    assert "environment applies" in ds.features["observation.tcp_wrench"]["info"]["sign"]  # survives info.json
-    np.testing.assert_allclose(ds[2]["observation.tcp_wrench"].numpy(), np.arange(6) + 2)
-    np.testing.assert_allclose(ds[1]["observation.velocity"].numpy(), [1])
+    names = ds.features["observation.state"]["names"]
+    assert names == ["x", "y", "z", "rx", "ry", "rz", "joint1.pos", "joint1.vel", "vz", "fx"]
+    assert ds.features["action"]["names"] == ["x", "y", "z", "rx", "ry", "rz", "joint1.pos", "joint1.vel", "vz"]
+    assert set(ds.features).isdisjoint({"observation.velocity", "observation.tcp_twist", "observation.tcp_wrench"})
+    assert ds.features["observation.state"]["info"]["unit"]["vz"] == "m/s"  # survives info.json
+    assert ds.features["action"]["info"]["unit"]["rx"] == "rad"
+    np.testing.assert_allclose(ds[2]["observation.state"].numpy()[-3:], [2, 4, -2])
+    np.testing.assert_allclose(ds[2]["action"].numpy()[-2:], [2, 4])
+
+
+def test_the_old_opt_in_flags_are_refused():
+    with pytest.raises(ValueError, match="removed"):
+        SceneRecorder("pkg", "extras", {"dataset": {"velocity": True}})
 
 
 def test_zero_joint_force_records_zero_not_the_tare():
@@ -100,10 +103,3 @@ def test_zero_joint_force_records_zero_not_the_tare():
     args = (np.eye(3), np.zeros(3), np.zeros(3), np.eye(3), 0.65, np.zeros(3))
     assert not tcp_wrench(np.zeros(3), np.zeros(3), *args).any()
     assert tcp_wrench([0, 0, 1.0], np.zeros(3), *args).any()
-
-
-def test_velocity_dofs_must_match_state_joints():
-    cfg = {"observations": OBS}
-    assert check_velocity_dofs([0, 1, 8], cfg) == [0, 1, 8]
-    with pytest.raises(ValueError, match="3 <joint>.pos names"):
-        check_velocity_dofs([0, 1], cfg)

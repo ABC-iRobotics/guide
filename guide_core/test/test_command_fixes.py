@@ -140,7 +140,37 @@ def test_the_end_effector_is_recorded_relative_to_the_robot_base(isaac_import):
     obs = orchestrator.record_step(scene, 0)["observation"]
 
     assert np.allclose([obs[k] for k in ("x", "y", "z")], [0.4, 0.0, 0.4])
-    assert np.allclose([obs[k] for k in ("wx", "wy", "wz")], 0.0, atol=1e-9)
+    assert np.allclose([obs[k] for k in ("rx", "ry", "rz")], 0.0, atol=1e-9)
+
+
+def test_record_step_names_pose_euler_joint_vel_for_and_extras(isaac_import):
+    """the state's rotation vector rx ry rz, .vel/.eff measured in both, twist/wrench copied into state and action."""
+    import numpy as np
+
+    orchestrator = isaac_import("guide_core.scene.scene_orchestrator").SceneOrchestrator
+    yaw = np.array([[np.cos(np.pi / 8), 0.0, 0.0, np.sin(np.pi / 8)]])  # wxyz, +45 deg about z
+    ident = np.array([[1.0, 0.0, 0.0, 0.0]])
+    ee = SimpleNamespace(get_world_poses=lambda: (np.array([[0.1, 0.2, 0.3]]), yaw))
+    base = SimpleNamespace(get_world_poses=lambda: (np.zeros((1, 3)), ident))
+    view = SimpleNamespace(get_joint_positions=lambda joint_indices: np.array([0.5]), get_joint_velocities=lambda joint_indices: np.array([1.5]),
+                           get_measured_joint_efforts=lambda joint_indices: np.array([-2.5]), get_applied_action=lambda: None)
+    obs_masks = {"franka": {"pos": {"indices": [0], "keys": ["j.pos"]}, "vel": {"indices": [0], "keys": ["j.vel"]}, "eff": {"indices": [0], "keys": ["j.eff"]}}}
+    scene = host(
+        _config={"dataset": {}}, ee_views={"franka": ee}, base_views={"franka": base}, robots_views={"franka": view},
+        obs_masks=obs_masks, act_masks={"franka": {"vel": obs_masks["franka"]["vel"], "eff": obs_masks["franka"]["eff"]}},
+        prompts={"task": "", "subtask": ""}, task="",
+        _extras={"obs": ["vx", "fz"], "act": ["vx"]}, _record_extras=lambda: {"vx": 3.0, "fz": 7.0},
+    )
+    scene._recorded_annotators = dict
+
+    frame = orchestrator.record_step(scene, 0)
+    obs, act = frame["observation"], frame["action"]
+
+    assert list(obs) == ["x", "y", "z", "rx", "ry", "rz", "j.pos", "j.vel", "j.eff", "vx", "fz"]
+    assert list(act) == ["x", "y", "z", "rx", "ry", "rz", "j.vel", "j.eff", "vx"]
+    assert np.allclose([obs["rx"], obs["ry"], obs["rz"]], [0.0, 0.0, np.pi / 4])  # rotation vector: 45 deg about z
+    assert (obs["j.vel"], obs["j.eff"], obs["vx"], obs["fz"]) == (1.5, -2.5, 3.0, 7.0)
+    assert (act["j.vel"], act["j.eff"], act["vx"]) == (1.5, -2.5, 3.0)
 
 
 def test_robot_graphs_carry_the_motion_layer(isaac_import):

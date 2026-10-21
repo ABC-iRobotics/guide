@@ -1,59 +1,52 @@
-"""Opt-in recorded modalities beyond observation.state (pure numpy: no pxr, no Isaac).
+"""Named keys of observation.state and action beyond the joint positions (pure numpy: no pxr, no Isaac).
 
-``dataset.velocity: true`` in a task's init.yaml adds
-  observation.velocity   joint velocities, the joints and order of observation.state (".vel" for ".pos")
-  observation.tcp_twist  J(q) qd at the TCP: linear (m/s) and angular (rad/s) velocity, in the TCP's own axes
-``dataset.tcp_wrench: true`` adds
-  observation.tcp_wrench the 6-D wrench the ENVIRONMENT applies to the TCP (N, N m), in the TCP's own axes,
-                         moments about the TCP point. Computed, not a sensor: see tcp_wrench().
-Both default to off; a dataset without them keeps exactly its old features.
+A task's init.yaml lists them under dataset.observations / dataset.action like ``joint1.pos``:
+  <joint>.vel              joint velocity (rad/s; m/s for the prismatic gripper), the ``.vel`` attr
+  <joint>.eff              joint effort PhysX measures (N m; N for the gripper)
+  vx vy vz wx wy wz        J(q) qd at the TCP: linear (m/s) and angular (rad/s) velocity, in the TCP's own axes
+  fx fy fz tx ty tz        the 6-D wrench the ENVIRONMENT applies to the TCP (N, N m), in the TCP's own axes,
+                           moments about the TCP point. Computed, not a sensor: see tcp_wrench().
+Twist is computed only when a vx..wz key is listed, the wrench (and its Articulation) only when an fx..tz key is.
+In the action each of these keys is a copy of the measured value, as x y z / rx ry rz copy the measured pose delta.
+The pose keys are always recorded: state x y z (m) and rx ry rz (rad, rotation vector), both in the base frame; the
+action's x y z rx ry rz are the per-frame delta (rotation vector).
 """
 from __future__ import annotations
 
 import numpy as np
 
 GRAVITY = np.array([0.0, 0.0, -9.81])  # world frame, m/s^2
-TWIST_NAMES = ["vx_m_s", "vy_m_s", "vz_m_s", "wx_rad_s", "wy_rad_s", "wz_rad_s"]
-WRENCH_NAMES = ["fx_N", "fy_N", "fz_N", "tx_Nm", "ty_Nm", "tz_Nm"]
-TCP_AXES = "TCP frame (the tool frame's own axes; the point is the TCP origin)"
+POSE = ["x", "y", "z", "rx", "ry", "rz"]  # rx ry rz a rotation vector; the state's is absolute, the action's a per-frame delta
+TWIST = ["vx", "vy", "vz", "wx", "wy", "wz"]
+WRENCH = ["fx", "fy", "fz", "tx", "ty", "tz"]
+CARTESIAN = {*POSE, *TWIST, *WRENCH}  # keys that are not a joint attr: parse_mapping skips them
+TCP_FRAME = "TCP axes (the tool frame's own; the point is the TCP origin)"
 
 
-def velocity_names(dataset_cfg: dict) -> list[str]:
-    """observation.velocity's names: observation.state's joints, ``<joint>.pos`` -> ``<joint>.vel``."""
-    return [k[:-4] + ".vel" for item in dataset_cfg.get("observations", []) for k in item if k.endswith(".pos")]
+def listed(dataset_cfg: dict, names: list[str]) -> list[str]:
+    """The ``names`` that dataset.observations or dataset.action list, in ``names`` order."""
+    have = {k for sec in ("observations", "action") for item in dataset_cfg.get(sec, []) for k in item}
+    return [n for n in names if n in have]
 
 
-def check_velocity_dofs(state_dofs: list, dataset_cfg: dict) -> list:
-    """The dof indices behind observation.velocity; they must match velocity_names one to one."""
-    names = velocity_names(dataset_cfg)
-    if len(state_dofs) != len(names):
-        raise ValueError(
-            f"dataset.velocity: {len(state_dofs)} joint dofs resolved for robot observations but "
-            f"{len(names)} <joint>.pos names in dataset.observations ({names}); a name missed its robot or dof")
-    return state_dofs
+def key_info(name: str, action: bool = False) -> tuple[str, str]:
+    """(unit, frame) of one observation.state / action key; frame is '' for a joint key."""
+    if name in POSE:
+        return ("m" if name in ("x", "y", "z") else "rad"), ("per-frame delta in the base frame" if action else "base frame") + ("; rotation vector" if name[0] == "r" else "")
+    if name in TWIST:
+        return ("m/s" if name[0] == "v" else "rad/s"), TCP_FRAME
+    if name in WRENCH:
+        return ("N" if name[0] == "f" else "N m"), TCP_FRAME + "; wrench the environment applies, gripper weight and static hand load removed"
+    gripper = name.startswith("gripper")  # prismatic; the arm's joints are revolute
+    unit = {"pos": ("rad", "m"), "vel": ("rad/s", "m/s"), "eff": ("N m", "N")}.get(name.rsplit(".", 1)[-1], ("", ""))[gripper]
+    return unit, ""
 
 
-def _vector(names: list[str], **info) -> dict:
-    return {"dtype": "float32", "shape": (len(names),), "names": names, "info": info}
-
-
-def extra_features(dataset_cfg: dict) -> dict[str, dict]:
-    """LeRobot features of the modalities ``dataset_cfg`` turns on; {} when none is."""
-    out = {}
-    if dataset_cfg.get("velocity"):
-        names = velocity_names(dataset_cfg)
-        if not names:
-            raise ValueError("dataset.velocity needs <joint>.pos entries under dataset.observations")
-        out["observation.velocity"] = _vector(names, unit="rad/s (revolute joints), m/s (prismatic gripper)")
-        out["observation.tcp_twist"] = _vector(
-            TWIST_NAMES, frame=TCP_AXES, point="TCP", unit="m/s (v), rad/s (w)",
-            source="J(q) qd, guide_motion model, q and qd read from the articulation")
-    if dataset_cfg.get("tcp_wrench"):
-        out["observation.tcp_wrench"] = _vector(
-            WRENCH_NAMES, frame=TCP_AXES, point="TCP", unit="N (f), N m (t)",
-            sign="wrench the environment applies to the TCP; gripper weight and static hand load removed",
-            source="PhysX incoming joint force of the hand link, gravity-tared, moved to the TCP")
-    return out
+def with_info(feature: dict, action: bool = False) -> dict:
+    """``feature`` (observation.state or action) plus an info entry with each key's unit and frame."""
+    pairs = {n: key_info(n, action) for n in feature["names"]}
+    return {**feature, "info": {"unit": {n: u for n, (u, _) in pairs.items()},
+                                "frame": {n: f for n, (_, f) in pairs.items() if f}}}
 
 
 def tcp_wrench(f, tau, R_link, p_link, p_tcp, R_tcp, tare_mass, tare_com, gravity=GRAVITY) -> np.ndarray:
