@@ -26,6 +26,9 @@ ASSETS = {
     "cookies": "stable_hope_objects/cookies/cookies.xml",
     "wooden_cabinet": "articulated_objects/wooden_cabinet.xml",
     "flat_stove": "articulated_objects/flat_stove.xml",
+    "wine_rack": "turbosquid_objects/wine_rack/wine_rack.xml",
+    "wine_bottle": "turbosquid_objects/wine_bottle/wine_bottle.xml",
+    "cream_cheese": "stable_hope_objects/cream_cheese/cream_cheese.xml",
 }
 
 

@@ -31,8 +31,11 @@ The wood of the cabinet (carcass and drawers), the metal of its handles and the 
 | `akita_black_bowl` | Google Scanned Objects (Google LLC) via LIBERO, re-modelled; origin not proven | CC BY 4.0 if the Google Scanned Objects origin holds (unverified), https://creativecommons.org/licenses/by/4.0/legalcode | Attribute both Google Scanned Objects and LIBERO. |
 | `glazed_rim_porcelain_ramekin` | as above | as above | as above |
 | `cookies` | NVIDIA HOPE dataset (Tyree et al., IROS 2022), https://github.com/swtyree/hope-dataset | CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode | NonCommercial and ShareAlike: not usable commercially, adaptations stay CC BY-NC-SA 4.0; likely incompatible with GPL terms, so kept as a separately licensed file. BOP lists CC BY-SA 4.0; the stricter is assumed. |
+| `cream_cheese` | NVIDIA HOPE dataset (Tyree et al., IROS 2022), https://github.com/swtyree/hope-dataset; whether LIBERO's mesh is HOPE verbatim or modified is unverified | CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode | As `cookies`: NonCommercial and ShareAlike, kept as a separately licensed file. |
 | `wooden_cabinet` | LIBERO (Lifelong Robot Learning); origin of meshes and textures unknown | No licence file for LIBERO's assets; LIBERO's code is MIT and its README lists "Datasets: CC BY 4.0", whose scope (demos only, or also assets) is unclear | Origin and redistribution terms unverified. |
 | `flat_stove` | as above | as above | as above |
+
+`wine_rack` and `wine_bottle` (LIBERO-Goal) are TurboSquid purchases (Royalty Free licence: giving away the model files themselves is not allowed). They are **not shipped**: `assets/wine_rack/` and `assets/wine_bottle/` are git-ignored and derived locally from your own LIBERO checkout with `guide-bench assets`.
 
 Attribution:
 - "Google Scanned Objects, Google LLC, CC BY 4.0" (https://arxiv.org/abs/2204.11918);

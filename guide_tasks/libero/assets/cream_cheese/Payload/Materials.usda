@@ -1,0 +1,39 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "cream_cheese"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "cream_cheese"
+{
+    def Scope "Materials"
+    {
+        def Material "cream_cheese" (
+            prepend references = @./MaterialsLibrary.usdc@</Materials/cream_cheese>
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "Body"
+        {
+            over "object"
+            {
+                over "cream_cheese_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </cream_cheese/Materials/cream_cheese>
+                }
+            }
+        }
+    }
+}
+

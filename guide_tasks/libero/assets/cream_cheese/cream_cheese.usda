@@ -1,0 +1,82 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "MuJoCo USD Converter v0.2.0"
+    }
+    defaultPrim = "cream_cheese"
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "cream_cheese" (
+    prepend apiSchemas = ["GeomModelAPI"]
+    assetInfo = {
+        string name = "cream_cheese"
+    }
+    kind = "component"
+    prepend payload = @./Payload/Contents.usda@
+)
+{
+    float3[] extentsHint = [(-0.041251592, -0.021353768, -0.009711577), (0.041620657, 0.021336, 0.009673344), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (3.4028235e38, 3.4028235e38, 3.4028235e38), (-3.4028235e38, -3.4028235e38, -3.4028235e38), (-0.005, -0.005, -0.03), (0.035, 0.035, 0.03)]
+
+    over "Geometry"
+    {
+        over "Body" (
+            delete apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            over "object" (
+                prepend apiSchemas = ["PhysxRigidBodyAPI"]
+            )
+            {
+                custom float physxRigidBody:maxDepenetrationVelocity = 0.1
+
+                over "Box"
+                {
+                    uniform token purpose = "guide"
+                }
+
+                over "PhysicsFixedJoint"
+                {
+                    bool physics:jointEnabled = 0
+                }
+
+                over "cream_cheese_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </cream_cheese/Materials/guide_print>
+                }
+            }
+
+            over "PhysicsFixedJoint"
+            {
+                bool physics:jointEnabled = 0
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_print"
+        {
+            token outputs:mdl:displacement.connect = </cream_cheese/Materials/guide_print/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </cream_cheese/Materials/guide_print/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </cream_cheese/Materials/guide_print/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @./Payload/Textures/texture_map.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.6
+                float inputs:specular_level = 0.3
+                token outputs:out
+            }
+        }
+    }
+}
+
