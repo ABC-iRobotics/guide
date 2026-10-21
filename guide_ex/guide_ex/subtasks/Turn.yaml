@@ -1,11 +1,12 @@
 # Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed
-# fingers beside the rim, sweep them round the knob axis in 0.15 rad steps until the knob has turned
-# 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the
-# sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense).
-# RimPose is the hand pose in the part's frame, hand down, a finger width outside the rim at 0.062 m
-# from the axis. Values are the LIBERO flat stove knob, MJCF frame; Isaac tuning: the USD frame of the
-# part, the rim radius and height (the knob has no handle: the fingers push its side), the step and
-# the 0.6 rad stop (the success is 0.5 rad).
+# fingers on the flank of the knob's lever, sweep them round the knob axis in 0.15 rad steps until the
+# knob has turned 0.6 rad from where it started (read from the part's pose), lift away. `direction` is
+# +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's
+# positive sense). RimPose is the hand pose in the part's frame, hand down, on the lever's trailing
+# flank for direction +1 (a sweep at the flange's rim would only graze it: the lever is the torque arm).
+# Values are the LIBERO flat stove knob, MJCF frame: flange radius 0.055 m, top 0.0128 m; lever 2.5 cm
+# thick, from y -0.017 to +0.052 m, up to 0.050 m. Isaac tuning: the USD frame of the part, the finger
+# clearance on the flank, the step and the 0.6 rad stop (the success is 0.5 rad).
 node_type: CompositeNode
 name: Turn
 level: SUBTASK
@@ -16,6 +17,7 @@ dynamic_map:
   scene_id: scene_id
   part: part
   turn: turn
+# guess from guide_tasks/libero/assets/flat_stove/Payload/Physics.usda (button: axis Z, limits -0.005 .. 2.1 rad, +z is the turn-on sense): verify in Isaac (G3)
 static_args: {direction: 1.0}
 children:
   - ref: SetPrompt
@@ -25,12 +27,13 @@ children:
     alias: GetPartStart
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
     output_map: {pose: part_start}
+  # guess from guide_tasks/libero/assets/flat_stove/Payload/Geometry.usda (button Box_14, lever +x face at 0.0137 m, a 1 cm finger half-width and 2 mm gap, mid-height of the lever): verify in Isaac (G3)
   - ref: TransformPose
     alias: RimPose
     dynamic_map: {l_pose: part_start}
     static_args:
       r_pose:
-        position: [0.062, 0.0, 0.02]
+        position: [0.026, 0.035, 0.03]
         orientation: {euler: [x, 3.141592653589793]}
     output_map: {pose: rim_pose}
   - ref: TransformPose

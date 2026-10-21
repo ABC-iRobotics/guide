@@ -21,7 +21,7 @@
       "used_by": []
     },
     {
-      "doc": "PutOn into a container (support: the container's region, e.g. a drawer interior): the carried object goes 20 cm over the region's centre, so it clears the open drawer's walls and front edge, and is released inside it. Announce labels (pick, place) come from the context as PutOn's. Isaac tuning: the carry height and the release height over the region centre (Release: 6.65 cm).",
+      "doc": "PutOn into a container (support: the container's region, e.g. a drawer interior): the carried object goes 20 cm over the region's centre, so it clears the open drawer's walls and front edge, and is released inside it. Announce labels (pick, place) come from the context as PutOn's. The values are the LIBERO cabinet's open top drawer: the region centre is 2.6 cm over the drawer floor, so the release is 1.85 cm over the centre (the grasped bowl's bottom 5 mm over the floor; Release's 6.65 cm would drop it 5 cm). Isaac tuning: the carry height and the release height over the region centre.",
       "inputs": [],
       "kind": "recipe",
       "level": "TASK",
@@ -57,7 +57,7 @@
       ]
     },
     {
-      "doc": "PutOn onto a tilted support (support: a region such as the wine rack's slot): the support's tilt is kept, not flattened to the table plane, so the carried object comes down square to the slot. The grasp is fitted by the same overrides as PutOn's; the release offset (SupportGripperDown) is in the slot's tilted frame. Isaac tuning: the tilt-keeping carry and release against the real rack slot (risk R6).",
+      "doc": "PutOn onto a tilted support (support: a region such as the wine rack's slot): the support's tilt is kept, not flattened to the table plane, so the carried object comes down square to the slot. The grasp is fitted by the same overrides as PutOn's; the release offset (SupportGripperDown) is in the slot's tilted frame. The slot is the rack's top_region site (turned 62 degrees about x, 20 x 4.4 cm); the object's own carry pose in the slot frame is the task's (guide_bench's HANDLING). Isaac tuning: the tilt-keeping carry and release against the real rack slot (risk R6).",
       "inputs": [],
       "kind": "recipe",
       "level": "TASK",
@@ -166,7 +166,7 @@
       "used_by": []
     },
     {
-      "doc": "Push an object (top) along the table to a goal region (support): announce the subtask (push), close the fingers, go behind the object, lower, push straight to where its centre meets the goal's, lift away. No grasp, no force: the stop is a distance (PushPoses). PushPoses' defaults are the LIBERO plate (reach 0.10 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per object, the 0.1 m/s push speed (the plate must slide flat, not tilt or ride over the hand).",
+      "doc": "Push an object (top) along the table to a goal region (support): announce the subtask (push), close the fingers, go behind the object, lower, push straight to where its centre meets the goal's, lift away. No grasp, no force: the stop is a distance (PushPoses). Its values here are the LIBERO plate's (reach 0.08 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per object, the 0.1 m/s push speed (the plate must slide flat, not tilt or ride over the hand).",
       "inputs": [
         "push",
         "robot",
@@ -200,7 +200,7 @@
       ]
     },
     {
-      "doc": "Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed fingers beside the rim, sweep them round the knob axis in 0.15 rad steps until the knob has turned 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense). RimPose is the hand pose in the part's frame, hand down, a finger width outside the rim at 0.062 m from the axis. Values are the LIBERO flat stove knob, MJCF frame; Isaac tuning: the USD frame of the part, the rim radius and height (the knob has no handle: the fingers push its side), the step and the 0.6 rad stop (the success is 0.5 rad).",
+      "doc": "Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed fingers on the flank of the knob's lever, sweep them round the knob axis in 0.15 rad steps until the knob has turned 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense). RimPose is the hand pose in the part's frame, hand down, on the lever's trailing flank for direction +1 (a sweep at the flange's rim would only graze it: the lever is the torque arm). Values are the LIBERO flat stove knob, MJCF frame: flange radius 0.055 m, top 0.0128 m; lever 2.5 cm thick, from y -0.017 to +0.052 m, up to 0.050 m. Isaac tuning: the USD frame of the part, the finger clearance on the flank, the step and the 0.6 rad stop (the success is 0.5 rad).",
       "inputs": [
         "part",
         "robot",

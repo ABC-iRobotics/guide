@@ -7,6 +7,8 @@ import numpy as np
 
 from guide_core.scene import predicates
 
+# guess from guide_tasks/libero/assets/*/Payload/Physics.usda (newton:contactGap 0 on every collider, no contact or rest offset set, so
+# resting bodies sit at PhysX's default rest offset 0; the 5 mm covers the visual mesh sitting a little off its box colliders): verify in Isaac (G3)
 TOUCH_TOL = 0.005  # m: two meshes this close touch (PhysX rests bodies a contact offset apart)
 
 

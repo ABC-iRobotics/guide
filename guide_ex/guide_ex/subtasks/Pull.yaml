@@ -26,6 +26,7 @@ children:
     alias: GetPartStart
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
     output_map: {pose: part_start}
+  # guess from guide_tasks/libero/assets/wooden_cabinet/Payload/Geometry.usda (cabinet_top Box_6, the handle bar: centre, 8.9 x 1.5 x 1.6 cm; the joint axis is +Y, range -0.16 .. 0.01 m, so the drawer opens toward -y and the pull runs along the hand's -z): verify in Isaac (G3)
   - ref: TransformPose
     alias: HandlePose
     dynamic_map: {l_pose: part_start}

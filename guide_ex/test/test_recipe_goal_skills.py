@@ -122,6 +122,17 @@ def test_turn_sweeps_until_the_knob_is_0_6_rad_round_in_either_direction(directi
     assert sweep_dir == direction
 
 
+def test_the_libero_values_come_from_the_converted_colliders():
+    """Turn: the closed fingers sit on the lever's +x flank (0.0137 m) with 1 cm half-width and a gap, above the flange (0.0128 m), below the lever top
+    (0.050 m); Push: reach = the plate's radius (0.07) + 1 cm; PutIn: the drawer-floor release, 1.85 cm over the region centre."""
+    rim = child(load({"ref": "Turn"}, values=VALUES), "RimPose").static_args["r_pose"].position.to_numpy()
+    assert rim[0] > 0.0137 + 0.01 and 0.0128 + 0.01 < rim[2] < 0.050 and -0.0172 < rim[1] < 0.052
+    push = child(load({"ref": "Push"}, values=VALUES), "PushPoses").static_args
+    assert push["reach"] == pytest.approx(0.07 + 0.01)
+    place = child(child(child(load({"ref": "PutIn"}, values=VALUES), "Place"), "Release"), "PlacePose")
+    assert place.static_args["l_pose"].position.to_numpy()[2] == pytest.approx(0.0185)
+
+
 def test_put_in_and_put_on_tilted_are_put_on_with_their_overrides():
     put_in = load({"ref": "PutIn"}, values=VALUES)
     assert (put_in.name, put_in.level) == ("PutIn", Layer.TASK)

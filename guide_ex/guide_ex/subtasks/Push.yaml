@@ -1,7 +1,7 @@
 # Push an object (top) along the table to a goal region (support): announce the subtask (push), close the
 # fingers, go behind the object, lower, push straight to where its centre meets the goal's, lift away.
-# No grasp, no force: the stop is a distance (PushPoses). PushPoses' defaults are the LIBERO plate
-# (reach 0.10 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per
+# No grasp, no force: the stop is a distance (PushPoses). Its values here are the LIBERO plate's
+# (reach 0.08 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per
 # object, the 0.1 m/s push speed (the plate must slide flat, not tilt or ride over the hand).
 node_type: CompositeNode
 name: Push
@@ -26,8 +26,10 @@ children:
     alias: GetGoalPose
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: support}
     output_map: {pose: goal_pose}
+  # guess from guide_tasks/libero/assets/plate/Payload/Geometry.usda (plate colliders: radius 0.07 m, rim top 0.0164 m over the origin; reach = radius + a 1 cm finger half-width): verify in Isaac (G3)
   - ref: PushPoses
     dynamic_map: {object_pose: pushed_pose, goal_pose: goal_pose}
+    static_args: {reach: 0.08, gap: 0.05, height: 0.015}
   - ref: TransformPose
     alias: PushApproachPose
     dynamic_map: {l_pose: start_pose}

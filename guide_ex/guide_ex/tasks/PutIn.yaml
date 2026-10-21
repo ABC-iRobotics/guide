@@ -1,14 +1,23 @@
 # PutOn into a container (support: the container's region, e.g. a drawer interior): the carried object
 # goes 20 cm over the region's centre, so it clears the open drawer's walls and front edge, and is
 # released inside it. Announce labels (pick, place) come from the context as PutOn's.
-# Isaac tuning: the carry height and the release height over the region centre (Release: 6.65 cm).
+# The values are the LIBERO cabinet's open top drawer: the region centre is 2.6 cm over the drawer floor, so the
+# release is 1.85 cm over the centre (the grasped bowl's bottom 5 mm over the floor; Release's 6.65 cm would drop it 5 cm).
+# Isaac tuning: the carry height and the release height over the region centre.
 ref: PutOn
 alias: PutIn
 level: TASK
 overrides:
+  # guess from guide_tasks/libero/assets/wooden_cabinet/Payload/Geometry.usda (cabinet_top: region centre z 0.1856, floor Box_5 top 0.1592; front panel top 0.2174, cabinet top 0.2230, so a bowl whose bottom is 4 cm under the hand clears them by 12 cm at 0.20 m): verify in Isaac (G3)
   Place.CarryToSupport.OverSupportPose:
     ref: TransformPose
     alias: OverSupportPose
     dynamic_map: {r_pose: support_pose}
     static_args: {l_pose: {position: [0.0, 0.0, 0.20]}}
     output_map: {pose: over_support_pose}
+  Place.Release.PlacePose:
+    ref: TransformPose
+    alias: PlacePose
+    dynamic_map: {r_pose: support_pose}
+    static_args: {l_pose: {position: [0.0, 0.0, 0.0185]}}
+    output_map: {pose: place_pose}
