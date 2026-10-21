@@ -13,7 +13,7 @@ import yaml
 from scipy.spatial.transform import Rotation as R
 
 from guide_core.scene import robot_profile
-from guide_core.scene.extra_features import CARTESIAN, POSE, TWIST, WRENCH, listed, tcp_wrench
+from guide_core.scene.extra_features import CARTESIAN, POSE, TWIST, WRENCH, check_layout, listed, tcp_wrench
 from guide_core.scene.predicates import PREDICATE_PATHS
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
@@ -1118,6 +1118,7 @@ class SceneOrchestrator(ABC):
         self._logger.info(f"obs_masks: {self.obs_masks}")
         self._logger.info(f"act_masks: {self.act_masks}")
 
+        check_layout(dataset_cfg)
         twist, wrench = listed(dataset_cfg, TWIST), listed(dataset_cfg, WRENCH)
         self._extras = self._setup_extras(dataset_cfg, bool(twist), bool(wrench)) if twist or wrench else None
         if self._extras:
@@ -1228,6 +1229,7 @@ class SceneOrchestrator(ABC):
             transition["start"] = current_step
 
         # Joint states
+        measured = {}  # (robot, attr, dof index) -> value of this frame's read; the action's .vel / .eff copy it
         if hasattr(self, "obs_masks"):
             for r_name, attr_masks in self.obs_masks.items():
                 view = self.robots_views[r_name]
@@ -1249,8 +1251,9 @@ class SceneOrchestrator(ABC):
                             vals = vals[0]
                         elif not hasattr(vals, "__iter__"):
                             vals = [vals]
-                        for val, key in zip(vals, mask["keys"]):
+                        for val, key, i in zip(vals, mask["keys"], joint_indices):
                             observation[key] = float(val)
+                            measured[(r_name, attr, i)] = float(val)
 
         # ~~~~~~~~~~~~~~~~ Actions ~~~~~~~~~~~~~~~~ #
         if hasattr(self, "act_masks"):
@@ -1261,19 +1264,19 @@ class SceneOrchestrator(ABC):
 
                     vals = None
                     # .vel and .eff copy the measured value, as x y z rx ry rz copy the measured delta below
-                    if attr == "vel":
-                        vals = view.get_joint_velocities(joint_indices=joint_indices)
-                    elif attr == "eff":
-                        vals = view.get_measured_joint_efforts(joint_indices=joint_indices)
+                    if attr in ("vel", "eff"):
+                        # the observation's read of this frame, not a second Isaac call; only a joint it did not list is read here
+                        new = [i for i in joint_indices if (r_name, attr, i) not in measured]
+                        if new:
+                            got = (view.get_joint_velocities if attr == "vel" else view.get_measured_joint_efforts)(joint_indices=new)
+                            got = np.asarray(got, dtype=float).reshape(-1)
+                            measured.update({(r_name, attr, i): float(v) for i, v in zip(new, got)})
+                        vals = [measured[(r_name, attr, i)] for i in joint_indices]
                     elif hasattr(view, "get_applied_action"):
                         action_obj = view.get_applied_action()
                         if action_obj is not None:
                             if attr == "pos":
                                 vals = action_obj.joint_positions
-                            elif attr == "vel":
-                                vals = action_obj.joint_velocities
-                            elif attr == "eff":
-                                vals = action_obj.joint_efforts
 
                             if vals is not None:
                                 vals = np.asarray(vals)

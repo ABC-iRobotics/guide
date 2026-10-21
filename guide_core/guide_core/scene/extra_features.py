@@ -29,6 +29,13 @@ def listed(dataset_cfg: dict, names: list[str]) -> list[str]:
     return [n for n in names if n in have]
 
 
+def check_layout(dataset_cfg: dict) -> None:
+    """Refuse an old-layout config: there wx wy wz was the state's rotation vector, now it is rx ry rz."""
+    if listed(dataset_cfg, TWIST[3:]) and not listed(dataset_cfg, TWIST[:3]):
+        raise ValueError("dataset lists wx/wy/wz without vx/vy/vz: the rotation vector is rx ry rz now; "
+                         "wx wy wz are the TCP's angular velocity (list vx vy vz wx wy wz together)")
+
+
 def key_info(name: str, action: bool = False) -> tuple[str, str]:
     """(unit, frame) of one observation.state / action key; frame is '' for a joint key."""
     if name in POSE:

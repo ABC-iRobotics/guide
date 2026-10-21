@@ -6,7 +6,7 @@ import numpy as np
 import pinocchio as pin
 import pytest
 
-from guide_core.scene.extra_features import TWIST, WRENCH, key_info, listed, tcp_wrench, with_info
+from guide_core.scene.extra_features import TWIST, WRENCH, check_layout, key_info, listed, tcp_wrench, with_info
 from guide_core.scene.scene_recorder import SceneRecorder
 
 OBS = [{"joint1.pos": "franka.fr3_joint1.pos"}, {"joint1.vel": "franka.fr3_joint1.vel"}, {"x": "x"}, {"vz": "vz"}, {"fx": "fx"}]
@@ -103,3 +103,10 @@ def test_zero_joint_force_records_zero_not_the_tare():
     args = (np.eye(3), np.zeros(3), np.zeros(3), np.eye(3), 0.65, np.zeros(3))
     assert not tcp_wrench(np.zeros(3), np.zeros(3), *args).any()
     assert tcp_wrench([0, 0, 1.0], np.zeros(3), *args).any()
+
+
+def test_old_layout_wx_as_rotation_is_refused():
+    with pytest.raises(ValueError, match="rx ry rz"):
+        check_layout({"observations": [{"wx": "wx"}, {"wz": "wz"}]})
+    check_layout({"observations": [{"vx": "vx"}, {"wx": "wx"}]})  # a twist
+    check_layout({"observations": [{"rx": "rx"}]})
