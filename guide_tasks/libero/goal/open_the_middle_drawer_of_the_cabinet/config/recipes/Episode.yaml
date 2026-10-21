@@ -39,12 +39,25 @@ overrides:
       r_pose:
         position:
         - -0.00278
-        - -0.10161
-        - 0.11041
+        - -0.10853820323027552
+        - 0.11441
         orientation:
           euler:
           - ZX
           - 3.141592653589793
-          - 1.5707963267948966
+          - 2.0943951023931953
+    output_map:
+      pose: handle_pose
+  Pull.PullUntilOpen.PullStepPose:
+    ref: TransformPose
+    alias: PullStepPose
+    dynamic_map:
+      l_pose: handle_pose
+    static_args:
+      r_pose:
+        position:
+        - 0.0
+        - -0.014999999999999998
+        - -0.02598076211353316
     output_map:
       pose: handle_pose
