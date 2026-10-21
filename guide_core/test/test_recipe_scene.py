@@ -110,7 +110,7 @@ JOINT_GOAL = {"joint": "/objects/cab/top_level", "body": "/objects/cab/base/cabi
 
 def test_goal_items_name_the_skills_inputs(tmp_path):
     root = tmp_path / "t.yaml"
-    goal = [{"on": ["/a", "/b"]}, {"in": ["/a", "/region"]}, {"on_region": {"obj": "/a", "region": "", "center": [0, 0, 0], "half": [1, 1, 1]}},
+    goal = [{"on": ["/a", "/b"]}, {"in": ["/a", "/region"]}, {"on_region": {"obj": "/a", "region": "/zone"}}, {"on_zone": {"obj": "/a", "region": "/zone"}},
             {"open": JOINT_GOAL}, {"turn_on": {**JOINT_GOAL, "inclusive": True}}]
     root.write_text(yaml.safe_dump({"language": {"task": "x"}, "goal": goal}))
     assert load_task(root)["goal"] == goal

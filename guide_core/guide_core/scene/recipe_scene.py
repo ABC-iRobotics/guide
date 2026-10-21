@@ -6,8 +6,7 @@ config/task.yaml gives the language, the zone target, the goal (handed to the so
 reply) and, optionally, the free draw's separation radii. config/success.yaml lists success predicates
 (on, on_region, in_region, joint_above, joint_below; guide_core.scene.predicates), which must all hold.
 
-The goal items name the skills' inputs: {on: [obj, support]}, {in: [obj, region]}, {on_region: {obj, region[, center,
-half]}} and {open | close | turn_on | turn_off: {joint, body, value, direction[, inclusive]}}; the solver reads them
+The goal items name the skills' inputs: {on: [obj, support]}, {in: [obj, region]}, {on_region | on_zone (a table zone, pushed into): {obj, region}} and {open | close | turn_on | turn_off: {joint, body, value, direction[, inclusive]}}; the solver reads them
 from the Randomize reply (guide_ex.recipe.solve.context). A task may list a joint item its success does not test
 (the drawer to pull before putting something in it).
 """
@@ -23,7 +22,7 @@ from guide_core.scene.scene_orchestrator import SceneOrchestrator
 
 TASK_KEYS = {"language", "target", "goal", "separation"}
 GOAL_LISTS = {"on", "in"}  # [a, b]
-GOAL_DICTS = {"on_region": {"obj", "region"}, "open": {"joint", "body", "value", "direction"}}  # required keys
+GOAL_DICTS = {"on_region": {"obj", "region"}, "on_zone": {"obj", "region"}, "open": {"joint", "body", "value", "direction"}}  # required keys
 GOAL_DICTS |= {k: GOAL_DICTS["open"] for k in ("close", "turn_on", "turn_off")}
 MAX_LAYOUT_DRAWS = 200  # as cube_stack: a free draw is redrawn until the separation holds
 

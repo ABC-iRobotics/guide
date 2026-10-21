@@ -34,9 +34,8 @@ SERVICES = {  # attribute -> (service under /Sim_<n>, guide_msgs.srv type): bloc
 def context(namespace: str, robot, entry: dict, dataset: str, reply: str) -> dict:
     """The library's context keys for a RecipeScene episode (Plan A contract addition 7), from the
     Randomize reply {task, target, goal, subtasks} and the resolved robot entry. Per goal kind: PutOn / PutIn read
-    top, support (a body or a region prim), pick, place; Pull / Turn read joint (prim path), joint_body, joint_value
-    (the success threshold), direction (+1 / -1, the sign the joint moves) and subtask; Push reads top, zone
-    ({obj, region, center, half}: a box in the scene frame) and subtask."""
+    top, support (a body or a region prim), pick, place; Pull / Turn read joint_body (the part they move) and subtask;
+    Push reads top, support (the zone's prim) and subtask."""
     from guide_core.types.geometry import Pose
 
     try:
@@ -46,17 +45,18 @@ def context(namespace: str, robot, entry: dict, dataset: str, reply: str) -> dic
     answer = answer if isinstance(answer, dict) else {}
     goals = answer.get("goal") or []
     top, support = None, None
-    for g in goals:  # on / in: [obj, support or region]; on_region: {obj, region[, center, half]} (a zone has no prim to stand on)
+    for g in goals:  # on / in: [obj, support or region]; on_region / on_zone (a table zone, pushed into): {obj, region}
         if "on" in g or "in" in g:
             top, support = g.get("on") or g["in"]
-        elif "on_region" in g:
-            top, support = g["on_region"]["obj"], None if "center" in g["on_region"] else g["on_region"]["region"]
-    zone = next((g["on_region"] for g in goals if "center" in g.get("on_region", {})), None)
-    # The joint a Pull or Turn works: open / close / turn_on / turn_off {joint, body, value, direction}. A task whose
+        for k in ("on_region", "on_zone"):
+            if k in g:
+                top, support = g[k]["obj"], g[k]["region"]
+    # The part a Pull or Turn moves: open / close / turn_on / turn_off {joint, body, value, direction}. A task whose
     # success is "in the drawer" lists the drawer's open goal too, so Pull runs before PutIn.
     joint = next((v for g in goals for k, v in g.items() if k in ("open", "close", "turn_on", "turn_off")), None) or {}
     subtasks = list(answer.get("subtasks") or [])
-    lead = subtasks.pop(0) if (joint or zone) and subtasks else ""  # Pull / Turn / Push announce the first label, PutOn / PutIn the rest
+    # Pull and Turn announce the first label, PutOn and PutIn the rest; Push (an on_zone goal) the only one
+    lead = subtasks.pop(0) if (joint or any("on_zone" in g for g in goals)) and subtasks else ""
     scene_id = int(re.search(r"(\d+)$", namespace.rstrip("/")).group(1))
     return {"sim_namespace": "/" + namespace.strip("/").split("/")[0], "scene_namespace": f"/Scene_{scene_id}",
             "scene_id": scene_id, "robot": robot, "robot_prim": f"{entry['path']}/{entry['profile']}_rightfinger",
@@ -64,8 +64,7 @@ def context(namespace: str, robot, entry: dict, dataset: str, reply: str) -> dic
             "pick": subtasks[0] if subtasks else "",
             "goal": next((g["in"][1] for g in goals if "in" in g), None),  # Place's container (block_bin-style tasks)
             "place": subtasks[1] if len(subtasks) > 1 else "", "subtask": lead, "dataset_path": dataset,
-            "joint": joint.get("joint"), "joint_body": joint.get("body"), "joint_value": joint.get("value"),
-            "direction": joint.get("direction"), "zone": zone,
+            "joint_body": joint.get("body"),
             "rest_pose": Pose.from_numpy(np.array(REST[0]), R.from_euler("xyz", REST[1])), "scene_pose_inv": Pose()}
 
 

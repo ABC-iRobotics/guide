@@ -132,12 +132,6 @@ def test_the_commands_read_the_scene_and_apply_the_predicates():
     assert cp._cmd_on(host, "/Scene_0/plate", "/Scene_0/mark", contact=True)["success"] and calls == [("/Scene_0/plate", "/Scene_0/mark")]
     assert cp._cmd_on_region(host, "/Scene_0/plate", "/Scene_0/region", touch="/Scene_0/cab")["success"]  # the box is 0.03 half over 0.03 centre
     assert calls[-1] == ("/Scene_0/plate", "/Scene_0/cab")
-    scene = (np.array([1.0, 2.0, 0.0]), np.array([1, 0, 0, 0.0]), np.ones(3))  # the scene root, away from the world origin
-    host.__dict__["__pose"] = lambda path: scene if path == "/Scene_0" else poses[path]
-    zone = {"center": [0.05, 0.2, 0.0], "half": [0.04, 0.04, 0.007]}  # a table zone: a box in the scene frame, no prim
-    assert not cp._cmd_on_region(host, "/Scene_0/plate", "/Scene_0", **zone)["success"]  # the plate is 1 m, 2 m from it
-    poses["/Scene_0/plate"] = (np.array([1.055, 2.205, 0.0023]), np.array([1, 0, 0, 0.0]), np.ones(3))
-    assert cp._cmd_on_region(host, "/Scene_0/plate", "/Scene_0", **zone)["success"]
 
 
 def test_predicate_paths_are_scene_prefixed_like_prim_path(tmp_path):
@@ -146,7 +140,7 @@ def test_predicate_paths_are_scene_prefixed_like_prim_path(tmp_path):
     (task / "config" / "success.yaml").write_text(yaml.safe_dump({"instructions": [
         {"cmd": "on", "kwargs": {"a": "/objects/plate", "b": "/marks/home", "xy_tol": 0.03}},
         {"cmd": "in_region", "kwargs": {"obj": "/objects/plate", "region": "/marks/region"}},
-        {"cmd": "on_region", "kwargs": {"obj": "/objects/plate", "region": "", "touch": "/objects/cab", "center": [0, 0, 0]}},
+        {"cmd": "on_region", "kwargs": {"obj": "/objects/plate", "region": "/stove_front_region", "touch": "/objects/cab"}},
         {"cmd": "joint_below", "kwargs": {"joint": "/objects/cab/top_level", "value": -0.1}},
         {"cmd": "some_other", "kwargs": {"a": "/not/a/prim"}},
     ]}))
@@ -156,5 +150,5 @@ def test_predicate_paths_are_scene_prefixed_like_prim_path(tmp_path):
     on, inside, zone, joint, other = (i["kwargs"] for i in manager._scenes[0].success_instructions)
     assert (on["a"], on["b"], on["xy_tol"]) == ("/Scene_0/objects/plate", "/Scene_0/marks/home", 0.03)
     assert (inside["obj"], inside["region"]) == ("/Scene_0/objects/plate", "/Scene_0/marks/region")
-    assert (zone["obj"], zone["region"], zone["touch"], zone["center"]) == ("/Scene_0/objects/plate", "/Scene_0", "/Scene_0/objects/cab", [0, 0, 0])
+    assert (zone["obj"], zone["region"], zone["touch"]) == ("/Scene_0/objects/plate", "/Scene_0/stove_front_region", "/Scene_0/objects/cab")
     assert joint["joint"] == "/Scene_0/objects/cab/top_level" and other["a"] == "/not/a/prim"

@@ -4,7 +4,6 @@ Each reads the poses or the joint value it needs and returns {success, reason}; 
 Prim paths arrive scene-prefixed (SceneOrchestrator.parse_instruction).
 """
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 from guide_core.scene import predicates
 
@@ -72,16 +71,11 @@ def _cmd_on(self, a: str, b: str, xy_tol: float = predicates.XY_TOL, contact: bo
                          self.__touching(a, b) if contact else None)
 
 
-def _cmd_on_region(self, obj: str, region: str, touch: str | None = None, center=None, half=None) -> dict:
-    """``obj`` on ``region`` (a site prim; ``touch``: its parent object's prim, which ``obj`` must touch). With
-    ``center`` and ``half`` the region is that box in the frame of the prim ``region`` instead (a table zone has no
-    prim of its own: frame = the scene root)."""
-    if center is None:
-        position, orientation, scale, lo, hi = self.__region_bound(region)
-        centre, half = predicates.box_world(lo, hi, position, orientation, scale)
-    else:
-        position, orientation, _ = self.__pose(region)
-        centre = position + Rotation.from_quat(orientation, scalar_first=True).apply(center)
+def _cmd_on_region(self, obj: str, region: str, touch: str | None = None) -> dict:
+    """``obj`` on ``region`` (a site prim, or a table zone's hidden box; ``touch``: the site's parent object, which
+    ``obj`` must touch)."""
+    position, orientation, scale, lo, hi = self.__region_bound(region)
+    centre, half = predicates.box_world(lo, hi, position, orientation, scale)
     return predicates.on_region(self.__pose(obj)[0], centre, orientation, half, f"on_region({obj}, {region})",
                                 self.__touching(obj, touch) if touch else None)
 
