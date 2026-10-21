@@ -27,9 +27,12 @@ children:
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: support}
     output_map: {pose: goal_pose}
   # guess from guide_tasks/libero/assets/plate/Payload/Geometry.usda (plate colliders: radius 0.07 m, rim top 0.0164 m over the origin; reach = radius + a 1 cm finger half-width): verify in Isaac (G3)
+  # Isaac pilot 2026-10-21: with gap 0.05 and a level hand across the push, the hand's 20 cm body ran into the
+  # LIBERO-Goal cabinet just behind the plate (overlap ~2 cm). The wrist now leans 0.5 rad ahead and the hand turns
+  # -0.38 rad, which lays its body along the cabinet's face (1.9 cm clear of its box, handles included).
   - ref: PushPoses
     dynamic_map: {object_pose: pushed_pose, goal_pose: goal_pose}
-    static_args: {reach: 0.08, gap: 0.05, height: 0.015}
+    static_args: {reach: 0.08, gap: 0.03, height: 0.015, yaw: -0.38, lean: 0.5}
   - ref: TransformPose
     alias: PushApproachPose
     dynamic_map: {l_pose: start_pose}

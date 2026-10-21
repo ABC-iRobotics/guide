@@ -694,7 +694,9 @@
         "goal_pose",
         "reach=0.1",
         "gap=0.05",
-        "height=0.015"
+        "height=0.015",
+        "yaw=0.0",
+        "lean=0.0"
       ],
       "kind": "leaf",
       "level": "UTILITY",

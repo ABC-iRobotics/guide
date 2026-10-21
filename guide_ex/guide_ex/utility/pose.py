@@ -161,7 +161,7 @@ class PushPoses(BaseNode):
         super().__init__("PushPoses", alias, dynamic_map, static_args, output_map)
 
     def run(self, object_pose: Pose, goal_pose: Pose, reach: float = 0.10, gap: float = 0.05,
-            height: float = 0.015) -> ExecutionResult:
+            height: float = 0.015, yaw: float = 0.0, lean: float = 0.0) -> ExecutionResult:
         """
         The push runs along the table, straight from the object to the goal, in the base xy plane. The
         hand points down, its x axis along the push, so the closed fingers lead with their width.
@@ -172,6 +172,8 @@ class PushPoses(BaseNode):
             reach: Hand-to-centre distance at the end of the push: the object's radius plus the finger's.
             gap: Extra distance behind the object where the hand starts, so it lowers clear of it.
             height: Hand height over the object's centre, to catch its lower rim.
+            yaw: Turn of the hand about the vertical from that (rad), e.g. to lay its 20 cm body along a fixture's face.
+            lean: Tilt of the wrist ahead along the push (rad), which takes the hand's body away from what is behind.
         Returns:
             ExecutionResult with `start_pose` and `end_pose` (hand poses, base frame).
         """
@@ -181,7 +183,7 @@ class PushPoses(BaseNode):
         if norm < 1e-6:
             return ExecutionResult(status=DemoStatus.FAILURE, error_message="PushPoses: the object is already at the goal.")
         along /= norm
-        rot = R.from_euler("z", np.arctan2(along[1], along[0])) * R.from_euler("x", np.pi)
+        rot = R.from_euler("z", np.arctan2(along[1], along[0]) + yaw) * R.from_euler("x", np.pi) * R.from_euler("y", -lean)
 
         def hand(xy):
             return Pose.from_numpy(np.array([*xy, obj[2] + height]), rot)

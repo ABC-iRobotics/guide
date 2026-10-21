@@ -48,6 +48,16 @@ def test_push_poses_run_along_the_line_to_the_goal_with_the_hand_down():
     assert PushPoses().run(pose([0, 0, 0]), pose([0, 0, 0])).status == DemoStatus.FAILURE
 
 
+def test_a_leaning_turned_push_hand_keeps_its_line_and_tilts_its_wrist_ahead():
+    out = PushPoses().run(pose([0.5, 0.1, 0.02]), pose([0.5, 0.4, 0.02]), reach=0.1, gap=0.05, height=0.015,
+                          yaw=-0.3, lean=0.5).outputs
+    np.testing.assert_allclose(out["start_pose"].position.to_numpy(), [0.5, -0.05, 0.035], atol=1e-9)
+    hand = out["end_pose"].orientation.to_scipy().as_matrix()
+    assert hand[2, 2] == pytest.approx(-np.cos(0.5))  # still pointing down, 0.5 rad off vertical
+    assert -hand[:, 2] @ [0, 1, 0] == pytest.approx(np.sin(0.5) * np.cos(0.3))  # the wrist (behind the TCP) leans ahead
+    assert np.arctan2(hand[1, 1], hand[0, 1]) == pytest.approx(-0.3)  # y (along +x unturned) turned by yaw
+
+
 def test_the_skills_load_at_subtask_and_name_their_context():
     for name, keys in {"Pull": {"part", "pull"}, "Turn": {"part", "turn", "direction"}, "Push": {"top", "support", "push"}}.items():
         tree = load({"ref": name}, values=VALUES)
