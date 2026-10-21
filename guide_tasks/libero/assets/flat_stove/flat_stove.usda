@@ -39,6 +39,23 @@ def Xform "flat_stove" (
                         {
                             uniform token purpose = "guide"
                         }
+
+                        over "burner_plate"
+                        {
+                            over "burner" (
+                                prepend apiSchemas = ["MaterialBindingAPI"]
+                            )
+                            {
+                                rel material:binding = </flat_stove/Materials/guide_burner>
+                            }
+                        }
+
+                        over "base_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </flat_stove/Materials/guide_body>
+                        }
                     }
 
                     over "button"
@@ -132,8 +149,72 @@ def Xform "flat_stove" (
                         {
                             uniform token purpose = "guide"
                         }
+
+                        over "stove_knob_button_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </flat_stove/Materials/guide_knob>
+                        }
                     }
                 }
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_burner"
+        {
+            token outputs:mdl:displacement.connect = </flat_stove/Materials/guide_burner/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </flat_stove/Materials/guide_burner/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </flat_stove/Materials/guide_burner/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                color3f inputs:diffuse_color_constant = (0.05, 0.05, 0.05)
+                float inputs:metallic_constant = 1
+                float inputs:reflection_roughness_constant = 0.35
+                token outputs:out
+            }
+        }
+
+        def Material "guide_body"
+        {
+            token outputs:mdl:displacement.connect = </flat_stove/Materials/guide_body/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </flat_stove/Materials/guide_body/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </flat_stove/Materials/guide_body/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                color3f inputs:diffuse_color_constant = (0.05, 0.05, 0.05)
+                float inputs:metallic_constant = 0.8
+                float inputs:reflection_roughness_constant = 0.5
+                token outputs:out
+            }
+        }
+
+        def Material "guide_knob"
+        {
+            token outputs:mdl:displacement.connect = </flat_stove/Materials/guide_knob/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </flat_stove/Materials/guide_knob/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </flat_stove/Materials/guide_knob/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                color3f inputs:diffuse_color_constant = (0.1, 0.1, 0.1)
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.35
+                token outputs:out
             }
         }
     }

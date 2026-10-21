@@ -86,11 +86,41 @@ def Xform "plate" (
                 {
                     bool physics:jointEnabled = 0
                 }
+
+                over "model_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </plate/Materials/guide_glaze>
+                }
             }
 
             over "PhysicsFixedJoint"
             {
                 bool physics:jointEnabled = 0
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_glaze"
+        {
+            token outputs:mdl:displacement.connect = </plate/Materials/guide_glaze/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </plate/Materials/guide_glaze/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </plate/Materials/guide_glaze/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR_ClearCoat.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR_ClearCoat"
+                float inputs:clearcoat_reflection_roughness = 0.03
+                float inputs:clearcoat_weight = 0.03
+                asset inputs:diffuse_texture = @./Payload/Textures/texture.png@
+                bool inputs:enable_clearcoat = 1
+                float inputs:reflection_roughness_constant = 0.25
+                token outputs:out
             }
         }
     }

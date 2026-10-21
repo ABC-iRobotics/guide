@@ -236,11 +236,41 @@ def Xform "akita_black_bowl" (
                 {
                     bool physics:jointEnabled = 0
                 }
+
+                over "akita_black_bowl_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </akita_black_bowl/Materials/guide_glaze>
+                }
             }
 
             over "PhysicsFixedJoint"
             {
                 bool physics:jointEnabled = 0
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_glaze"
+        {
+            token outputs:mdl:displacement.connect = </akita_black_bowl/Materials/guide_glaze/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </akita_black_bowl/Materials/guide_glaze/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </akita_black_bowl/Materials/guide_glaze/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR_ClearCoat.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR_ClearCoat"
+                float inputs:clearcoat_reflection_roughness = 0.03
+                float inputs:clearcoat_weight = 0.03
+                asset inputs:diffuse_texture = @./Payload/Textures/texture.png@
+                bool inputs:enable_clearcoat = 1
+                float inputs:reflection_roughness_constant = 0.3
+                token outputs:out
             }
         }
     }

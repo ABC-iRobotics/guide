@@ -15,6 +15,7 @@ def Cube "main_table" (
     bool physics:kinematicEnabled = 1
     double size = 1
     color3f[] primvars:displayColor = [(0.55, 0.45, 0.35)]
+    rel material:binding = </Scene/main_table_wood>
     rel material:binding:physics = </Scene/main_table_physics>
     double3 xformOp:translate = (0, 0, -0.025)
     float3 xformOp:scale = (1.0, 1.2, 0.05)
@@ -27,6 +28,21 @@ def Material "main_table_physics" (
     float physics:dynamicFriction = 0.6
     float physics:staticFriction = 0.6
 }
+def Material "main_table_wood"
+{
+    token outputs:mdl:surface.connect = </Scene/main_table_wood/Shader.outputs:out>
+    def Shader "Shader"
+    {
+        uniform token info:implementationSource = "sourceAsset"
+        uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+        uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+        asset inputs:diffuse_texture = @./textures/martin_novak_wood_table.png@
+        bool inputs:project_uvw = 1
+        bool inputs:world_or_object = 1
+        float inputs:reflection_roughness_constant = 0.5
+        token outputs:out
+    }
+}
 def Xform "objects"
 {
 }
@@ -37,6 +53,8 @@ def DistantLight "distant_light"
 def DomeLight "dome_light"
 {
     float inputs:intensity = 300
+    asset inputs:texture:file = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Assets/Skies/Indoor/studio_small_04_4k.hdr@
+    token inputs:texture:format = "latlong"
 }
 def Camera "agentview"
 {

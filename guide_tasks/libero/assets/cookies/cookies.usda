@@ -41,11 +41,40 @@ def Xform "cookies" (
                 {
                     bool physics:jointEnabled = 0
                 }
+
+                over "cookies_vis" (
+                    prepend apiSchemas = ["MaterialBindingAPI"]
+                )
+                {
+                    rel material:binding = </cookies/Materials/guide_print>
+                }
             }
 
             over "PhysicsFixedJoint"
             {
                 bool physics:jointEnabled = 0
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_print"
+        {
+            token outputs:mdl:displacement.connect = </cookies/Materials/guide_print/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </cookies/Materials/guide_print/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </cookies/Materials/guide_print/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                asset inputs:diffuse_texture = @./Payload/Textures/texture_map.png@
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.75
+                float inputs:specular_level = 0.3
+                token outputs:out
             }
         }
     }

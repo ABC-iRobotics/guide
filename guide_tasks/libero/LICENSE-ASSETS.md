@@ -9,6 +9,8 @@ The files under `assets/` are **not part of GUIDE and are not covered by GUIDE's
 
 The stage (`stage/`) and the task configurations (`spatial/`) are GUIDE's own work under GUIDE's licence.
 
+The wood of the cabinet (carcass and drawers) and the metal of its handles are NVIDIA Base materials (`NVIDIA/Materials/Base/Wood/Walnut.mdl`, `Metals/Steel_Stainless.mdl`), loaded by URL from NVIDIA's asset server when the scene is opened. They are under the NVIDIA Omniverse License, not GUIDE's GPL-3.0, and are not part of this repository. The other materials are Isaac Sim's own `OmniPBR` and `OmniPBR_ClearCoat` (BSD-3-Clause), referenced by name, and the dome light's HDRI (`NVIDIA/Assets/Skies/Indoor/studio_small_04_4k.hdr`) is likewise loaded by URL. The stage's table texture, `stage/textures/martin_novak_wood_table.png`, is LIBERO's own file and has the same unverified terms as LIBERO's other assets.
+
 ## Source
 
 - **LIBERO:** Liu et al., "LIBERO: Benchmarking Knowledge Transfer for Lifelong Robot Learning", NeurIPS 2023
@@ -19,7 +21,7 @@ The stage (`stage/`) and the task configurations (`spatial/`) are GUIDE's own wo
   - The repository has no separate licence or attribution file for its 3D assets.
 - **Changes for GUIDE:**
   - MuJoCo MJCF/OBJ/MSH converted to USD with `mujoco_usd_converter` (`guide_core/scripts/spike_libero_convert.py`);
-  - physics overrides authored by `guide_bench` (`assets.py`): the welds of movable objects disabled, and collision-only geometry hidden from rendering.
+  - physics overrides authored by `guide_bench` (`assets.py`): the welds of movable objects disabled, and collision-only geometry hidden from rendering, and the visual meshes rebound to MDL materials.
 
 ## Per asset
 

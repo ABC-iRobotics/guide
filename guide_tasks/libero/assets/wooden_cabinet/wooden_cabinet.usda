@@ -119,6 +119,20 @@ def Xform "wooden_cabinet" (
                         {
                             uniform token purpose = "guide"
                         }
+
+                        over "wooden_cabinet_top_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_wood_top>
+                        }
+
+                        over "wooden_cabinet_top_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_steel>
+                        }
                     }
 
                     over "cabinet_middle"
@@ -166,6 +180,20 @@ def Xform "wooden_cabinet" (
                         over "Box_8"
                         {
                             uniform token purpose = "guide"
+                        }
+
+                        over "wooden_cabinet_middle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_wood_middle>
+                        }
+
+                        over "wooden_cabinet_middle_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_steel>
                         }
                     }
 
@@ -215,8 +243,120 @@ def Xform "wooden_cabinet" (
                         {
                             uniform token purpose = "guide"
                         }
+
+                        over "wooden_cabinet_bottom_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_wood_bottom>
+                        }
+
+                        over "wooden_cabinet_bottom_handle_vis" (
+                            prepend apiSchemas = ["MaterialBindingAPI"]
+                        )
+                        {
+                            rel material:binding = </wooden_cabinet/Materials/guide_steel>
+                        }
+                    }
+
+                    over "wooden_cabinet_base_vis" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding = </wooden_cabinet/Materials/guide_wood_base>
                     }
                 }
+            }
+        }
+    }
+
+    over "Materials"
+    {
+        def Material "guide_wood_base"
+        {
+            token outputs:mdl:displacement.connect = </wooden_cabinet/Materials/guide_wood_base/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wooden_cabinet/Materials/guide_wood_base/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wooden_cabinet/Materials/guide_wood_base/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Wood/Walnut.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Walnut"
+                color3f inputs:diffuse_tint = (0.63, 0.78, 0.93)
+                float2 inputs:texture_scale = (3, 3)
+                float2 inputs:texture_translate = (0, 0)
+                token outputs:out
+            }
+        }
+
+        def Material "guide_wood_top"
+        {
+            token outputs:mdl:displacement.connect = </wooden_cabinet/Materials/guide_wood_top/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wooden_cabinet/Materials/guide_wood_top/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wooden_cabinet/Materials/guide_wood_top/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Wood/Walnut.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Walnut"
+                color3f inputs:diffuse_tint = (0.63, 0.78, 0.93)
+                float2 inputs:texture_scale = (3, 3)
+                float2 inputs:texture_translate = (0.37, 0.21)
+                token outputs:out
+            }
+        }
+
+        def Material "guide_wood_middle"
+        {
+            token outputs:mdl:displacement.connect = </wooden_cabinet/Materials/guide_wood_middle/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wooden_cabinet/Materials/guide_wood_middle/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wooden_cabinet/Materials/guide_wood_middle/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Wood/Walnut.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Walnut"
+                color3f inputs:diffuse_tint = (0.63, 0.78, 0.93)
+                float2 inputs:texture_scale = (3, 3)
+                float2 inputs:texture_translate = (0.71, 0.55)
+                token outputs:out
+            }
+        }
+
+        def Material "guide_wood_bottom"
+        {
+            token outputs:mdl:displacement.connect = </wooden_cabinet/Materials/guide_wood_bottom/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wooden_cabinet/Materials/guide_wood_bottom/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wooden_cabinet/Materials/guide_wood_bottom/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Wood/Walnut.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Walnut"
+                color3f inputs:diffuse_tint = (0.63, 0.78, 0.93)
+                float2 inputs:texture_scale = (3, 3)
+                float2 inputs:texture_translate = (0.13, 0.83)
+                token outputs:out
+            }
+        }
+
+        def Material "guide_steel"
+        {
+            token outputs:mdl:displacement.connect = </wooden_cabinet/Materials/guide_steel/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </wooden_cabinet/Materials/guide_steel/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </wooden_cabinet/Materials/guide_steel/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Metals/Steel_Stainless.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "Steel_Stainless"
+                color3f inputs:diffuse_tint = (0.75, 0.75, 0.75)
+                token outputs:out
             }
         }
     }
