@@ -175,9 +175,9 @@ def Xform "flat_stove" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.05, 0.05, 0.05)
-                float inputs:metallic_constant = 1
-                float inputs:reflection_roughness_constant = 0.35
+                color3f inputs:diffuse_color_constant = (0.4, 0.4, 0.4)
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.45
                 token outputs:out
             }
         }
@@ -193,9 +193,9 @@ def Xform "flat_stove" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.05, 0.05, 0.05)
-                float inputs:metallic_constant = 0.8
-                float inputs:reflection_roughness_constant = 0.5
+                color3f inputs:diffuse_color_constant = (0.4, 0.4, 0.4)
+                float inputs:metallic_constant = 0
+                float inputs:reflection_roughness_constant = 0.45
                 token outputs:out
             }
         }
@@ -211,7 +211,7 @@ def Xform "flat_stove" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.1, 0.1, 0.1)
+                color3f inputs:diffuse_color_constant = (0.15, 0.15, 0.15)
                 float inputs:metallic_constant = 0
                 float inputs:reflection_roughness_constant = 0.35
                 token outputs:out

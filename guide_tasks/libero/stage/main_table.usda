@@ -39,9 +39,18 @@ def Material "main_table_wood"
         asset inputs:diffuse_texture = @./textures/martin_novak_wood_table.png@
         bool inputs:project_uvw = 1
         bool inputs:world_or_object = 1
+        float inputs:albedo_brightness = 1.15
         float inputs:reflection_roughness_constant = 0.5
         token outputs:out
     }
+}
+def Cube "backdrop"
+{
+    double size = 1
+    color3f[] primvars:displayColor = [(0.34, 0.32, 0.3)]
+    double3 xformOp:translate = (-1.6, 0, 1)
+    float3 xformOp:scale = (0.02, 8, 6)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
 }
 def Xform "objects"
 {
@@ -52,9 +61,10 @@ def DistantLight "distant_light"
 }
 def DomeLight "dome_light"
 {
-    float inputs:intensity = 300
+    float inputs:intensity = 450
     asset inputs:texture:file = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Assets/Skies/Indoor/studio_small_04_4k.hdr@
     token inputs:texture:format = "latlong"
+    bool visibleInPrimaryRay = 1
 }
 def Camera "agentview"
 {

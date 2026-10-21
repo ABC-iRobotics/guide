@@ -355,7 +355,8 @@ def Xform "wooden_cabinet" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/6.0/NVIDIA/Materials/Base/Metals/Steel_Stainless.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "Steel_Stainless"
-                color3f inputs:diffuse_tint = (0.75, 0.75, 0.75)
+                float inputs:albedo_brightness = 5.5
+                color3f inputs:diffuse_tint = (1, 1, 1)
                 token outputs:out
             }
         }
