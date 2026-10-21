@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import yaml
 from scipy.spatial.transform import Rotation as R
-from scipy.spatial.transform import Slerp
 
 from guide_core.scene import robot_profile
 from guide_core.scene.extra_features import extra_features, tcp_wrench
@@ -53,15 +52,23 @@ def depth_to_uint16_mm(depth: np.ndarray) -> np.ndarray:
     return millimetres.reshape(millimetres.shape[0], millimetres.shape[1], 1)
 
 
-def eased_pose(p0, q0, p1, q1, u: float) -> tuple[np.ndarray, np.ndarray]:
+def eased_pose(p0, q0, p1, q1, u: float, way=None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """The pose a fraction ``u`` of the way from (p0, q0) to (p1, q1), eased in and out:
     ``s = smoothstep(u) = 3u^2 - 2u^3``, position ``lerp(p0, p1, s)``, orientation
-    ``slerp(q0, q1, s)``. Quaternions are Isaac's [w, x, y, z]; ``u`` is clipped to [0, 1]."""
+    ``slerp(q0, q1, s)``, and the turn taken (a rotation vector in q0's frame). Quaternions are
+    Isaac's [w, x, y, z]; ``u`` is clipped to [0, 1].
+
+    ``way``: an earlier call's turn, whose side this one keeps. Near 180 degrees the shortest
+    turn flips side when q1 moves a little (a wrist camera's mount as the arm moves), and the
+    camera swings back and forth; keeping the first turn's side goes the long way round instead."""
     u = min(max(float(u), 0.0), 1.0)
     s = u * u * (3.0 - 2.0 * u)
     p = (1.0 - s) * np.asarray(p0, float) + s * np.asarray(p1, float)
-    q = Slerp([0.0, 1.0], R.from_quat([q0, q1], scalar_first=True))(s).as_quat(scalar_first=True)
-    return p, q
+    r0 = R.from_quat(q0, scalar_first=True)
+    turn = (r0.inv() * R.from_quat(q1, scalar_first=True)).as_rotvec()
+    if way is not None and np.dot(turn, way) < 0:
+        turn -= 2 * np.pi * turn / np.linalg.norm(turn)
+    return p, (r0 * R.from_rotvec(s * turn)).as_quat(scalar_first=True), turn
 
 
 #: dataset.segmentation's keys. Without the section the instance stream is tab10 on black.
@@ -1455,9 +1462,10 @@ class SceneOrchestrator(ABC):
             return UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
 
         p0, q0 = _pose(world(self._transition["from"]))
+        ways = self._transition.setdefault("ways", {})  # each camera's first turn: its side is kept
         for prim, (translate, orient), mount, local in self._transition["cameras"]:
             parent = world(prim.GetParent())
-            p, q = eased_pose(p0, q0, *_pose(local * parent), u)
+            p, q, ways[prim] = eased_pose(p0, q0, *_pose(local * parent), u, ways.get(prim))
             position = np.linalg.solve(np.array(parent).T, [*p, 1.0])[:3]
             turn = R.from_quat(_pose(parent)[1], scalar_first=True)
             rotation = turn.inv() * R.from_quat(q, scalar_first=True)

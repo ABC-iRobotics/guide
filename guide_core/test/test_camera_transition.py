@@ -38,7 +38,7 @@ def test_eased_pose_eases_in_and_out_from_one_pose_to_the_other():
     p0, p1 = np.array([1.25, 0.0, 0.75]), np.array([0.2, 0.0, 1.2])
     q0 = R.from_euler("xyz", [10, 20, 30], degrees=True).as_quat(scalar_first=True)
     q1 = R.from_euler("xyz", [-40, 5, 120], degrees=True).as_quat(scalar_first=True)
-    pose = lambda u: eased_pose(p0, q0, p1, q1, u)  # noqa: E731
+    pose = lambda u: eased_pose(p0, q0, p1, q1, u)[:2]  # noqa: E731
 
     assert np.allclose(pose(0)[0], p0) and angle(pose(0)[1], q0) < 1e-9
     assert np.allclose(pose(1)[0], p1) and angle(pose(1)[1], q1) < 1e-9
@@ -51,6 +51,23 @@ def test_eased_pose_eases_in_and_out_from_one_pose_to_the_other():
         assert angle(pose(v)[1], pose(u)[1]) < 1e-6 * angle(q0, q1)
     for u in np.linspace(0, 1, 21):
         assert np.isclose(np.linalg.norm(pose(u)[1]), 1.0, atol=1e-12)
+
+
+def test_a_half_turn_keeps_its_side_while_the_target_wobbles():
+    """LIBERO's agentview and wrist camera are 180 degrees apart: the hand yawing +-2 degrees
+    flips the shortest turn's side, so without ``way`` the camera swings back and forth."""
+    q0 = [0.638018, 0.30485, 0.30485, 0.638018]  # LIBERO agentview
+    mount = R.from_quat([0.0, 0.707107, 0.707107, 0.0], scalar_first=True)  # wrist camera in the hand
+    target = lambda yaw: (R.from_euler("zx", [yaw, 180], degrees=True) * mount).as_quat(scalar_first=True)  # noqa: E731
+    p = np.zeros(3)
+    _, _, way = eased_pose(p, q0, p, target(2), 0.0)
+    for k, yaw in enumerate((2, -2, 2, -2, -2, 2)):
+        u = (k + 1) / 8
+        free = eased_pose(p, q0, p, target(yaw), u)[2]
+        _, _, kept = eased_pose(p, q0, p, target(yaw), u, way)
+        assert np.dot(kept, way) > 0
+        assert (np.dot(free, way) > 0) == (yaw == 2)  # the bug this guards against
+        assert angle(eased_pose(p, q0, p, target(yaw), 1.0, way)[1], target(yaw)) < 1e-9  # still lands
 
 
 # ---- config ----------------------------------------------------------------------------------
