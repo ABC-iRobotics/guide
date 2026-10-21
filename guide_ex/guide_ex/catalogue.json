@@ -21,7 +21,17 @@
       "used_by": []
     },
     {
-      "doc": "Put the target (top, once held) on a support (support): announce the pick, locate the target as a top-down grasp, pick it, carry it over the support and set it down (PlaceOn, which announces `place`). No recording: the episode around it is the task's. A task fits the grasp to its object by overriding GetTargetPose's TransformCubePoseForGripper, Pick's CloseGripper and Place's CarryToSupport.SupportGripperDown.",
+      "doc": "PutOn into a container (support: the container's region, e.g. a drawer interior): the carried object goes 20 cm over the region's centre, so it clears the open drawer's walls and front edge, and is released inside it. Announce labels (pick, place) come from the context as PutOn's. Isaac tuning: the carry height and the release height over the region centre (Release: 6.65 cm).",
+      "inputs": [],
+      "kind": "recipe",
+      "level": "TASK",
+      "name": "PutIn",
+      "outputs": [],
+      "source": "tasks/PutIn.yaml",
+      "used_by": []
+    },
+    {
+      "doc": "Put the target (top, once held) on a support (support): announce the pick, locate the target as a top-down grasp, pick it, carry it over the support and set it down (PlaceOn, which announces `place`). No recording: the episode around it is the task's. A task fits the grasp to its object by overriding GetTargetPose's TransformCubePoseForGripper, Pick's CloseGripper and Place's CarryToSupport.SupportGripperDown. The support is any prim: an object, or a region (a site such as a burner, a cabinet top, a drawer interior, or a table region); the release height and orientation are measured from its frame, so a region is fitted through SupportGripperDown's offset like an object. A tilted region is PutOnTilted's.",
       "inputs": [
         "pick",
         "place",
@@ -41,6 +51,19 @@
       "name": "PutOn",
       "outputs": [],
       "source": "tasks/PutOn.yaml",
+      "used_by": [
+        "PutIn",
+        "PutOnTilted"
+      ]
+    },
+    {
+      "doc": "PutOn onto a tilted support (support: a region such as the wine rack's slot): the support's tilt is kept, not flattened to the table plane, so the carried object comes down square to the slot. The grasp is fitted by the same overrides as PutOn's; the release offset (SupportGripperDown) is in the slot's tilted frame. Isaac tuning: the tilt-keeping carry and release against the real rack slot (risk R6).",
+      "inputs": [],
+      "kind": "recipe",
+      "level": "TASK",
+      "name": "PutOnTilted",
+      "outputs": [],
+      "source": "tasks/PutOnTilted.yaml",
       "used_by": []
     },
     {
@@ -125,6 +148,43 @@
       ]
     },
     {
+      "doc": "Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle horizontally, pull back in 3 cm steps until the part has slid 15 cm from where it started (read from the part's pose, so the stop follows the drawer's joint value), let go and back away. HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar; the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411; a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the grasp slips), and the 3 cm step / 15 cm stop (the success is 14 cm).",
+      "inputs": [
+        "part",
+        "pull",
+        "robot",
+        "scene_id",
+        "scene_namespace",
+        "sim_namespace",
+        "${robot.gripper_joint}"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Pull",
+      "outputs": [],
+      "source": "subtasks/Pull.yaml",
+      "used_by": []
+    },
+    {
+      "doc": "Push an object (top) along the table to a goal region (support): announce the subtask (push), close the fingers, go behind the object, lower, push straight to where its centre meets the goal's, lift away. No grasp, no force: the stop is a distance (PushPoses). PushPoses' defaults are the LIBERO plate (reach 0.10 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per object, the 0.1 m/s push speed (the plate must slide flat, not tilt or ride over the hand).",
+      "inputs": [
+        "push",
+        "robot",
+        "scene_id",
+        "scene_namespace",
+        "sim_namespace",
+        "support",
+        "top",
+        "${robot.gripper_joint}"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Push",
+      "outputs": [],
+      "source": "subtasks/Push.yaml",
+      "used_by": []
+    },
+    {
       "doc": "Go back to the rest pose and stay still for 1 s, the stationary end of going home.",
       "inputs": [
         "rest_pose",
@@ -138,6 +198,24 @@
       "used_by": [
         "PickAndPlace"
       ]
+    },
+    {
+      "doc": "Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed fingers beside the rim, sweep them round the knob axis in 0.15 rad steps until the knob has turned 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense). RimPose is the hand pose in the part's frame, hand down, a finger width outside the rim at 0.062 m from the axis. Values are the LIBERO flat stove knob, MJCF frame; Isaac tuning: the USD frame of the part, the rim radius and height (the knob has no handle: the fingers push its side), the step and the 0.6 rad stop (the success is 0.5 rad).",
+      "inputs": [
+        "part",
+        "robot",
+        "scene_id",
+        "scene_namespace",
+        "sim_namespace",
+        "turn",
+        "${robot.gripper_joint}"
+      ],
+      "kind": "recipe",
+      "level": "SUBTASK",
+      "name": "Turn",
+      "outputs": [],
+      "source": "subtasks/Turn.yaml",
+      "used_by": []
     },
     {
       "doc": "Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it already was at rest), open.",
@@ -278,7 +356,10 @@
       "used_by": [
         "CarryToSupport",
         "GetTargetPose",
-        "Place"
+        "Place",
+        "Pull",
+        "Push",
+        "Turn"
       ]
     },
     {
@@ -372,9 +453,12 @@
         "CarryToSupport",
         "Pick",
         "Place",
+        "Pull",
+        "Push",
         "Release",
         "RetreatViaRest",
         "Return",
+        "Turn",
         "Unclutch"
       ]
     },
@@ -421,7 +505,10 @@
       "used_by": [
         "PickRecovery",
         "Place",
+        "Pull",
+        "Push",
         "Release",
+        "Turn",
         "Unclutch"
       ]
     },
@@ -438,7 +525,10 @@
       "source": "steps/end_effector/gripper_control.py",
       "used_by": [
         "CloseGripper",
-        "OpenGripper"
+        "OpenGripper",
+        "Pull",
+        "Push",
+        "Turn"
       ]
     },
     {
@@ -559,6 +649,25 @@
       "used_by": []
     },
     {
+      "doc": "How far a moved body is from where it started: the joint value of a drawer (slide, `distance`) or a knob (hinge, `angle`), read from the body's pose instead of the joint, so a stop condition needs no joint service.",
+      "inputs": [
+        "pose",
+        "reference"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "PoseDisplacement",
+      "outputs": [
+        "angle",
+        "distance"
+      ],
+      "source": "utility/pose.py",
+      "used_by": [
+        "Pull",
+        "Turn"
+      ]
+    },
+    {
       "doc": "Project an object's full 3D orientation onto the pure Z-rotation of the base frame, assuming the object is meant to be reached from straight above.",
       "inputs": [
         "pose",
@@ -576,6 +685,27 @@
         "CarryToSupport",
         "GetTargetPose",
         "Place"
+      ]
+    },
+    {
+      "doc": "The two hand poses of a push: behind the object, and where the hand ends with the object at the goal.",
+      "inputs": [
+        "object_pose",
+        "goal_pose",
+        "reach=0.1",
+        "gap=0.05",
+        "height=0.015"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "PushPoses",
+      "outputs": [
+        "end_pose",
+        "start_pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": [
+        "Push"
       ]
     },
     {
@@ -600,6 +730,26 @@
       ]
     },
     {
+      "doc": "A pose turned about an axis of another pose: one step of an arc around a knob.",
+      "inputs": [
+        "pose",
+        "about",
+        "angle",
+        "direction=1.0",
+        "axis='z'"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "RotateAbout",
+      "outputs": [
+        "pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": [
+        "Turn"
+      ]
+    },
+    {
       "doc": "Tells the scene what the robot works on from now on, at the GUIDE-EX layers.",
       "inputs": [
         "robot",
@@ -616,7 +766,10 @@
       "source": "utility/recording.py",
       "used_by": [
         "PlaceOn",
-        "PutOn"
+        "Pull",
+        "Push",
+        "PutOn",
+        "Turn"
       ]
     },
     {
@@ -708,7 +861,12 @@
         "Pick",
         "PickRecovery",
         "Place",
+        "Pull",
+        "Push",
+        "PutIn",
+        "PutOnTilted",
         "Release",
+        "Turn",
         "Unclutch"
       ]
     },
@@ -728,6 +886,7 @@
         "Pick",
         "PickRecovery",
         "Place",
+        "Pull",
         "Release",
         "Return",
         "Unclutch"

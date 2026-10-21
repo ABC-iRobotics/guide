@@ -1,0 +1,98 @@
+# Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed
+# fingers beside the rim, sweep them round the knob axis in 0.15 rad steps until the knob has turned
+# 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the
+# sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense).
+# RimPose is the hand pose in the part's frame, hand down, a finger width outside the rim at 0.062 m
+# from the axis. Values are the LIBERO flat stove knob, MJCF frame; Isaac tuning: the USD frame of the
+# part, the rim radius and height (the knob has no handle: the fingers push its side), the step and
+# the 0.6 rad stop (the success is 0.5 rad).
+node_type: CompositeNode
+name: Turn
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  part: part
+  turn: turn
+static_args: {direction: 1.0}
+children:
+  - ref: SetPrompt
+    alias: AnnounceTurn
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: turn}
+  - ref: GetPrimPose
+    alias: GetPartStart
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
+    output_map: {pose: part_start}
+  - ref: TransformPose
+    alias: RimPose
+    dynamic_map: {l_pose: part_start}
+    static_args:
+      r_pose:
+        position: [0.062, 0.0, 0.02]
+        orientation: {euler: [x, 3.141592653589793]}
+    output_map: {pose: rim_pose}
+  - ref: TransformPose
+    alias: RimApproachPose
+    dynamic_map: {l_pose: rim_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.10]}}
+    output_map: {pose: rim_approach_pose}
+  - ref: SetGripperState
+    alias: CloseOnKnob
+    dynamic_map: {robot: robot}
+    static_args:
+      gripper_goal_pos: {"${robot.gripper_joint}": 0.0}
+  - ref: MoveToCartesianPose
+    alias: MoveToRimApproach
+    dynamic_map: {robot: robot, target_pose: rim_approach_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: MoveToCartesianPose
+    alias: MoveToRim
+    dynamic_map: {robot: robot, target_pose: rim_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  # Each pass turns the hand's goal 0.15 rad about the knob axis (rim_pose accumulates in the loop's
+  # context) and measures the knob; 8 passes (1.2 rad) without reaching 0.6 rad fail the subtask.
+  - node_type: CompositeNode
+    name: TurnUntilOn
+    level: SEQUENCE
+    mode: loop
+    max_loops: 8
+    condition_expr: part_angle >= 0.6
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      part: part
+      part_start: part_start
+      rim_pose: rim_pose
+      direction: direction
+    children:
+      - ref: RotateAbout
+        alias: SweepStepPose
+        dynamic_map: {pose: rim_pose, about: part_start, direction: direction}
+        static_args: {angle: 0.15}
+        output_map: {pose: rim_pose}
+      - ref: MoveToCartesianPose
+        alias: SweepStep
+        dynamic_map: {robot: robot, target_pose: rim_pose}
+        static_args: {speed: 0.2, cartesian: true}
+      - ref: GetPrimPose
+        alias: GetPartNow
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
+        output_map: {pose: part_now}
+      - ref: PoseDisplacement
+        alias: MeasurePartTurn
+        dynamic_map: {pose: part_now, reference: part_start}
+        output_map: {angle: part_angle}
+  - ref: TransformPose
+    alias: RimRetreatPose
+    dynamic_map: {l_pose: rim_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.12]}}
+    output_map: {pose: rim_retreat_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveFromRim
+    dynamic_map: {robot: robot, target_pose: rim_retreat_pose}
+    static_args: {speed: 0.3, cartesian: true}
+  - ref: OpenGripper
+    alias: OpenAfterTurn

@@ -1,0 +1,20 @@
+# PutOn onto a tilted support (support: a region such as the wine rack's slot): the support's tilt is kept,
+# not flattened to the table plane, so the carried object comes down square to the slot. The grasp is
+# fitted by the same overrides as PutOn's; the release offset (SupportGripperDown) is in the slot's tilted frame.
+# Isaac tuning: the tilt-keeping carry and release against the real rack slot (risk R6).
+ref: PutOn
+alias: PutOnTilted
+level: TASK
+overrides:
+  Place.CarryToSupport.FlattenSupport:
+    ref: TransformPose
+    alias: FlattenSupport
+    dynamic_map: {l_pose: support_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, 0.0]}}
+    output_map: {pose: support_pose}
+  Place.CarryToSupport.MinimizeSupportTurn:
+    ref: TransformPose
+    alias: MinimizeSupportTurn
+    dynamic_map: {l_pose: support_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, 0.0]}}
+    output_map: {pose: support_pose}

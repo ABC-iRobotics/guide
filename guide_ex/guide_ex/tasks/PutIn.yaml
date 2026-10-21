@@ -1,0 +1,14 @@
+# PutOn into a container (support: the container's region, e.g. a drawer interior): the carried object
+# goes 20 cm over the region's centre, so it clears the open drawer's walls and front edge, and is
+# released inside it. Announce labels (pick, place) come from the context as PutOn's.
+# Isaac tuning: the carry height and the release height over the region centre (Release: 6.65 cm).
+ref: PutOn
+alias: PutIn
+level: TASK
+overrides:
+  Place.CarryToSupport.OverSupportPose:
+    ref: TransformPose
+    alias: OverSupportPose
+    dynamic_map: {r_pose: support_pose}
+    static_args: {l_pose: {position: [0.0, 0.0, 0.20]}}
+    output_map: {pose: over_support_pose}

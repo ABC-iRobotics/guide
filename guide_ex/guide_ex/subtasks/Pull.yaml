@@ -1,0 +1,107 @@
+# Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle
+# horizontally, pull back in 3 cm steps until the part has slid 15 cm from where it started (read from
+# the part's pose, so the stop follows the drawer's joint value), let go and back away.
+# HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the
+# drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar;
+# the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO
+# wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411;
+# a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the
+# fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the
+# grasp slips), and the 3 cm step / 15 cm stop (the success is 14 cm).
+node_type: CompositeNode
+name: Pull
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  part: part
+  pull: pull
+children:
+  - ref: SetPrompt
+    alias: AnnouncePull
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: pull}
+  - ref: GetPrimPose
+    alias: GetPartStart
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
+    output_map: {pose: part_start}
+  - ref: TransformPose
+    alias: HandlePose
+    dynamic_map: {l_pose: part_start}
+    static_args:
+      r_pose:
+        position: [-0.00278, -0.10161, 0.18393]
+        orientation: {euler: [ZX, 3.141592653589793, 1.5707963267948966]}
+    output_map: {pose: handle_pose}
+  - ref: TransformPose
+    alias: HandleApproachPose
+    dynamic_map: {l_pose: handle_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.10]}}
+    output_map: {pose: handle_approach_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToHandleApproach
+    dynamic_map: {robot: robot, target_pose: handle_approach_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: MoveToCartesianPose
+    alias: MoveToHandle
+    dynamic_map: {robot: robot, target_pose: handle_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  # 0.0 per finger: the fingers stall on the 1.6 cm bar and keep squeezing (see CloseGripper).
+  - ref: SetGripperState
+    alias: CloseOnHandle
+    dynamic_map: {robot: robot}
+    static_args:
+      gripper_goal_pos: {"${robot.gripper_joint}": 0.0}
+  - ref: WaitForSeconds
+    alias: WaitAfterClose
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}
+  # Each pass moves the hand 3 cm further back (handle_pose accumulates in the loop's context) and
+  # measures the part; 8 passes (24 cm) without reaching 15 cm fail the subtask.
+  - node_type: CompositeNode
+    name: PullUntilOpen
+    level: SEQUENCE
+    mode: loop
+    max_loops: 8
+    condition_expr: part_travel >= 0.15
+    dynamic_map:
+      robot: robot
+      sim_namespace: sim_namespace
+      scene_namespace: scene_namespace
+      part: part
+      part_start: part_start
+      handle_pose: handle_pose
+    children:
+      - ref: TransformPose
+        alias: PullStepPose
+        dynamic_map: {l_pose: handle_pose}
+        static_args: {r_pose: {position: [0.0, 0.0, -0.03]}}
+        output_map: {pose: handle_pose}
+      - ref: MoveToCartesianPose
+        alias: PullStep
+        dynamic_map: {robot: robot, target_pose: handle_pose}
+        static_args: {speed: 0.2, cartesian: true}
+      - ref: GetPrimPose
+        alias: GetPartNow
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: part}
+        output_map: {pose: part_now}
+      - ref: PoseDisplacement
+        alias: MeasurePartTravel
+        dynamic_map: {pose: part_now, reference: part_start}
+        output_map: {distance: part_travel}
+  - ref: OpenGripper
+    alias: OpenOnHandle
+  - ref: WaitForSeconds
+    alias: WaitAfterOpen
+    dynamic_map: {timer: robot}
+    static_args: {seconds: 0.5}
+  - ref: TransformPose
+    alias: HandleRetreatPose
+    dynamic_map: {l_pose: handle_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.12]}}
+    output_map: {pose: handle_retreat_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveFromHandle
+    dynamic_map: {robot: robot, target_pose: handle_retreat_pose}
+    static_args: {speed: 0.3, cartesian: true}

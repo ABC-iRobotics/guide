@@ -1,0 +1,63 @@
+# Push an object (top) along the table to a goal region (support): announce the subtask (push), close the
+# fingers, go behind the object, lower, push straight to where its centre meets the goal's, lift away.
+# No grasp, no force: the stop is a distance (PushPoses). PushPoses' defaults are the LIBERO plate
+# (reach 0.10 m = its radius plus a finger, 0.015 m up its rim); Isaac tuning: reach and height per
+# object, the 0.1 m/s push speed (the plate must slide flat, not tilt or ride over the hand).
+node_type: CompositeNode
+name: Push
+level: SUBTASK
+dynamic_map:
+  robot: robot
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  top: top
+  support: support
+  push: push
+children:
+  - ref: SetPrompt
+    alias: AnnouncePush
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: push}
+  - ref: GetPrimPose
+    alias: GetPushedPose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: top}
+    output_map: {pose: pushed_pose}
+  - ref: GetPrimPose
+    alias: GetGoalPose
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: support}
+    output_map: {pose: goal_pose}
+  - ref: PushPoses
+    dynamic_map: {object_pose: pushed_pose, goal_pose: goal_pose}
+  - ref: TransformPose
+    alias: PushApproachPose
+    dynamic_map: {l_pose: start_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.12]}}
+    output_map: {pose: push_approach_pose}
+  - ref: SetGripperState
+    alias: ClosePushFingers
+    dynamic_map: {robot: robot}
+    static_args:
+      gripper_goal_pos: {"${robot.gripper_joint}": 0.0}
+  - ref: MoveToCartesianPose
+    alias: MoveToPushApproach
+    dynamic_map: {robot: robot, target_pose: push_approach_pose}
+    static_args: {speed: 0.5, cartesian: true}
+  - ref: MoveToCartesianPose
+    alias: LowerBehindObject
+    dynamic_map: {robot: robot, target_pose: start_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  - ref: MoveToCartesianPose
+    alias: PushToGoal
+    dynamic_map: {robot: robot, target_pose: end_pose}
+    static_args: {speed: 0.2, cartesian: true}
+  - ref: TransformPose
+    alias: PushRetreatPose
+    dynamic_map: {l_pose: end_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, -0.12]}}
+    output_map: {pose: push_retreat_pose}
+  - ref: MoveToCartesianPose
+    alias: LiftFromObject
+    dynamic_map: {robot: robot, target_pose: push_retreat_pose}
+    static_args: {speed: 0.3, cartesian: true}
+  - ref: OpenGripper
+    alias: OpenAfterPush

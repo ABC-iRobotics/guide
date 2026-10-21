@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from guide_core.types.geometry import Pose, Transform
 from guide_ex.core.base_node import BaseNode
@@ -93,3 +94,97 @@ class ChainLength(BaseNode):
             status=DemoStatus.PERFECT,
             outputs={"length": length, "complete": length == len(poses)},
         )
+
+
+@node()
+class PoseDisplacement(BaseNode):
+    """
+    How far a moved body is from where it started: the joint value of a drawer (slide, `distance`) or
+    a knob (hinge, `angle`), read from the body's pose instead of the joint, so a stop condition needs
+    no joint service.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("PoseDisplacement", alias, dynamic_map, static_args, output_map)
+
+    def run(self, pose: Pose, reference: Pose) -> ExecutionResult:
+        """
+        Args:
+            pose: The body now.
+            reference: The same body before it moved (the same frame).
+        Returns:
+            ExecutionResult with `distance` (m, between the origins) and `angle` (rad, 0 to pi, of the
+            turn between the orientations).
+        """
+        distance = float(np.linalg.norm(pose.position.to_numpy() - reference.position.to_numpy()))
+        angle = float((reference.orientation.to_scipy().inv() * pose.orientation.to_scipy()).magnitude())
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"distance": distance, "angle": angle})
+
+
+@node()
+class RotateAbout(BaseNode):
+    """A pose turned about an axis of another pose: one step of an arc around a knob."""
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("RotateAbout", alias, dynamic_map, static_args, output_map)
+
+    def run(self, pose: Pose, about: Pose, angle: float, direction: float = 1.0, axis: str = "z") -> ExecutionResult:
+        """
+        Args:
+            pose: The pose to turn.
+            about: The frame whose `axis` through its origin is the turning axis.
+            angle: Size of the turn, radians.
+            direction: +1 or -1; its sign picks the sense of the turn (a number, so a recipe takes it as a parameter).
+            axis: The axis of `about`: x, y or z.
+        Returns:
+            ExecutionResult with `pose`, position and orientation turned by `direction * angle`.
+        """
+        about_rot = about.orientation.to_scipy()
+        turn = R.from_rotvec(about_rot.apply(np.eye(3)["xyz".index(axis)]) * direction * angle)
+        centre = about.position.to_numpy()
+        moved = Pose.from_numpy(centre + turn.apply(pose.position.to_numpy() - centre),
+                                turn * pose.orientation.to_scipy())
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": moved})
+
+
+@node()
+class PushPoses(BaseNode):
+    """The two hand poses of a push: behind the object, and where the hand ends with the object at the goal."""
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("PushPoses", alias, dynamic_map, static_args, output_map)
+
+    def run(self, object_pose: Pose, goal_pose: Pose, reach: float = 0.10, gap: float = 0.05,
+            height: float = 0.015) -> ExecutionResult:
+        """
+        The push runs along the table, straight from the object to the goal, in the base xy plane. The
+        hand points down, its x axis along the push, so the closed fingers lead with their width.
+
+        Args:
+            object_pose: The object now (its centre).
+            goal_pose: Where its centre should end up (a region prim's centre).
+            reach: Hand-to-centre distance at the end of the push: the object's radius plus the finger's.
+            gap: Extra distance behind the object where the hand starts, so it lowers clear of it.
+            height: Hand height over the object's centre, to catch its lower rim.
+        Returns:
+            ExecutionResult with `start_pose` and `end_pose` (hand poses, base frame).
+        """
+        obj, goal = object_pose.position.to_numpy(), goal_pose.position.to_numpy()
+        along = goal[:2] - obj[:2]
+        norm = np.linalg.norm(along)
+        if norm < 1e-6:
+            return ExecutionResult(status=DemoStatus.FAILURE, error_message="PushPoses: the object is already at the goal.")
+        along /= norm
+        rot = R.from_euler("z", np.arctan2(along[1], along[0])) * R.from_euler("x", np.pi)
+
+        def hand(xy):
+            return Pose.from_numpy(np.array([*xy, obj[2] + height]), rot)
+
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={
+            "start_pose": hand(obj[:2] - along * (reach + gap)), "end_pose": hand(goal[:2] - along * reach)})

@@ -2,6 +2,9 @@
 # top-down grasp, pick it, carry it over the support and set it down (PlaceOn, which announces `place`).
 # No recording: the episode around it is the task's. A task fits the grasp to its object by overriding
 # GetTargetPose's TransformCubePoseForGripper, Pick's CloseGripper and Place's CarryToSupport.SupportGripperDown.
+# The support is any prim: an object, or a region (a site such as a burner, a cabinet top, a drawer
+# interior, or a table region); the release height and orientation are measured from its frame, so a region
+# is fitted through SupportGripperDown's offset like an object. A tilted region is PutOnTilted's.
 node_type: CompositeNode
 name: PutOn
 level: TASK
