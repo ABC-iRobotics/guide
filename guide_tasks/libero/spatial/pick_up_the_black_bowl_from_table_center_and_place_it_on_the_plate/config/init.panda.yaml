@@ -39,12 +39,16 @@ cameras:
     height: 512
     topic: /cam_agentview
     rgb: true
+    depth: true
+    instance: true
   wrist:
     path: /robot/panda_hand/wrist_camera
     width: 512
     height: 512
     topic: /cam_wrist
     rgb: true
+    depth: true
+    instance: true
 dataset:
   tracked_objects:
     wooden_cabinet_1: /objects/wooden_cabinet_1_Xform/wooden_cabinet_1
@@ -54,7 +58,33 @@ dataset:
     cookies_1: /objects/cookies_1_Xform/cookies_1
     glazed_rim_porcelain_ramekin_1: /objects/glazed_rim_porcelain_ramekin_1_Xform/glazed_rim_porcelain_ramekin_1
     plate_1: /objects/plate_1_Xform/plate_1
+    main_table: /main_table
     robot: /robot
+  segmentation:
+    tables:
+      ade20k: ade20k
+    colors:
+      wooden_cabinet_1: ade20k:cabinet
+      flat_stove_1: ade20k:stove
+      akita_black_bowl_1: ade20k:basket
+      akita_black_bowl_2:
+      - 140
+      - 255
+      - 0
+      cookies_1: ade20k:box
+      glazed_rim_porcelain_ramekin_1: ade20k:vase
+      plate_1: ade20k:plate
+      main_table: ade20k:table
+      robot: ade20k:computer
+    background:
+    - 0
+    - 0
+    - 0
+  camera_transition:
+    enabled: true
+    duration: 2.0
+    from: agentview
+    label: Startup
   fps: 20
   images:
   - agentview: agentview
