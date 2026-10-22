@@ -117,9 +117,10 @@ def test_float32_states_give_the_float64_command(controller):
 
 
 def test_the_gains_are_the_specs(controller):
-    """S2b spec 5: LIBERO-like torque gains (zeta = 1), OSCBF's velocity gains."""
-    assert GAINS["torque"] == {"kp": 150.0, "kd": 2 * math.sqrt(150.0), "kp_null": 10.0, "kd_null": 2 * math.sqrt(10.0)}
-    assert GAINS["velocity"] == {"kp_pos": 50.0, "kp_rot": 20.0, "kp_null": 10.0}
+    """S2b spec 5: LIBERO-like torque gains (zeta = 1), OSCBF's velocity gains; joint goals (2026-10-22) at the task stiffness."""
+    assert GAINS["torque"] == {"kp": 150.0, "kd": 2 * math.sqrt(150.0), "kp_null": 10.0, "kd_null": 2 * math.sqrt(10.0),
+                               "kp_joint": 150.0, "kd_joint": 2 * math.sqrt(150.0)}
+    assert GAINS["velocity"] == {"kp_pos": 50.0, "kp_rot": 20.0, "kp_null": 10.0, "kp_joint": 20.0}
     assert controller.gains == GAINS[controller.mode]
 
 
@@ -162,3 +163,29 @@ def test_warm_up_compiles_the_barrier_check(fr3_model):
     c = Controller(fr3_model, "torque")
     c.warm_up()
     assert c._h._cache_size() == 1
+
+
+def test_a_joint_goal_unwinds_a_wound_wrist(controller):
+    """turn_on_the_stove (2026-10-22): from a failed Turn's wrist (j5 -2.53, j7 at its limit) MoveHome tracked as the
+    goal's FK pose stalled 8 mm / 28 deg off home on another branch, every later attempt failing. Joint space gets home."""
+    import pinocchio as pin
+
+    from guide_motion.model import Model
+
+    model = controller.model
+    # the plant has the controller's (PhysX) masses, as in Isaac: the exporter URDF's wrist is far lighter, and
+    # computed torque from the heavier model over-drives it past what this explicit 120 Hz rollout can integrate
+    plant = Model(model.urdf_text, model.xrdf)
+    wound = np.array([0.0376, 0.2269, -0.3308, -2.0589, -2.5255, 4.0082, 3.0146])
+    hz = 240 if controller.mode == "velocity" else 120
+    q, qd = wound.copy(), np.zeros(7)
+    for k in range(6 * hz):  # the planner's joint interpolation over 4 s, then hold
+        if controller.mode == "velocity" or k % 2 == 0:
+            goal = wound + min(1.0, k / (4 * hz)) * (HOME - wound)
+            u = controller.step(Target(mode=JOINTS, joints=goal), q, qd)
+        if controller.mode == "velocity":
+            q = q + u / hz
+        else:
+            qd = qd + pin.aba(plant.pin_model, plant.pin_data, q, qd, u) / hz
+            q = q + qd / hz
+    assert np.abs(q - HOME).max() < 0.02

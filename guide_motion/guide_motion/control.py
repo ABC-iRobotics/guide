@@ -11,9 +11,11 @@ from guide_motion.targets import JOINTS, TWIST, Target
 GAINS = {
     # LIBERO-like: robosuite OSC_POSE as LIBERO configures it (kp 150, zeta 1, all six axes);
     # nullspace PD towards the posture at the episode start.
-    "torque": {"kp": 150.0, "kd": 2 * math.sqrt(150.0), "kp_null": 10.0, "kd_null": 2 * math.sqrt(10.0)},
+    "torque": {"kp": 150.0, "kd": 2 * math.sqrt(150.0), "kp_null": 10.0, "kd_null": 2 * math.sqrt(10.0),
+               # JOINTS goals: computed-torque joint PD, critically damped like the pose task
+               "kp_joint": 150.0, "kd_joint": 2 * math.sqrt(150.0)},
     # OSCBF's own velocity gains (its dynamic_motion.py).
-    "velocity": {"kp_pos": 50.0, "kp_rot": 20.0, "kp_null": 10.0},
+    "velocity": {"kp_pos": 50.0, "kp_rot": 20.0, "kp_null": 10.0, "kp_joint": 20.0},
 }
 BARRIERS = {
     "workspace": [[-1.0, 1.0], [-1.0, 1.0], [-0.05, 1.3]],  # tool box in the base frame, m
@@ -55,7 +57,7 @@ class Controller:
         # one row per box: rotation (9, row-major), centre (3), half extents (3), margin; far away until set
         self.obstacles = np.zeros((self.obstacle_boxes, 16))
         self.obstacles[:, [0, 4, 8]], self.obstacles[:, 9] = 1.0, 1e3
-        self._fn, self._h, self.gravity = _build(model, mode, self.gains, self.barriers, self.obstacle_boxes)
+        self._fn, self._joint_fn, self._h, self.gravity = _build(model, mode, self.gains, self.barriers, self.obstacle_boxes)
 
     def set_obstacles(self, poses, half_extents, margins) -> None:
         """Every obstacle box in the base frame: poses (B, 4, 4), half extents (B, 3), margins (B,).
@@ -73,6 +75,7 @@ class Controller:
         start = time.perf_counter()
         position, rotation = self.model.ee_pose(self.q_rest)
         self.step(Target(position=position, rotation=rotation), self.q_rest, np.zeros_like(self.q_rest))
+        self.step(Target(mode=JOINTS, joints=self.q_rest), self.q_rest, np.zeros_like(self.q_rest))
         self.gravity(self.q_rest)  # the fallback's, so an infeasible step never compiles mid-episode
         self.barrier_values(self.q_rest)  # the host checks the barriers at registration and attach
         self.events["infeasible"] = 0
@@ -82,9 +85,11 @@ class Controller:
         q, qd = np.asarray(q, float), np.asarray(qd, float)
         des_q, twist = self.q_rest, np.zeros(6)
         if target.mode == JOINTS:
-            des_q = np.asarray(target.joints, float)
-            position, rotation = self.model.ee_pose(des_q)
-        elif target.mode == TWIST:
+            # Joint space, not the goal's FK pose: from a wound wrist (j5 -2.5, j7 at its limit) the
+            # pose task held a branch 8 mm / 28 deg off home and the weak posture never unwound it.
+            u, violation = self._joint_fn(q, qd, np.asarray(target.joints, float), *self._args())
+            return self._checked(u, violation, q, qd)
+        if target.mode == TWIST:
             position, rotation = self.model.ee_pose(q)
             twist = np.asarray(target.twist, float)
         else:
@@ -96,6 +101,10 @@ class Controller:
             if len(target.joints) == len(des_q):
                 des_q = np.asarray(target.joints, float)
         u, violation = self._fn(q, qd, position, rotation, twist[:3], twist[3:], des_q, *self._args())
+        return self._checked(u, violation, q, qd)
+
+    def _checked(self, u, violation, q, qd) -> np.ndarray:
+        """The QP's command, or the fallback when it is non-finite or breaks a row; clipped to the limits."""
         u = np.asarray(u)
         if not np.all(np.isfinite(u)) or float(violation) > INFEASIBLE_TOL:
             self.events["infeasible"] += 1
@@ -199,6 +208,10 @@ def _build(model, mode, gains, barriers, obstacle_boxes=0):
             u = task(q, qd, T[:3, 3], T[:3, :3], p, R, v, w, z3, z3, des_q, jnp.zeros(n), J, M, M_inv, g, c)
             return jnp.concatenate([q, qd]), u
 
+        def joint_nominal(q, qd, des_q):
+            M, _, g, c, _, _ = man.torque_control_matrices(q, qd)
+            return jnp.concatenate([q, qd]), M @ (gains["kp_joint"] * (des_q - q) - gains["kd_joint"] * qd) + g + c
+
     else:
 
         @jax.tree_util.register_static
@@ -219,11 +232,12 @@ def _build(model, mode, gains, barriers, obstacle_boxes=0):
             M_inv, J, T = man.dynamically_consistent_velocity_control_matrices(q)
             return q, task(q, T[:3, 3], T[:3, :3], p, R, v, w, des_q, J, M_inv)
 
+        def joint_nominal(q, qd, des_q):
+            return q, gains["kp_joint"] * (des_q - q)
+
     cbf = CBF.from_config(Config())
 
-    @jax.jit
-    def fn(q, qd, p, R, v, w, des_q, *obstacles):
-        z, u_nom = nominal(q, qd, p, R, v, w, des_q)
+    def safe(z, u_nom, obstacles):
         # CBF.safety_filter's relaxed QP, spelled out so the step also reports how far the
         # solution breaks a row (the relaxed QP never says "infeasible" by itself).
         P, c, _, _, G, hq = cbf.qp_data(z, u_nom, *obstacles)
@@ -231,4 +245,12 @@ def _build(model, mode, gains, barriers, obstacle_boxes=0):
         u = qpax.solve_qp_elastic_primal(P, c, G, hq, penalty=penalty, solver_tol=cbf.solver_tol)
         return u, jnp.max(G @ u - hq)
 
-    return fn, jax.jit(h), jax.jit(man.gravity_vector)
+    @jax.jit
+    def fn(q, qd, p, R, v, w, des_q, *obstacles):
+        return safe(*nominal(q, qd, p, R, v, w, des_q), obstacles)
+
+    @jax.jit
+    def joint_fn(q, qd, des_q, *obstacles):
+        return safe(*joint_nominal(q, qd, des_q), obstacles)
+
+    return fn, joint_fn, jax.jit(h), jax.jit(man.gravity_vector)
