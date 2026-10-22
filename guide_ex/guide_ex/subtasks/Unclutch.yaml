@@ -1,5 +1,7 @@
 # Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it
-# already was at rest), open.
+# already was at rest), open. An attempt that broke off can leave the wrist at its limits (a failed Turn left
+# joint 6 at 4.517 rad), where the straight line to rest has no IK and every later attempt failed here: a refused
+# MoveToRest goes home in joint space first. Unclutch runs before StartEpisode, so the detour is never recorded.
 node_type: CompositeNode
 name: Unclutch
 level: SUBTASK
@@ -24,3 +26,13 @@ children:
     alias: WaitAfterOpen
     dynamic_map: {timer: robot}
     static_args: {seconds: 0.5}
+fallbacks:
+  MoveToRest:
+    node_type: RecoveryNode
+    name: UnclutchViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveToRest
+    max_retries: 1
+    children:
+      - {ref: MoveHome, alias: UnclutchViaHomeToHome}

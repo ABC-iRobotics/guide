@@ -1,4 +1,6 @@
 # Go back to the rest pose and stay still for 1 s, the stationary end of going home.
+# A Cartesian move keeps the arm's posture: from a wrist at its limits (after Turn, or the rack's tilted
+# release) the straight line to rest has no IK, so a refused MoveToRest goes home in joint space and retries.
 node_type: CompositeNode
 name: Return
 level: SUBTASK
@@ -12,3 +14,13 @@ children:
     alias: WaitAfterTask
     dynamic_map: {timer: robot}
     static_args: {seconds: 1.0}
+fallbacks:
+  MoveToRest:
+    node_type: RecoveryNode
+    name: RestViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveToRest
+    max_retries: 1
+    children:
+      - {ref: MoveHome, alias: RestViaHomeToHome}

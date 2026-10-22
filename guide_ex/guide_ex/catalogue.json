@@ -185,7 +185,7 @@
       "used_by": []
     },
     {
-      "doc": "Go back to the rest pose and stay still for 1 s, the stationary end of going home.",
+      "doc": "Go back to the rest pose and stay still for 1 s, the stationary end of going home. A Cartesian move keeps the arm's posture: from a wrist at its limits (after Turn, or the rack's tilted release) the straight line to rest has no IK, so a refused MoveToRest goes home in joint space and retries.",
       "inputs": [
         "rest_pose",
         "robot"
@@ -218,7 +218,7 @@
       "used_by": []
     },
     {
-      "doc": "Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it already was at rest), open.",
+      "doc": "Free the arm and open the hand at rest: to the rest pose, 10 cm down (which moves the arm even if it already was at rest), open. An attempt that broke off can leave the wrist at its limits (a failed Turn left joint 6 at 4.517 rad), where the straight line to rest has no IK and every later attempt failed here: a refused MoveToRest goes home in joint space first. Unclutch runs before StartEpisode, so the detour is never recorded.",
       "inputs": [
         "rest_pose",
         "robot"
@@ -446,7 +446,9 @@
       "source": "steps/MoveHome.yaml",
       "used_by": [
         "CarryToSupport",
-        "Release"
+        "Release",
+        "Return",
+        "Unclutch"
       ]
     },
     {
