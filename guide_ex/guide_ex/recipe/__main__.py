@@ -5,9 +5,9 @@ if sys.argv[1:] == ["catalogue"]:
 
     for path in write():
         print(f"wrote {path}")
-elif sys.argv[1:] == ["view"]:
-    from guide_ex.recipe.viewer import main
+elif sys.argv[1:] == ["edit"]:
+    from guide_ex.recipe.editor import main
 
     main()
 else:
-    sys.exit("usage: python -m guide_ex.recipe catalogue|view")
+    sys.exit("usage: python -m guide_ex.recipe catalogue|edit")
