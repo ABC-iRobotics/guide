@@ -5,9 +5,10 @@ Left, the catalogue (leaves and library recipes by level): click describes a nod
 drag one onto the recipe tree to add it: onto the top or bottom of a row, before or after it; onto the middle
 of a composite, as its last child. While dragging, the node at the pointer says where it lands and the tree
 marks the place. A composite that is a ref or inherited is copied into the file first (asked). Middle, the
-editor: New, Open, Save, Save as and Check; the tree shows the open recipe with the nodes of the recipes it
-refs expanded and their overrides applied: grey rows are inherited, blue ones overridden. Select a row to
-edit its alias, dynamic_map, static_args and output_map; an edit of an inherited row becomes an override in the nearest node of the file. Drag a row of
+editor: New, Open, Save, Save as and Check; New stays in memory until the first Save asks where to write it.
+The tree shows the open recipe with the nodes of the recipes it refs expanded and their overrides applied:
+grey rows are inherited, blue ones overridden. Select a row to edit its alias, dynamic_map, static_args and
+output_map; an edit of an inherited row becomes an override in the nearest node of the file. Drag a row of
 the file to move it, Delete removes it (an override: reverts it). Source edits the YAML (or a leaf's
 Python) as text, Timeline shows what each node reads and gives and the context after it, Values holds the
 roots of the ${...} interpolations. Saving checks the recipe with load() and rewrites the catalogue;
@@ -320,7 +321,9 @@ class Editor(tk.Tk):
 
     # --- documents ---
     def set_title(self):
-        name = self.path.name if self.path else ("untitled" if self.doc is not None else "")
+        name = self.path.name if self.path else ""
+        if self.path is None and self.doc is not None:
+            name = f"{self.doc.get('name')} (not saved yet)"
         self.title(f"GUIDE-EX editor  {'*' if self.dirty else ''}{name}")
         where = f"{self.path.parent.name}/{self.path.name}" if self.path else name
         self.file_label.config(text=f"{'*' if self.dirty else ''}{where}")
@@ -362,24 +365,28 @@ class Editor(tk.Tk):
     def new(self):
         if not self.discard_ok():
             return
-        name = simpledialog.askstring("New recipe", "Name (the file stem):", parent=self)
+        name = simpledialog.askstring("New recipe", "Name:", parent=self)
         level = name and simpledialog.askstring("New recipe", f"Level, one of {list(FOLDERS)}:",
                                                 initialvalue="SUBTASK", parent=self)
         if not name or level not in FOLDERS:
             return
         self.doc = CommentedMap(node_type="CompositeNode", name=name, level=level, dynamic_map={}, children=[])
         self.doc.yaml_set_start_comment("What it does; the catalogue's description.")
-        self.path = PACKAGE / FOLDERS[level] / f"{name}.yaml"
-        if self.path.exists():
-            self.say(f"{self.path} exists: opened it instead", error=True)
-            return self.open_path(self.path)
+        self.path = None  # in memory only: the first Save asks where it goes
         self.set_source(dump(self.doc))
         self.mark_dirty()
         self.refresh()
 
     def save_as(self):
-        path = filedialog.asksaveasfilename(initialdir=self.path.parent if self.path else PACKAGE,
-                                            defaultextension=".yaml")
+        if self.path is None and self.doc is None:
+            return self.say("nothing to save: New or Open first", error=True)
+        if self.path:
+            folder, file = self.path.parent, self.path.name
+        else:
+            folder = PACKAGE / FOLDERS.get(self.doc.get("level"), "")
+            file = f"{self.doc.get('name', 'untitled')}.yaml"
+        path = filedialog.asksaveasfilename(parent=self, title="Save recipe as", initialdir=folder, initialfile=file,
+                                            defaultextension=".yaml", filetypes=[("Recipes", "*.yaml"), ("All", "*")])
         if path:
             self.save(Path(path))
 
