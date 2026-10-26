@@ -1,16 +1,18 @@
 """An editor for guide_ex's recipes: `python -m guide_ex.recipe edit`, run from `guide_ex/` so it edits the
 source tree, not the installed copy.
 
-Left, the catalogue (leaves and library recipes by level): click shows a node, double-click opens it, drag
-one onto the recipe tree to add it (onto a composite written in the file: its last child; onto a child:
-before it). The tree
-shows the open recipe with the nodes of the recipes it refs expanded and their overrides applied: grey rows
-are inherited, blue ones overridden. Select a row to edit its alias, dynamic_map, static_args and
-output_map; an edit of an inherited row becomes an override in the nearest node of the file. Drag a row of
+Left, the catalogue (leaves and library recipes by level): click describes a node, double-click opens it,
+drag one onto the recipe tree to add it: onto the top or bottom of a row, before or after it; onto the middle
+of a composite, as its last child. While dragging, the node at the pointer says where it lands and the tree
+marks the place. A composite that is a ref or inherited is copied into the file first (asked). Middle, the
+editor: New, Open, Save, Save as and Check; the tree shows the open recipe with the nodes of the recipes it
+refs expanded and their overrides applied: grey rows are inherited, blue ones overridden. Select a row to
+edit its alias, dynamic_map, static_args and output_map; an edit of an inherited row becomes an override in the nearest node of the file. Drag a row of
 the file to move it, Delete removes it (an override: reverts it). Source edits the YAML (or a leaf's
 Python) as text, Timeline shows what each node reads and gives and the context after it, Values holds the
 roots of the ${...} interpolations. Saving checks the recipe with load() and rewrites the catalogue;
-comments and layout survive (ruamel.yaml round trip)."""
+comments and layout survive (ruamel.yaml round trip). Right, the selected node's description and the
+timeline."""
 
 import copy
 import inspect
@@ -123,6 +125,7 @@ class Row:
     path: str  # its override path below the top node (an override matches the name it replaces)
     overridden: bool
     scope: str  # the path its own nodes extend: an override that renames it renames their paths
+    index: int | None = None  # its place among its parent's children; None: the top, a branch or a fallback
 
     def chain(self) -> list["Row"]:
         """Itself and its ancestors, the top node first."""
@@ -145,9 +148,10 @@ def rows(doc: dict, registry: Registry) -> list[Row]:
     def below(scope, name):
         return f"{scope}.{name}" if scope else name
 
-    def walk(spec, parent, prefix, slot, path, overridden):
+    def walk(spec, parent, prefix, slot, path, overridden, index=None):
         scope = below(parent.scope, node_name(spec, registry)) if parent else ""
-        row = Row(spec, effective(spec, registry), parent, prefix + label(spec), slot, path, overridden, scope)
+        row = Row(spec, effective(spec, registry), parent, prefix + label(spec), slot, path, overridden, scope,
+                  index)
         out.append(row)
         own = slot is not None and row.eff is spec  # its kids are in the file too
         for kid_prefix, kid, container, key in kids(row.eff):
@@ -161,7 +165,8 @@ def rows(doc: dict, registry: Registry) -> list[Row]:
                 if rel in (above.eff.get("overrides") or {}):
                     kid, kid_slot, hit = above.eff["overrides"][rel], None, True
                     break
-            walk(kid, row, kid_prefix, kid_slot, kid_path, hit)
+            index = key if container is row.eff.get("children") else None
+            walk(kid, row, kid_prefix, kid_slot, kid_path, hit, index)
 
     walk(doc, None, "", ("top",), "", False)
     return out
@@ -196,30 +201,21 @@ def timeline(node, context: set, out: list, depth: int = 0, prefix: str = "") ->
 class Editor(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.geometry("1600x1000")
+        self.geometry("1700x1000")
         self.path, self.doc, self.dirty, self.problem = None, None, False, None
-        self.rows, self.drag = {}, None
+        self.rows, self.drag, self.marked = {}, None, None
         self.registry = fresh_registry()
-
-        menu = tk.Menu(self)
-        file = tk.Menu(menu, tearoff=False)
-        for text, key, command in (("New recipe...", "n", self.new), ("Open...", "o", self.open_file),
-                                   ("Save", "s", self.save), ("Save as...", None, self.save_as)):
-            file.add_command(label=text, command=command, accelerator=f"Ctrl+{key.upper()}" if key else None)
-            if key:
-                self.bind(f"<Control-{key}>", lambda _, c=command: c())
-        menu.add_cascade(label="File", menu=file)
-        self.config(menu=menu)
         self.protocol("WM_DELETE_WINDOW", lambda: self.discard_ok() and self.destroy())
-
-        bottom = ttk.Frame(self)
-        bottom.pack(side=tk.BOTTOM, fill=tk.X)
-        ttk.Button(bottom, text="Apply source and values (Ctrl+Enter)", command=self.apply_text).pack(side=tk.RIGHT)
-        self.status = ttk.Label(bottom, anchor=tk.W)
-        self.status.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        for key, command in (("n", self.new), ("o", self.open_file), ("s", self.save)):
+            self.bind(f"<Control-{key}>", lambda _, c=command: c())
+        self.status = ttk.Label(self, anchor=tk.W, relief=tk.SUNKEN)
+        self.status.pack(side=tk.BOTTOM, fill=tk.X)
         panes = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         panes.pack(fill=tk.BOTH, expand=True)
+
+        # left: the catalogue, the nodes to drag in
         left = ttk.Frame(panes)
+        ttk.Label(left, text="Nodes: drag one into the recipe, double-click opens it").pack(anchor=tk.W)
         self.query = tk.StringVar()
         self.query.trace_add("write", lambda *_: self.fill_list())
         ttk.Entry(left, textvariable=self.query).pack(fill=tk.X)
@@ -230,42 +226,71 @@ class Editor(tk.Tk):
         self.list.pack(fill=tk.BOTH, expand=True)
         self.list.bind("<<TreeviewSelect>>", lambda _: self.describe(next(iter(self.list.selection()), None)))
         self.list.bind("<Double-1>", lambda _: self.open_node(self.list.focus()))
-        self.list.bind("<ButtonPress-1>", lambda e: self.start_drag(self.list.identify_row(e.y), None))
-        self.list.bind("<ButtonRelease-1>", self.drop)
-        panes.add(left, weight=1)
+        self.list.bind("<ButtonPress-1>", lambda e: self.start_drag(e, self.list.identify_row(e.y), None))
 
-        right = ttk.PanedWindow(panes, orient=tk.VERTICAL)
-        self.info = tk.Text(right, wrap=tk.WORD, height=7)
-        middle = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
-        self.tree = ttk.Treeview(middle, show="tree", selectmode="browse")
+        # middle: the editor
+        editor = ttk.Frame(panes)
+        bar = ttk.Frame(editor)
+        bar.pack(fill=tk.X)
+        for text, command in (("New", self.new), ("Open", self.open_file), ("Save", self.save),
+                              ("Save as", self.save_as), ("Check (Ctrl+Enter)", self.apply_text)):
+            ttk.Button(bar, text=text, command=command).pack(side=tk.LEFT)
+        self.file_label = ttk.Label(bar, font="TkHeadingFont")
+        self.file_label.pack(side=tk.LEFT, padx=10)
+        body = ttk.PanedWindow(editor, orient=tk.VERTICAL)
+        body.pack(fill=tk.BOTH, expand=True)
+        self.tree = ttk.Treeview(body, show="tree", selectmode="browse")
         self.tree.tag_configure("inherited", foreground="grey50")
         self.tree.tag_configure("overridden", foreground="blue")
-        self.tree.bind("<<TreeviewSelect>>", lambda _: self.edit_row(self.rows.get(self.tree.focus())))
+        self.tree.tag_configure("into", background="#cfe0ff")
+        self.tree.bind("<<TreeviewSelect>>", lambda _: self.select_row(self.rows.get(self.tree.focus())))
         self.tree.bind("<Double-1>", lambda _: self.open_node((self.rows[self.tree.focus()].spec.get("ref"))))
-        self.tree.bind("<ButtonPress-1>", lambda e: self.start_drag(None, self.tree.identify_row(e.y)))
-        self.tree.bind("<ButtonRelease-1>", self.drop)
+        self.tree.bind("<ButtonPress-1>", lambda e: self.start_drag(e, None, self.tree.identify_row(e.y)))
         self.tree.bind("<Delete>", lambda _: self.delete_row())
-        self.form = ttk.Frame(middle)
-        middle.add(self.tree, weight=3)
-        middle.add(self.form, weight=2)
-        tabs = ttk.Notebook(right)
+        self.empty = ttk.Label(self.tree, justify=tk.CENTER)
+        self.line = tk.Frame(self.tree, height=2, background="#1e66f5")  # where a drop goes
+        for widget in (self.list, self.tree):
+            widget.bind("<B1-Motion>", self.dragging)
+            widget.bind("<ButtonRelease-1>", self.drop)
+        self.tabs = tabs = ttk.Notebook(body)
+        self.form = ttk.Frame(tabs, padding=4)
         self.source = tk.Text(tabs, wrap=tk.NONE, font="TkFixedFont", undo=True)
         self.source.bind("<<Modified>>", lambda _: self.source.edit_modified() and self.mark_dirty())
-        self.timeline = ttk.Treeview(tabs, columns=("reads", "gives", "context"))
-        for column, text in (("#0", "Node"), ("reads", "Reads"), ("gives", "Gives"), ("context", "Context after")):
-            self.timeline.heading(column, text=text)
-        self.timeline.tag_configure("missing", foreground="red")
         self.values = tk.Text(tabs, font="TkFixedFont", height=6)
         self.values.insert("1.0", DEFAULT_VALUES)
-        for widget, text in ((self.source, "Source"), (self.timeline, "Timeline"), (self.values, "Values")):
-            tabs.add(widget, text=text)
+        tabs.add(self.form, text="Selected node")
+        tabs.add(self.source, text="Source")
+        tabs.add(self.values, text="Values")
         for widget in (self, self.source, self.values):  # "break": a Text would insert the newline too
             widget.bind("<Control-Return>", lambda _: (self.apply_text(), "break")[1])
-        for pane, weight in ((self.info, 1), (middle, 3), (tabs, 3)):
-            right.add(pane, weight=weight)
-        panes.add(right, weight=4)
+        for pane, weight in ((self.tree, 1), (tabs, 1)):
+            body.add(pane, weight=weight)
+
+        # right: information on the node and the context
+        right = ttk.PanedWindow(panes, orient=tk.VERTICAL)
+        self.info = tk.Text(right, wrap=tk.WORD, height=8)
+        flow = ttk.Frame(right)
+        ttk.Label(flow, text="Timeline: what each node reads and gives, red when read before it exists").pack(
+            anchor=tk.W)
+        self.timeline = ttk.Treeview(flow, columns=("reads", "gives", "context"))
+        for column, text in (("#0", "Node"), ("reads", "Reads"), ("gives", "Gives"), ("context", "Context after")):
+            self.timeline.heading(column, text=text)
+            self.timeline.column(column, width=120)
+        self.timeline.tag_configure("missing", foreground="red")
+        self.timeline.pack(fill=tk.BOTH, expand=True)
+        right.add(self.info, weight=1)
+        right.add(flow, weight=3)
+        for pane, weight in ((left, 1), (editor, 3), (right, 2)):
+            panes.add(pane, weight=weight)
+
+        self.ghost = tk.Toplevel(self)  # the dragged node, at the pointer
+        self.ghost.overrideredirect(True)
+        self.ghost.withdraw()
+        self.ghost_label = tk.Label(self.ghost, background="lightyellow", relief=tk.SOLID, borderwidth=1, padx=4)
+        self.ghost_label.pack()
         self.load_catalogue()
         self.set_title()
+        self.refresh()
 
     # --- the catalogue ---
     def load_catalogue(self):
@@ -297,6 +322,8 @@ class Editor(tk.Tk):
     def set_title(self):
         name = self.path.name if self.path else ("untitled" if self.doc is not None else "")
         self.title(f"GUIDE-EX editor  {'*' if self.dirty else ''}{name}")
+        where = f"{self.path.parent.name}/{self.path.name}" if self.path else name
+        self.file_label.config(text=f"{'*' if self.dirty else ''}{where}")
 
     def mark_dirty(self):
         self.dirty = True
@@ -329,6 +356,7 @@ class Editor(tk.Tk):
         if leaf:
             self.source.see(self.source.search(f"class {leaf}", "1.0") or "1.0")
         self.dirty = False
+        self.set_title()
         self.refresh()
 
     def new(self):
@@ -419,7 +447,10 @@ class Editor(tk.Tk):
         self.edit_row(None)
         self.problem = None
         if self.doc is None:
-            return
+            self.empty.config(text="A leaf: edit its Python under Source, then Save." if self.path else
+                              "No recipe open.\nNew or Open above, or double-click a recipe in the list.")
+            return self.empty.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
+        self.empty.place_forget()
         extra = [self.path.parent] if self.path and not any(self.path.parent == f for f in LIBRARY) else []
         try:
             self.registry = fresh_registry(extra)
@@ -458,40 +489,131 @@ class Editor(tk.Tk):
                 self.tree.selection_set(item)
                 self.tree.see(item)
 
-    def start_drag(self, name, item):
-        self.drag = (name, item) if name in self.nodes or item in self.rows else None
+    def select_row(self, row):
+        self.edit_row(row)
+        if row:
+            self.tabs.select(self.form)
+        if row and row.eff.get("ref"):
+            self.describe(row.eff["ref"])
+
+    # --- drag and drop ---
+    def start_drag(self, event, name, item):
+        """A press on a node of the list (name) or a row of the tree (item): a drag once the pointer moves."""
+        self.drag = (name, item, event.x_root, event.y_root) if name in self.nodes or item in self.rows else None
+
+    def dragging(self, event):
+        """The preview: the node at the pointer saying where it would land, and the place marked in the tree."""
+        if not self.drag:
+            return
+        name, item, x0, y0 = self.drag
+        if not self.ghost.winfo_viewable() and abs(event.x_root - x0) + abs(event.y_root - y0) < 6:
+            return  # a click so far
+        parent, _, mark, words = self.place_at(event)
+        what = name or self.rows[item].text.strip()
+        self.ghost_label.config(text=f"{what}  {words}" if parent else f"{what}: {words}",
+                                foreground="black" if parent else "red")
+        self.ghost.geometry(f"+{event.x_root + 16}+{event.y_root + 12}")
+        self.ghost.deiconify()
+        self.ghost.lift()
+        self.mark(mark)
+
+    def mark(self, mark):
+        """Show where a drop goes: ("line", y) between rows, ("into", item) on a composite; None clears."""
+        self.line.place_forget()
+        if self.marked and self.tree.exists(self.marked):
+            self.tree.item(self.marked, tags=[t for t in self.tree.item(self.marked, "tags") if t != "into"])
+        self.marked = None
+        if mark and mark[0] == "line":
+            self.line.place(x=0, y=max(mark[1] - 1, 0), relwidth=1)
+        elif mark:
+            self.marked = mark[1]
+            self.tree.item(mark[1], tags=[*self.tree.item(mark[1], "tags"), "into"])
+
+    def place_at(self, event):
+        """Where a drop at the pointer lands: (composite row, index among its children or None for the
+        last, mark, words); a None row when it cannot land there, the words saying why."""
+        if self.doc is None:
+            return None, None, None, "open or create a recipe first (New, Open, or double-click a recipe)"
+        if self.winfo_containing(event.x_root, event.y_root) is not self.tree or not self.rows:
+            return None, None, None, "drop it on the recipe tree (a recipe that loads)"
+        y = event.y_root - self.tree.winfo_rooty()
+        item = self.tree.identify_row(y) or self.tree.get_children()[0]  # below the rows: the top node
+        row = self.rows[item]
+        top, height = (self.tree.bbox(item) or (0, y, 0, 1))[1::2]
+        part = (y - top) / height if self.tree.identify_row(y) else 0.5
+        composite = "node_type" in row.eff
+        if row.index is not None and (part < 0.3 or not composite and part < 0.5):
+            parent, index, mark, words = row.parent, row.index, ("line", top), f"before {row.text.strip()}"
+        elif row.index is not None and (part > 0.7 or not composite):
+            parent, index, mark, words = row.parent, row.index + 1, ("line", top + height), f"after {row.text.strip()}"
+        elif composite:
+            parent, index, mark, words = row, None, ("into", item), f"as the last child of {row.text.strip()}"
+        else:
+            return None, None, None, "only before or after a child, or into a composite"
+        moved = self.rows.get(self.drag[1])
+        if moved:
+            if not (moved.slot and isinstance(moved.slot[0], list)):
+                return None, None, None, "only a child written in this file moves (drag a node from the list)"
+            if moved in parent.chain():
+                return None, None, None, "not into itself"
+        if not (parent.slot and "node_type" in parent.spec):  # a ref, or inherited: its recipe is copied in
+            if moved:
+                return None, None, None, f"{parent.text.strip()} is not written in this file: drop a node into it first"
+            words += f" (copies {parent.text.strip()} into this file)"
+        return parent, index, mark, words
 
     def drop(self, event):
-        """A node from the list, or a row of the file, onto a composite of the file (its last child) or a
-        child in the file (before it)."""
         drag, self.drag = self.drag, None
-        if not drag or self.doc is None or self.winfo_containing(event.x_root, event.y_root) is not self.tree:
+        started = self.ghost.winfo_viewable()
+        self.ghost.withdraw()
+        self.mark(None)
+        if not (drag and started):
             return
-        name, item = drag
-        target = self.rows.get(self.tree.identify_row(event.y_root - self.tree.winfo_rooty()))
-        if target is None or (item and self.rows.get(item) is target):
-            return
+        name, item = drag[:2]
+        self.drag = drag  # place_at reads what moves
+        parent, index, _, words = self.place_at(event)
+        self.drag = None
+        if parent is None:
+            return self.say(f"not dropped: {words}", error=True)
         if not self.text_taken():
             return
-        if target.slot is None:
-            return self.say("drop onto a node of this file (override an inherited one first)", error=True)
-        moved = self.rows.get(item)
-        if moved and (not (moved.slot and isinstance(moved.slot[0], list)) or moved in target.chain()):
-            return self.say("only a child of this file moves, and not into itself", error=True)
-        if "node_type" in target.spec:
-            container, index = target.spec.setdefault("children", []), None
-        elif isinstance(target.slot[0], list):
-            container, index = target.slot
-        else:
-            return self.say("drop onto a composite written in this file, or a child", error=True)
+        node = self.writable(parent)
+        if node is None:
+            return
+        children = node.setdefault("children", [])
         if name:
-            node = CommentedMap(ref=name)
+            new = CommentedMap(ref=name)
         else:
-            node = moved.slot[0].pop(moved.slot[1])
-            if container is moved.slot[0] and index is not None and index > moved.slot[1]:
+            container, key = self.rows[item].slot
+            new = container.pop(key)
+            if container is children and index is not None and index > key:
                 index -= 1
-        container.insert(len(container) if index is None else index, node)
+        children.insert(len(children) if index is None else index, new)
         self.edited()
+        self.say(f"{name or new.get('alias') or new.get('ref')} placed {words}; {self.status.cget('text')}",
+                 error=str(self.status.cget("foreground")) == "red")
+
+    def writable(self, row):
+        """`row`'s node as a composite written in the file: a ref or an inherited node has its recipe copied
+        in first (asked: the copy no longer follows the recipe); None when that is declined."""
+        if row.slot and "node_type" in row.spec:
+            return row.spec
+        name = row.text.strip()
+        if not messagebox.askyesno("Copy into this file", f"{name} comes from a recipe. Copy it into this file "
+                                   "to change its children? The copy no longer follows the recipe."):
+            return None
+        node = CommentedMap(copy.deepcopy(plain(row.eff)))
+        if row.slot is None:  # inherited: the copy is an override
+            holder = row.holder()
+            holder.spec.setdefault("overrides", CommentedMap())[relative(row.path, holder)] = node
+        elif row.parent is None:  # the top node, rewritten in place so the file's leading comment stays
+            self.doc.clear()
+            self.doc.update(node)
+            node = self.doc
+        else:
+            container, key = row.slot
+            container[key] = node
+        return node
 
     def delete_row(self):
         row = self.rows.get(self.tree.focus())
@@ -508,7 +630,7 @@ class Editor(tk.Tk):
             widget.destroy()
         self.form_row, self.fields = row, {}
         if row is None:
-            return
+            return ttk.Label(self.form, text="Select a row of the tree to edit it.").grid(sticky=tk.W)
         target = target_of(row.eff, self.registry)
         leaf = None if target is None or isinstance(target, RecipeTemplate) else target
         params = [n for n, p in inspect.signature(leaf.run).parameters.items()
