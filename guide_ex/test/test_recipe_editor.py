@@ -1,5 +1,7 @@
 from guide_ex.recipe.catalogue import _refs
-from guide_ex.recipe.editor import DEFAULT_VALUES, YAML_RT, dump, fresh_registry, plain, rows, timeline
+from guide_ex.core.states import Layer
+from guide_ex.recipe.editor import (DEFAULT_VALUES, FOLDERS, LEVELS, YAML_RT, dump, effective, fresh_registry, plain,
+                                      rows, target_of, timeline)
 from guide_ex.recipe.loader import load
 from guide_ex.recipe.registry import LIBRARY
 
@@ -29,3 +31,13 @@ def test_the_timeline_of_pick_reads_each_pose_after_the_node_that_gives_it():
     assert by_name["TransformCubeGraspPose"][2] == ["cube_grasp_pose"]
     assert "cube_grasp_pose" in by_name["MoveToCube"][0]
     assert not [name for _, name, _, lacking, _, _ in out if lacking]
+
+
+def test_new_offers_every_node_level_and_each_folder_holds_its_level():
+    assert sorted(LEVELS) == sorted(layer.name for layer in Layer)
+    assert set(FOLDERS) <= set(LEVELS)
+    registry = fresh_registry()
+    for path in RECIPES:
+        spec = effective(plain(YAML_RT.load(path.read_text())), registry)
+        level = spec.get("level") or target_of(spec, registry).level.name  # a leaf's own level
+        assert FOLDERS.get(level) == path.parent.name, (path.name, level)

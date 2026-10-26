@@ -24,13 +24,14 @@ import sys
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from omegaconf import OmegaConf
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
 from guide_ex.core.composite_node import CompositeNode
+from guide_ex.core.states import Layer
 from guide_ex.recipe.catalogue import _outputs
 from guide_ex.recipe.loader import load
 from guide_ex.recipe.registry import LIBRARY, PACKAGE, RecipeError, RecipeTemplate, Registry, load_defaults
@@ -40,6 +41,7 @@ YAML_RT.preserve_quotes = True
 YAML_RT.width = 4096
 YAML_RT.indent(mapping=2, sequence=4, offset=2)
 FOLDERS = {"TASK": "tasks", "SUBTASK": "subtasks", "SEQUENCE": "sequences", "STEP": "steps", "UTILITY": "utility"}
+LEVELS = [layer.name for layer in sorted(Layer, reverse=True)]  # New's list, the highest first
 MAPS = ("dynamic_map", "static_args", "output_map")
 DEFAULT_VALUES = """\
 # the roots of ${...}; a task's solver passes its own (recipe_values: robot, episode; cube_stack: cube, plan, tower)
@@ -365,10 +367,8 @@ class Editor(tk.Tk):
     def new(self):
         if not self.discard_ok():
             return
-        name = simpledialog.askstring("New recipe", "Name:", parent=self)
-        level = name and simpledialog.askstring("New recipe", f"Level, one of {list(FOLDERS)}:",
-                                                initialvalue="SUBTASK", parent=self)
-        if not name or level not in FOLDERS:
+        name, level = self.ask_new()
+        if not name or level not in LEVELS:
             return
         self.doc = CommentedMap(node_type="CompositeNode", name=name, level=level, dynamic_map={}, children=[])
         self.doc.yaml_set_start_comment("What it does; the catalogue's description.")
@@ -376,6 +376,38 @@ class Editor(tk.Tk):
         self.set_source(dump(self.doc))
         self.mark_dirty()
         self.refresh()
+
+    def ask_new(self) -> tuple[str, str | None]:
+        """The new recipe's name and level, the level picked from a list; ("", None) when cancelled."""
+        box = tk.Toplevel(self)
+        box.title("New recipe")
+        box.transient(self)
+        ttk.Label(box, text="Name:").pack(anchor="w", padx=8, pady=(8, 0))
+        name = ttk.Entry(box)
+        name.pack(fill="x", padx=8)
+        ttk.Label(box, text="Level:").pack(anchor="w", padx=8, pady=(8, 0))
+        levels = tk.Listbox(box, height=len(LEVELS), exportselection=False)
+        levels.insert("end", *LEVELS)
+        levels.selection_set(LEVELS.index("SUBTASK"))
+        levels.pack(fill="x", padx=8)
+        answer = ["", None]
+
+        def ok(_=None):
+            answer[:] = name.get().strip(), levels.get(levels.curselection()[0]) if levels.curselection() else None
+            box.destroy()
+
+        buttons = ttk.Frame(box)
+        buttons.pack(pady=8)
+        ttk.Button(buttons, text="Create", command=ok).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Cancel", command=box.destroy).pack(side="left", padx=4)
+        levels.bind("<Double-1>", ok)
+        box.bind("<Return>", ok)
+        box.bind("<Escape>", lambda _: box.destroy())
+        name.focus_set()
+        box.wait_visibility()
+        box.grab_set()
+        box.wait_window()
+        return tuple(answer)
 
     def save_as(self):
         if self.path is None and self.doc is None:
