@@ -8,12 +8,12 @@ marks the place. A composite that is a ref or inherited is copied into the file 
 editor: New, Open, Save, Save as and Check; New stays in memory until the first Save asks where to write it.
 The tree shows the open recipe with the nodes of the recipes it refs expanded and their overrides applied:
 grey rows are inherited, blue ones overridden. Select a row to edit its alias, dynamic_map, static_args and
-output_map; an edit of an inherited row becomes an override in the nearest node of the file. Drag a row of
-the file to move it, Delete removes it (an override: reverts it). Source edits the YAML (or a leaf's
-Python) as text, Timeline shows what each node reads and gives and the context after it, Values holds the
-roots of the ${...} interpolations. Saving checks the recipe with load() and rewrites the catalogue;
-comments and layout survive (ruamel.yaml round trip). Right, the selected node's description and the
-timeline."""
+output_map (✕ clears a key); an edit of an inherited row becomes an override in the nearest node of the
+file. Drag a row of the file to move it; Remove node (or Delete) removes it (an override: reverts it). Source
+edits the YAML (or a leaf's Python) as text, Timeline shows what each node reads and gives and the context
+after it, Values holds the roots of the ${...} interpolations. Saving checks the recipe with load() and
+rewrites the catalogue; comments and layout survive (ruamel.yaml round trip). Right, the selected node's
+description and the timeline."""
 
 import copy
 import inspect
@@ -694,10 +694,16 @@ class Editor(tk.Tk):
                                      json.dumps(current[k]) if key == "static_args" else current[k])
                 ttk.Entry(self.form, textvariable=name, width=18).grid(row=line, column=0, sticky=tk.W)
                 ttk.Entry(self.form, textvariable=value).grid(row=line, column=1, sticky=tk.EW)
+                if k in current:  # cleared, the key goes on Apply
+                    ttk.Button(self.form, text="✕", width=2, command=lambda n=name, v=value: (n.set(""), v.set(""))
+                               ).grid(row=line, column=2)
                 self.fields.setdefault(key, []).append((name, value))
                 line += 1
         self.form.columnconfigure(1, weight=1)
         ttk.Button(self.form, text="Apply", command=self.apply_form).grid(row=line, column=1, sticky=tk.E)
+        if row.slot and row.parent:
+            ttk.Button(self.form, text="Remove node (Del)", command=self.delete_row).grid(row=line, column=0,
+                                                                                         sticky=tk.W)
 
     def apply_form(self):
         row, fields = self.form_row, self.fields
