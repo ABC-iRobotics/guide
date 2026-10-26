@@ -148,7 +148,7 @@
       ]
     },
     {
-      "doc": "Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle horizontally, pull back in 3 cm steps until the part has slid 14 cm from where it started (read from the part's pose, so the stop follows the drawer's joint value), let go and back away. HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar; the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411; a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the grasp slips), and the 3 cm step / 14 cm stop (the success; 15 cm let a float sum a hair short of 5 x 3 cm ask for a 6th step into the drawer's end stop, Isaac pilot 2026-10-21).",
+      "doc": "Pull a sliding part open (part: a drawer body): announce the subtask (pull), take hold of its handle horizontally, pull back in one 15 cm stroke, again until the part has slid 14.5 cm from where it started (read from the part's pose, so the stop follows the drawer's joint value), let go and back away. HandlePose is the hand pose on the handle in the part's frame: the hand's z axis points into the drawer face and its y axis (the finger opening) is vertical, so the fingers straddle the horizontal bar; the pull runs back along the hand's -z, which is the drawer's slide axis. The values are the LIBERO wooden cabinet's top drawer, MJCF frame (handle bar centres, z: top 0.1839, middle 0.1104, bottom 0.0411; a task overrides HandlePose for another drawer or asset). Isaac tuning: the USD frame of the part, the fingers closing on a 1.6 cm bar (CloseOnHandle; a hook with closed fingers is the fallback if the grasp slips), and the 15 cm stroke / 14.5 cm stop (the drawers' end stop is at 16 cm). At 14 cm the top drawer left the bowl 1.4 cm of room between its front panel and the cabinet face, and it was placed tilted on an edge (user, 2026-10-22); a longer pull moves the drawer's front over the bowl on the table (the hand's clearance at the grasp: 1.5 cm at 14.5 cm, 1 cm at 15, 0.5 cm at 15.5; offline FK). The stroke was 3 cm steps until 2026-10-22: each stopped to measure, so the recorded pull was five jerks.",
       "inputs": [
         "part",
         "pull",
@@ -200,7 +200,7 @@
       ]
     },
     {
-      "doc": "Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed fingers on the flank of the knob's lever, sweep them round the knob axis in 0.15 rad steps until the knob has turned 0.6 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense). RimPose is the hand pose in the part's frame, hand down, on the lever's trailing flank for direction +1 (a sweep at the flange's rim would only graze it: the lever is the torque arm). Values are the LIBERO flat stove knob, MJCF frame: flange radius 0.055 m, top 0.0128 m; lever 2.5 cm thick, from y -0.017 to +0.052 m, up to 0.050 m. Isaac tuning: the USD frame of the part, the finger clearance on the flank, the step and the 0.6 rad stop (the success is 0.5 rad).",
+      "doc": "Turn a hinged part (part: a knob body) about its z axis: announce the subtask (turn), put the closed fingers on the flank of the knob's lever, sweep them round the knob axis in one 0.7 rad stroke, again until the knob has turned 0.55 rad from where it started (read from the part's pose), lift away. `direction` is +1 or -1, the sense of the turn about the part's z axis (a composite static_arg, 1 = the hinge's positive sense). RimPose is the hand pose in the part's frame, hand down, on the lever's trailing flank for direction +1 (a sweep at the flange's rim would only graze it: the lever is the torque arm). Values are the LIBERO flat stove knob, MJCF frame: flange radius 0.055 m, top 0.0128 m; lever 2.5 cm thick, from y -0.017 to +0.052 m, up to 0.050 m. Isaac tuning: the USD frame of the part, the finger clearance on the flank, the stroke and the 0.55 rad stop (the success is 0.5 rad; at 0.6 the knob, lagging the fingers, often stopped just short after one stroke and a 2nd followed, pilot 2026-10-22). The stroke was 0.15 rad steps until 2026-10-22: each stopped to measure, so the recorded turn was piecewise. One stroke is a straight Cartesian chord: it cuts 2.7 mm inside the 4.4 cm arc mid-sweep, still on the lever's flank.",
       "inputs": [
         "part",
         "robot",
@@ -285,6 +285,20 @@
       "source": "sequences/PullEndStop.yaml",
       "used_by": [
         "Pull"
+      ]
+    },
+    {
+      "doc": "Push's fallback when the push stalls: the pushed object (and the hand behind it) has met what stops it (the plate's friction load holds the hand 1-3 cm behind its goal, creeping < 1 mm per 0.5 s), so settle and resume at the lift away; the task's goal check then judges where the object ended (Isaac sweep 2026-10-22: push_the_plate demo_1 stalled 13-30 mm short in all 3 attempts, each aborting the whole Push).",
+      "inputs": [
+        "robot"
+      ],
+      "kind": "recipe",
+      "level": "SEQUENCE",
+      "name": "PushEndStop",
+      "outputs": [],
+      "source": "sequences/PushEndStop.yaml",
+      "used_by": [
+        "Push"
       ]
     },
     {
@@ -448,6 +462,7 @@
         "CarryToSupport",
         "Release",
         "Return",
+        "Turn",
         "Unclutch"
       ]
     },
@@ -906,6 +921,8 @@
         "Place",
         "Pull",
         "PullEndStop",
+        "PushEndStop",
+        "PutIn",
         "Release",
         "Return",
         "Unclutch"
