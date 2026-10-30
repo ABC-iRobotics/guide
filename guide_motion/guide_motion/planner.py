@@ -36,16 +36,22 @@ class PlanningError(RuntimeError):
     pass
 
 
-def profile(length: float, v_max: float, a_max: float = math.inf) -> np.ndarray:
-    """Distances along a path of `length` m at each 50 ms target; the last one is `length`."""
+def profile(length: float, v_max: float, a_max: float = math.inf, v0: float = 0.0, stop: bool = True) -> np.ndarray:
+    """Distances along a path of `length` m at each 50 ms target; the last one is `length`.
+
+    v0: the speed the path starts at (a free start, handed over from a moving arm: the ramps begin
+    where they give v0). stop=False: a free end, no deceleration onto the end."""
     lam, floor, dt = v_max / OMEGA, min(V_FLOOR, v_max), DT / SUBSTEPS
+    v0 = min(v0, 0.999 * v_max)  # ponytail: a faster hand-over steps down to v_max at once; OSC smooths it
+    t0, ta = -math.log1p(-v0 / v_max) / OMEGA, v0 / a_max
     s, t, out = 0.0, 0.0, []
     while True:
         step = 0.0
         for _ in range(SUBSTEPS):
             t += dt
             d = length - s - step
-            v = min(-v_max * math.expm1(-OMEGA * t), a_max * t, -v_max * math.expm1(-d / lam))
+            v = min(-v_max * math.expm1(-OMEGA * (t + t0)), a_max * (t + ta),
+                    -v_max * math.expm1(-d / lam) if stop else v_max)
             step += max(v, floor) * dt
         if length - s <= step:
             return np.array(out + [length])
@@ -61,7 +67,7 @@ def _path_limit(limits, rate) -> float:
     return float(np.min(np.asarray(limits, float) / np.maximum(np.abs(rate), 1e-9)))
 
 
-def _sigma(model, length: float, delta, v_max: float) -> np.ndarray:
+def _sigma(model, length: float, delta, v_max: float, v0: float = 0.0, stop: bool = True) -> np.ndarray:
     """The targets' path parameters in (0, 1]: the profile with v_max and a_max capped where the first
     joint reaches its URDF velocity / XRDF acceleration limit. [1.0] for a goal within one step.
 
@@ -73,10 +79,12 @@ def _sigma(model, length: float, delta, v_max: float) -> np.ndarray:
     v_max = min(v_max, _path_limit(model.max_velocity, rate))
     if length <= v_max * DT:
         return np.ones(1)
-    return profile(length, v_max, _path_limit(model.xrdf["cspace"]["acceleration_limits"], rate)) / length
+    a_max = _path_limit(model.xrdf["cspace"]["acceleration_limits"], rate)
+    return profile(length, v_max, a_max, v0, stop) / length
 
 
-def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
+def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED, route=None, v0: float = 0.0,
+         stop: bool = True) -> list:
     """Targets 50 ms apart from the configuration q to `goal`, the last one the goal's pose.
 
     speed: GUIDE-EX's speed (0..1]. POSE goals follow a straight line (slerp for the
@@ -86,6 +94,11 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     the arm on the planner's branch. JOINTS goals are interpolated in joint space. Both follow
     the module's speed profile, capped by the joint velocity and acceleration limits. TWIST goals
     pass through unchanged.
+
+    route (POSE goals): a guide_motion.noise.Route to follow instead of the straight line; its end,
+    not the goal's position, is the last target, and each target carries the route's clean point in
+    `clean`. plan() records the targets' path parameters in route.s. v0, stop: the profile's
+    (a hand-over from a moving arm, a free end).
     """
     if not speed > 0:
         raise ValueError(f"speed must be > 0, got {speed}")
@@ -106,13 +119,21 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     if goal.mode != POSE:
         return [goal]
     p0, R0 = model.ee_pose(q)
+    if route is not None:
+        goal = replace(goal, position=route.at(1.0))
     turn = Rotation.from_matrix(goal.rotation @ R0.T).as_rotvec()
     # ponytail: one turn-to-metres ratio for every speed (5 rad/s at speed 1.0, above Franka's
     # 2.5 rad/s Cartesian limit); cap ANGULAR_SPEED separately if fast turns ever track badly.
-    length = max(np.linalg.norm(goal.position - p0), np.linalg.norm(turn) * SPEED / ANGULAR_SPEED)
+    line = route.length if route is not None else np.linalg.norm(goal.position - p0)
+    length = max(line, np.linalg.norm(turn) * SPEED / ANGULAR_SPEED)
     tool = model.pin_model.getFrameId(model.tool_frame)
     J = pin.computeFrameJacobian(model.pin_model, model.pin_data, q, tool, pin.LOCAL_WORLD_ALIGNED)
-    sigma = _sigma(model, length, np.linalg.pinv(J) @ np.r_[goal.position - p0, turn], v_max)
+    sigma = _sigma(model, length, np.linalg.pinv(J) @ np.r_[goal.position - p0, turn], v_max, v0, stop)
+    if route is not None:
+        route.s = sigma
+        point, clean = route.at, route.clean
+    else:
+        point = clean = lambda s: (1.0 - s) * p0 + s * goal.position
     if len(sigma) == 1:
         return [replace(goal, joints=q)]
     slerp = Slerp([0.0, 1.0], Rotation.from_matrix([R0, goal.rotation]))
@@ -122,16 +143,17 @@ def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED) -> list:
     posture.set_target(q)
     targets = []
     for s in np.r_[sigma, np.ones(EXTRA_STEPS)]:
-        task.set_target(pin.SE3(slerp(s).as_matrix(), (1.0 - s) * p0 + s * goal.position))
+        task.set_target(pin.SE3(slerp(s).as_matrix(), point(s)))
         for _ in range(3):
             velocity = pink.solve_ik(configuration, [task, posture], DT, solver="quadprog", safety_break=False)
             configuration.integrate_inplace(velocity, DT)
         T = configuration.get_transform_frame_to_world(model.tool_frame)
         if s < 1.0:
-            targets.append(Target(POSE, T.translation.copy(), T.rotation.copy(), joints=configuration.q.copy(), gripper_width=width))
+            targets.append(Target(POSE, T.translation.copy(), T.rotation.copy(), joints=configuration.q.copy(),
+                                  gripper_width=width, clean=clean(s)))
         elif (np.linalg.norm(T.translation - goal.position) < POS_TOL
               and Rotation.from_matrix(T.rotation @ goal.rotation.T).magnitude() < ROT_TOL):
-            return targets + [replace(goal, joints=configuration.q.copy())]
+            return targets + [replace(goal, joints=configuration.q.copy(), clean=clean(1.0))]
     raise PlanningError(
         f"IK did not reach the goal within {EXTRA_STEPS} steps (reach or joint limits): "
         f"goal p={np.round(goal.position, 4).tolist()} "

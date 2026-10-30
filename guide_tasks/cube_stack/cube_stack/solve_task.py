@@ -76,6 +76,7 @@ from guide_core.types.randomization import zone_plan
 from guide_core.types.randomization.replicator_guide import zone_grid
 from guide_ex.core.states import DemoStatus
 from guide_ex.recipe import load, recipes_dir, robot_values
+from guide_motion.noise import NoiseParams
 from guide_msgs import srv
 
 REBUILDS = 3  # loop passes beyond one per layer, for placements that did not hold
@@ -134,15 +135,20 @@ def episode_context(robot, sim_namespace, scene_id, plan, path=""):
     }
 
 
-def solve_task(scene_id, robot, sim_namespace, zone=None, path=""):
-    """Randomize the scene, build the episode's tree and run it. True if saved."""
+def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene_seed=None):
+    """Randomize the scene, build the episode's tree and run it. True if saved. `scene_seed` pins the
+    layout (Randomize use_seed), so draws of the motion noise can be compared on one scene."""
     reply = robot.callService(
         robot.randomize,
-        srv.Randomize.Request(id=scene_id, use_zone=zone is not None, zone=int(zone or 0)),
+        srv.Randomize.Request(id=scene_id, use_zone=zone is not None, zone=int(zone or 0),
+                              use_seed=scene_seed is not None, seed=int(scene_seed or 0)),
     )
     plan = json.loads(reply.message)
     log = robot.node.get_logger()
     log.info(f"Task: {plan['task']} Order (bottom first): {plan['order']}")
+    master = robot.motion_episode(scene_id, draw)  # the trajectories' own seed, apart from the scene's
+    if master is not None:
+        log.info(f"Motion noise: trajectory master seed {master}, key (scene {scene_id}, draw {draw})")
 
     # Let the layout settle (the bins drop onto the floor) before solving.
     time.sleep(5)
@@ -165,14 +171,15 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
     """Record one episode per `plan` entry; a failed attempt is discarded and redrawn."""
     log = robot.node.get_logger()
     try:
-        done = attempts = errors = 0
+        done = attempts = errors = draws = 0
         while done < len(plan):
             if attempts == MAX_ATTEMPTS:
                 raise RuntimeError(f"episode {done + 1} failed {attempts} times in a row")
             attempts += 1
+            draws += 1
             log.info(f"--- Episode {done + 1}/{len(plan)} | attempt {attempts} ---")
             try:
-                saved = solve_task(scene_id, robot, sim_namespace, zone=plan[done], path=path)
+                saved = solve_task(scene_id, robot, sim_namespace, zone=plan[done], path=path, draw=draws)
                 errors = 0
             except Exception as e:
                 # A timed-out sim call costs this attempt; five in a row, the run.
@@ -215,6 +222,11 @@ def main():
     parser = argparse.ArgumentParser(description="cube_stack demonstration generator.")
     parser.add_argument("--namespace", type=str, default="")
     parser.add_argument("--controller", choices=["moveit", "oscbf"], default="oscbf")
+    parser.add_argument(
+        "--motion-noise", nargs="?", const="{}", default=None, metavar="JSON",
+        help="perturbed demonstrations (controller: oscbf): guide_motion.noise.NoiseParams' defaults, "
+             'or a JSON object of overrides, e.g. \'{"sigma": 0.008, "seed": 7}\'',
+    )
     args, _ = parser.parse_known_args()
     namespace = args.namespace  # e.g. /Sim_0/Scene_0
     sim_namespace = "/" + namespace.split("/")[1]
@@ -229,6 +241,7 @@ def main():
         max_acceleration=1.0,
         gripper_action_type=ActionType.JOINT_POSITION,
         controller=args.controller,
+        motion_noise=None if args.motion_noise is None else NoiseParams(**json.loads(args.motion_noise)),
     )
     config.arm_action_type = ActionType.CARTESIAN_POSE
     config.cameras = {}  # the recorder captures images sim-side; the solver needs none

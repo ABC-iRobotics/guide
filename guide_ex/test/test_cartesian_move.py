@@ -36,7 +36,8 @@ def test_speed_and_straightness_go_to_the_robot():
     result = MoveToCartesianPose().run(robot, TARGET, speed=0.2, cartesian=True, min_fraction=1.0)
 
     assert result.status == DemoStatus.PERFECT
-    assert robot.sent == [{"cartesian": True, "wait_for_execution": True, "speed": 0.2, "min_fraction": 1.0}]
+    assert robot.sent == [{"cartesian": True, "wait_for_execution": True, "speed": 0.2, "min_fraction": 1.0,
+                           "perturb": False, "precise_end": True, "jitter": None}]
 
 
 def test_a_refused_move_fails_after_three_tries():

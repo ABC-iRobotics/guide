@@ -25,6 +25,9 @@ class MoveToCartesianPose(BaseNode):
         speed: float = 1.0,
         cartesian: bool = False,
         min_fraction: float = 0.95,
+        perturb: bool = False,
+        precise_end: bool = True,
+        jitter: list | None = None,
     ) -> ExecutionResult:
         """
         Executes a Cartesian move to the specified target pose at the given speed.
@@ -38,6 +41,10 @@ class MoveToCartesianPose(BaseNode):
             min_fraction (float): A straight-line move MoveIt can compute for less than
                 this share of the way is refused before the arm moves (controller: moveit;
                 oscbf plans straight lines or refuses).
+            perturb (bool): An aim error around the planned path (DART-style demonstrations).
+            precise_end (bool): False: no settling at the goal, the next pose move blends in.
+            jitter (list): [x, y, z (m), yaw (rad)], a uniform random offset of the goal.
+                The three act only with the robot's motion noise on (controller: oscbf).
         Returns:
             ExecutionResult: The result of the move execution.
         """
@@ -65,6 +72,9 @@ class MoveToCartesianPose(BaseNode):
                     wait_for_execution=True,
                     speed=speed,
                     min_fraction=min_fraction,
+                    perturb=perturb,
+                    precise_end=precise_end,
+                    jitter=jitter,
                 )
                 if success:
                     break

@@ -26,7 +26,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveOverCube
     dynamic_map: {robot: robot, target_pose: over_cube_pose}
-    static_args: {speed: 0.5, cartesian: true}
+    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
   - ref: TransformPose
     alias: GraspPose
     dynamic_map: {r_pose: cube_pose}
@@ -44,7 +44,7 @@ children:
   - ref: MoveToCartesianPose
     alias: LiftCube
     dynamic_map: {robot: robot, target_pose: over_cube_pose}
-    static_args: {speed: 0.5, cartesian: true}
+    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
   - ref: IsPrimClashing
     alias: CheckHolding
     dynamic_map:

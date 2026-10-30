@@ -26,6 +26,7 @@ class Target:
     twist: np.ndarray = field(default_factory=lambda: np.zeros(6))  # [v m/s, w rad/s]
     joints: np.ndarray = field(default_factory=lambda: np.zeros(0))  # rad, arm joints; POSE: optional posture
     gripper_width: float = float("nan")  # m, absolute; NaN leaves the gripper as it is
+    clean: np.ndarray = field(default_factory=lambda: np.full(3, np.nan))  # m, POSE: the unperturbed path's point
 
 
 def delta_action_to_target(action, measured_pose) -> Target:

@@ -15,7 +15,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToUnclutch
     dynamic_map: {robot: robot, target_pose: unclutch_pose}
-    static_args: {speed: 1.0, cartesian: true}
+    static_args: {speed: 1.0, cartesian: true, jitter: [0.03, 0.03, 0.01, 0.1745]}
   - ref: OpenGripper
   - ref: WaitForSeconds
     alias: OpenGripperSettle

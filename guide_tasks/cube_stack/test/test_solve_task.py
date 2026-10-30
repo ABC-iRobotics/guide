@@ -69,7 +69,7 @@ def world(monkeypatch):
         position = w.cubes[prim_path] if prim_path in w.cubes else np.zeros(3)  # the scene frame: the origin
         return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(position))})
 
-    def move(self, robot, target_pose, speed=1.0, cartesian=False):
+    def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, jitter=None):
         w.moves.append(self.name)
         if self.name in w.failing_moves:
             w.failing_moves.remove(self.name)
@@ -253,7 +253,7 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
                 announced.append((prompt, oracle()[level]))
         return announce(self, robot, sim_namespace, scene_id, task, subtask, timeout_sec)
 
-    def move_and_ask(self, robot, target_pose, speed=1.0, cartesian=False):
+    def move_and_ask(self, robot, target_pose, speed=1.0, cartesian=False, **noise):
         result = move(self, robot, target_pose, speed, cartesian)
         subtask = next((p for level, p in reversed(world.prompts) if level == "subtask"), None)
         # The lift ends Pick: Place is announced right after it, with no motion between.

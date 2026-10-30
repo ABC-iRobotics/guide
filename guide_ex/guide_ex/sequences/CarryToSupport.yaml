@@ -48,7 +48,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveOverSupport
     dynamic_map: {robot: robot, target_pose: over_support_pose}
-    static_args: {speed: 0.5, cartesian: true}
+    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
   - ref: IsPrimClashing
     alias: CheckStillHolding
     dynamic_map:
