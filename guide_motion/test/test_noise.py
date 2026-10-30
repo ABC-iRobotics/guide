@@ -7,7 +7,7 @@ P0, GOAL, NEXT = np.array([0.3, 0.0, 0.4]), np.array([0.47, 0.13, 0.3]), np.arra
 
 
 def draw(seed=1, key=(0, 0), **kw):
-    noise = Noise(NoiseParams(seed=seed, **kw))
+    noise = Noise(NoiseParams(seed=seed, **{"p_perturb": 1.0, **kw}))
     noise.episode(*key)
     return noise, noise.route(noise.move(), P0, GOAL, v=0.25)
 
@@ -34,7 +34,7 @@ def test_std_vanishes_at_precise_ends():
 
 
 def test_free_junction_is_continuous():
-    noise = Noise(NoiseParams(seed=5))
+    noise = Noise(NoiseParams(seed=5, p_perturb=1.0))
     a = noise.route(noise.move(), P0, GOAL, v=0.25, free_end=True)
     assert np.linalg.norm(a.offset(1.0)) > 0  # the free end keeps its error
     h = 1.0 - 0.03 / a.length  # handed over 3 cm before A's goal
@@ -59,10 +59,26 @@ def test_plan_tracks_the_route_with_pink(fr3_model):
     from guide_motion.targets import Target
 
     p, R = fr3_model.ee_pose(HOME)
-    noise = Noise(NoiseParams(seed=2, sigma=0.015))
+    noise = Noise(NoiseParams(seed=2, sigma=0.015, p_perturb=1.0))
     route = noise.route(noise.move(), p, p + [0.15, 0.1, -0.15], v=0.25)
     targets = plan(fr3_model, Target(position=p + [0.15, 0.1, -0.15], rotation=R), HOME, speed=0.5, route=route)
     assert len(targets) == len(route.s)
     assert max(np.linalg.norm(t.position - route.at(s)) for t, s in zip(targets, route.s)) < 2e-3
     assert all(np.allclose(t.clean, route.clean(s)) for t, s in zip(targets, route.s))
     assert np.allclose(targets[-1].position, route.at(1.0))
+
+
+def test_control_points_crowd_at_converging_ends_at_any_speed():
+    noise = Noise(NoiseParams(seed=1))
+    for L in (0.1, 0.4):
+        ds = np.diff(noise._spacing(L)) * L
+        assert ds[0] < 0.3 * ds.max() and ds[-1] < 0.3 * ds.max()  # dense at both precise ends
+        assert ds.max() <= 0.05 + 1e-9 and ds[len(ds) // 2] > 0.6 * ds.max()  # the middle keeps points
+    ds = np.diff(noise._spacing(0.4, free_end=True)) * 0.4
+    assert ds[0] < 0.3 * ds.max() and ds[-1] > 0.8 * ds.max()  # a free end does not converge
+
+
+def test_p_perturb_leaves_some_moves_clean():
+    noise = Noise(NoiseParams(seed=3))
+    clean = sum(noise.route(noise.move(), P0, GOAL, v=0.25).ctrl is None for _ in range(200))
+    assert 50 < clean < 110  # ~40 % of 200

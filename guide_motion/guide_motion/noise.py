@@ -1,8 +1,9 @@
 """Perturbed scripted motion (DART-style demonstrations): a seeded, smooth, mean-zero aim error.
 
 A move's clean path is a straight line, or, after a free junction, a blend that cuts the corner
-of the previous move. Control points walk along it, dense near a precise end and saturating at
-`spacing` in between. Each one's offset in the path's normal plane is an AR(1) draw biased to
+of the previous move. Control points sit at the quantiles of a density over the path's fraction s,
+1 - (1 - min_spacing) x a Gaussian about the middle: dense at a precise end and start, `spacing`
+apart mid-move, the same pattern at any speed and length (a free side stays at the mid density). Each one's offset in the path's normal plane is an AR(1) draw biased to
 the previous one (rho = exp(-ds / ell)): an error that persists, grows, fades or crosses the line
 (an overshoot) by chance, not by a parameter. Its std decays exponentially towards a precise end
 or start, sigma (1 - e^(-d / lam)) per side, with lam = decay x v / v_ref so the return onto the
@@ -29,8 +30,10 @@ class NoiseParams:
     decay: float = 0.03  # m: lam at v_ref
     v_ref: float = 0.1  # m/s
     ell: float = 0.15  # m: the bias's correlation length (shorter: more overshoots)
-    spacing: float = 0.05  # m: the largest control point spacing
+    spacing: float = 0.05  # m: the control point spacing mid-move
     min_spacing: float = 0.1  # the spacing at a precise end, as a share of `spacing`
+    width: float = 0.35  # the mid-move Gaussian's std, as a share of the move
+    p_perturb: float = 0.6  # the chance a move asked to be perturbed is (clean routes stay the mode)
     blend: float = 0.04  # m: the corner a free junction cuts
     speed_scale: tuple = (0.7, 1.3)  # each move's speed factor, drawn uniformly
     seed: int | None = None  # the trajectory master seed; None draws one
@@ -148,11 +151,23 @@ class Noise:
         if np.linalg.norm(np.diff(points, axis=0), axis=1).sum() < 1e-6:
             return None
         route = Route(points, tangent, u)
-        sigma = P.sigma if perturb else 0.0
+        sigma = P.sigma if perturb and rng.random() < P.p_perturb else 0.0
         if sigma > 0 or carry is not None:
             route = Route(points, tangent, u, self._control(rng, route.length, v, sigma, carry, free_end))
         self.prev = SimpleNamespace(route=route, carries=free_end and route.ctrl is not None)
         return route
+
+    def _spacing(self, L, free_start=False, free_end=False) -> np.ndarray:
+        """Control point fractions: the quantiles of 1 / spacing x (1 / min_spacing - (1 / min_spacing - 1)
+        x G(s)), G a Gaussian about the middle, held at 1 over a free half (no convergence there)."""
+        P = self.params
+        x = np.linspace(0.0, 1.0, 1001)
+        G = np.exp(-0.5 * ((x - 0.5) / P.width) ** 2)
+        G[(x <= 0.5) & free_start] = G[(x >= 0.5) & free_end] = 1.0
+        k = 1.0 / P.min_spacing
+        cdf = np.r_[0.0, np.cumsum(np.diff(x) * 0.5 * ((k - (k - 1) * G)[1:] + (k - (k - 1) * G)[:-1]))]
+        n = int(np.clip(round(cdf[-1] * L / P.spacing), 1, MAX_CONTROL_POINTS - 1))
+        return np.interp(np.linspace(0.0, 1.0, n + 1), cdf / cdf[-1], x)
 
     def _control(self, rng, L, v, sigma, carry, free_end):
         """Control points: the spacing walk, then the AR(1) offsets and their stds."""
@@ -160,14 +175,7 @@ class Noise:
         lam = P.decay * v / P.v_ref
         ramp = lambda x: -math.expm1(-x * L / lam)
         g = lambda s: (1.0 if carry is not None else ramp(s)) * (1.0 if free_end else ramp(1.0 - s))
-        ss, s = [0.0], 0.0
-        end = 0.5 * P.spacing * (g(1.0) if free_end else P.min_spacing) / L
-        while len(ss) < MAX_CONTROL_POINTS:
-            s += P.spacing * max(g(s), P.min_spacing) / L
-            if s >= 1.0 - end:
-                break
-            ss.append(s)
-        ss.append(1.0)
+        ss = self._spacing(L, free_start=carry is not None, free_end=free_end)
         n = len(ss)
         sig = [carry[1] if carry is not None else 0.0] + [sigma * g(x) for x in ss[1:]]
         if not free_end:
