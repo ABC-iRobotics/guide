@@ -670,14 +670,15 @@ class SceneOrchestrator(ABC):
             raise ValueError(f"{path} must be a non-empty mapping {{named distribution: value}}")
         return values
 
-    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None) -> SceneContext:
+    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None, zones=None) -> SceneContext:
         """Draw this episode's randomization deterministically and capture it.
 
         Order: the scene's discrete/selection draws (``randomize_preprocess``) run
         FIRST so the scene can declare the zone target (e.g. the color-picked block)
         before the pose draws that place it; then every randomize instruction's
         PoseDist is drawn into a concrete Pose (kwargs['pose']). ``zone`` (>=0)
-        restricts the ``zone_target`` prim to that grid cell; everything else is
+        restricts the ``zone_target`` prim to that grid cell; ``zones`` ({object: zone}, -1 = anywhere)
+        places each named object in its own cell instead (Replicator dialect); everything else is
         free. Each draw ``inject`` names takes its recorded value instead of the RNG's.
         A Replicator-dialect randomize file fires last, seeded with the same seed; its
         named samples are recorded as ``replicator/<name>``. ``inject`` does not replay
@@ -685,7 +686,7 @@ class SceneOrchestrator(ABC):
         """
         values = None
         if arrangement:
-            if zone is not None:
+            if zone is not None or zones:
                 raise ValueError(f"arrangement {arrangement!r} fixes the layout; a zone cannot be asked for too")
             if "randomize" not in self.replicator:
                 raise ValueError("arrangements pin Replicator distributions; this task's randomize.yaml "
@@ -715,8 +716,11 @@ class SceneOrchestrator(ABC):
             zone_target=self.zone_target(),
         )
 
+        if zones and "randomize" not in self.replicator:
+            raise ValueError("per-object zones need a Replicator-dialect randomize.yaml with guide.zone")
         if "randomize" in self.replicator:
-            samples = replicator_guide.fire(self.replicator["randomize"], used, zone, self.zone_target(), values=values)
+            samples = replicator_guide.fire(self.replicator["randomize"], used, zone, self.zone_target(),
+                                            values=values, zones=zones)
             record.values.update({f"replicator/{k}": v for k, v in samples.items()})
 
         self._last_context = SceneContext(
@@ -725,6 +729,7 @@ class SceneOrchestrator(ABC):
             record=record,
             zone=zone,
             arrangement=arrangement or None,
+            zones=dict(zones) if zones else None,
         )
         self._episode_index += 1
         return self._last_context

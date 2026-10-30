@@ -11,6 +11,11 @@ int32 seed
 # Load a fixed start: <task>/config/arrangements/<arrangement>.yaml pins each named Replicator
 # distribution it lists to its value for this draw (S3 v2). Empty: a free draw. Not with use_zone.
 string arrangement
+# Per-object zones: object zone_objects[i] (a zoned prim's name, e.g. 'red_block', or its path)
+# is drawn inside cell object_zones[i] of the guide.zone grid, -1 = anywhere in the region.
+# Objects not listed keep the free draw. Replaces use_zone/zone when given; not with arrangement.
+string[] zone_objects
+int32[] object_zones
 ---
 string message
 bool success

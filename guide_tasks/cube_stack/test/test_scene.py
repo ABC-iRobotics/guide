@@ -1,5 +1,5 @@
 import pytest
-from cube_stack.scene import Scene, plan, separated
+from cube_stack.scene import SEED_STRIDE, Scene, plan, separated
 
 from guide_core.scene.scene_orchestrator import SceneOrchestrator
 from guide_core.types.geometry import Point, Pose
@@ -30,7 +30,8 @@ def test_separation_is_measured_in_the_table_plane():
 def scene_drawing(monkeypatch, layouts):
     layouts = iter(layouts)
 
-    def randomize(self, *, seed=None, inject=None, zone=None):
+    def randomize(self, *, seed=None, inject=None, zone=None, zones=None):
+        self.seeds.append(seed)
         self.draws += 1
         self.layout = next(layouts)
         return self.draws
@@ -38,7 +39,7 @@ def scene_drawing(monkeypatch, layouts):
     monkeypatch.setattr(SceneOrchestrator, "randomize", randomize)
     monkeypatch.setattr(Scene, "_cube_positions", lambda self: self.layout)
     scene = Scene.__new__(Scene)
-    scene.draws = 0
+    scene.draws, scene.seeds = 0, []
     return scene
 
 
@@ -48,10 +49,11 @@ def test_a_cramped_layout_is_redrawn(monkeypatch):
     assert scene.randomize() == 3
 
 
-def test_a_seeded_layout_is_taken_as_drawn(monkeypatch):
-    scene = scene_drawing(monkeypatch, [CRAMPED, APART])
+def test_a_seeded_cramped_layout_walks_its_own_seed_sequence(monkeypatch):
+    scene = scene_drawing(monkeypatch, [CRAMPED, CRAMPED, APART])
 
-    assert scene.randomize(seed=7) == 1
+    assert scene.randomize(seed=7) == 3
+    assert scene.seeds == [7, 7 + SEED_STRIDE, 7 + 2 * SEED_STRIDE]
 
 
 def test_the_starting_cube_is_the_zone_target():

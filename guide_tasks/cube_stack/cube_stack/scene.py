@@ -17,6 +17,7 @@ MIN_SEPARATION = 0.12
 # randomize.yaml zeroes the cubes' velocities so a rejected one leaves nothing behind),
 # ~9% pass, so 200 all failing is ~1e-8.
 MAX_LAYOUT_DRAWS = 200
+SEED_STRIDE = 1_000_003  # a fixed seed's k-th redraw uses seed + k * SEED_STRIDE
 
 
 PROCEDURE = "Stack the cubes."
@@ -68,20 +69,17 @@ class Scene(SceneOrchestrator):
 
     colors = ["red", "yellow", "green", "blue"]
 
-    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None):
+    def randomize(self, *, seed=None, inject=None, zone=None, arrangement=None, zones=None):
         if arrangement is not None:
             raise ValueError("cube_stack does not support arrangements")
         # Draw until no two cubes are too close to grasp. Each draw advances the episode
         # counter, i.e. takes the next seed, so the sequence is still reproducible from
-        # the master seed. A fixed seed or injected values give the same layout every
-        # time: take it as it is.
-        for _ in range(MAX_LAYOUT_DRAWS):
-            context = super().randomize(seed=seed, inject=inject, zone=zone)
-            if (
-                seed is not None
-                or inject is not None
-                or separated(self._cube_positions(), MIN_SEPARATION)
-            ):
+        # the master seed. A fixed seed walks its own fixed sequence (seed, seed + 1000003,
+        # ...), so it still names one layout. Injected values: take them as they are.
+        for k in range(MAX_LAYOUT_DRAWS):
+            draw_seed = None if seed is None else seed + k * SEED_STRIDE
+            context = super().randomize(seed=draw_seed, inject=inject, zone=zone, zones=zones)
+            if inject is not None or separated(self._cube_positions(), MIN_SEPARATION):
                 break
         else:
             self._logger.warning(

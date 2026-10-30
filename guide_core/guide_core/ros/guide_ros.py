@@ -191,6 +191,7 @@ class GUIDEROS2Interface(Node):
                 zone=request.zone,
                 seed=request.seed if request.use_seed else None,
                 arrangement=request.arrangement or None,
+                zones=zone_map(request.zone_objects, request.object_zones),
             )
 
             response.message = output if isinstance(output, str) else ""
@@ -487,6 +488,13 @@ def pose_frame(scenes, path: str, frame_id: str) -> str:
     if len(robots) != 1:  # two robots sharing a base_name: the request would need the robot's name too
         raise ValueError(f"{scene} has {'no robot' if not robots else 'more than one robot'} with base_name '{frame_id}'")
     return f"/{scene}{robots[0]['path']}/{frame_id}"
+
+
+def zone_map(objects, zones) -> dict | None:
+    """Randomize's parallel zone_objects/object_zones -> {object: zone}, None when empty."""
+    if len(objects) != len(zones):
+        raise ValueError(f"Randomize: {len(objects)} zone_objects but {len(zones)} object_zones")
+    return dict(zip(objects, (int(z) for z in zones))) or None
 
 
 def target_from_msg(msg: MotionTarget) -> Target:

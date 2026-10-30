@@ -23,6 +23,7 @@ class SceneContext:
     record: Optional[RandomizationRecord] = None
     zone: Optional[int] = None
     arrangement: Optional[str] = None
+    zones: Optional[dict] = None  # {object: zone} of a per-object zoned draw
 
     def to_dict(self) -> dict:
         return {
@@ -31,6 +32,7 @@ class SceneContext:
             "record": self.record.to_dict() if self.record is not None else None,
             "zone": None if self.zone is None else int(self.zone),
             "arrangement": self.arrangement,
+            "zones": self.zones,
         }
 
     def to_json(self) -> str:
@@ -46,6 +48,7 @@ class SceneContext:
             record=RandomizationRecord.from_dict(rec) if rec else None,
             zone=None if zone is None else int(zone),
             arrangement=data.get("arrangement"),
+            zones=data.get("zones"),
         )
 
     @classmethod

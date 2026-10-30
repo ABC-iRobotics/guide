@@ -68,6 +68,17 @@ def test_a_zoned_scene_takes_an_arrangement_only_with_its_zone_distribution():
         rg.zone_pin(state, {"plate_position": [0, 0, 0]}, "/Scene_0/bowl")
 
 
+def test_zone_objects_resolve_to_one_zoned_prim_each():
+    state = {"zone_slots": dict.fromkeys(["/Scene_0/blocks/red_block", "/Scene_0/blocks/blue_block"])}
+    assert rg.zone_paths(state, {"red_block": 3, "/Scene_0/blocks/blue_block": -1}) == {
+        "/Scene_0/blocks/red_block": 3, "/Scene_0/blocks/blue_block": -1}
+    assert rg.zone_paths(state, {"blocks/red_block": 0}) == {"/Scene_0/blocks/red_block": 0}
+    with pytest.raises(ValueError, match="green_block"):
+        rg.zone_paths(state, {"green_block": 1})
+    with pytest.raises(ValueError, match="'block' names 0"):
+        rg.zone_paths(state, {"block": 1})  # a whole path element, not a substring
+
+
 def test_the_zone_redraw_bounds():
     g = Grid([-0.15, 0.0, 0.042], [0.15, 0.4, 0.042], 0.1)
     low, high = rg.zone_bounds(g, None, [0.05, 0.2, 0.042])
