@@ -21,7 +21,7 @@ from guide_motion.control import Controller, enable_compilation_cache
 from guide_motion.model import Model
 from guide_motion.planner import DT as TARGET_DT
 from guide_motion.planner import plan
-from guide_motion.targets import JOINTS, Target, TargetHolder
+from guide_motion.targets import JOINTS, POSE, Target, TargetHolder
 
 DYNAMICS_TOL = 1e-3  # controller M and g vs PhysX, relative (S2b spec 4.2.5)
 HOME_SPEED = 1.0  # Reset's homing at GUIDE-EX speed 1.0: the planner caps each joint below its URDF velocity limit
@@ -281,6 +281,7 @@ class OscbfHost:
         self._arm = Articulation(articulation_root)
         self._attached, self._switched, self._t, self._k = False, False, 0.0, 0
         self._u, self._hold, self._width, self._home, self._homing = None, None, None, None, None
+        self.joint_target, self.clean_target, self.clean_rotation = None, None, None  # set every controller step (_control)
         SimulationManager.register_callback(self._on_step, SimulationEvent.PHYSICS_PRE_STEP)
         SimulationManager.register_callback(self._on_stop, SimulationEvent.SIMULATION_STOPPED)
 
@@ -394,7 +395,18 @@ class OscbfHost:
             self._hold = Target(position=position, rotation=rotation)
         # stale: the controller holds the latched pose in both modes. A zero velocity target cannot:
         # on velocity drives (stiffness 0) it is only a damper, and the arm sags (FIX B4)
-        u = self._controller.step(self._hold or target, q, qd)
+        tracked = self._hold or target
+        # what the recorder writes as this robot's action: the planned posture (the arm's position drives
+        # are off, so their targets say nothing), the measured q when the target has none; and the
+        # unperturbed path point (DART's label)
+        self.joint_target = np.asarray(tracked.joints if len(tracked.joints) == len(q) else q, float).copy()
+        if tracked.mode == POSE:  # the noise moves the position only
+            clean = tracked.clean if np.all(np.isfinite(tracked.clean)) else tracked.position
+            self.clean_target, self.clean_rotation = np.asarray(clean, float), np.asarray(tracked.rotation, float)
+        else:  # joints (or a twist, whose joint target is q): where they put the tool
+            position, rotation = self.model.ee_pose(self.joint_target)
+            self.clean_target, self.clean_rotation = np.asarray(position, float), np.asarray(rotation, float)
+        u = self._controller.step(tracked, q, qd)
         if self.mode == "velocity":  # the drive pushes D (v_target - v): gravity needs v_target += tau_g / D (FIX B4-2)
             limit = self._controller.limit  # step's NaN guard and URDF clip, kept for the sum
             u = np.clip(np.nan_to_num(u + np.asarray(self._controller.gravity(q)) / self._damping), -limit, limit)

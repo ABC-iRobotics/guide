@@ -97,6 +97,7 @@ def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, r
     if not hasattr(self, "_motion_hosts"):
         self._motion_hosts = {}
     self._motion_hosts.setdefault(scene_id, []).append(host)  # also keeps it alive: callbacks hold a weakref
+    return host
 
 
 def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, float, float]]:
@@ -146,7 +147,8 @@ def _cmd_register_scene(self, package_name: str) -> Tuple[int, Tuple[float, floa
                 subscribe=not oscbf,
             )
             if oscbf:
-                _attach_oscbf(
+                # the recorder reads the robot's action from its host (SceneOrchestrator.get_frame)
+                scene.motion_hosts[robot["namespace"].lstrip("/")] = _attach_oscbf(
                     self,
                     id,
                     f'{scene_path}{robot.get("articulation_root", "/robot")}',

@@ -11,3 +11,6 @@ geometry_msgs/Twist twist              # linear m/s, angular rad/s
 float64[] joints                       # rad, the arm joints
 # NaN = leave the gripper; publishers must set it (the default 0.0 closes the hand)
 float64 gripper_width                  # metres, absolute
+# MODE_POSE: the unperturbed path's point under motion noise (DART's label), else the pose's
+# position; NaN when the publisher does not know it
+geometry_msgs/Point clean

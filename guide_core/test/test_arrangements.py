@@ -33,7 +33,7 @@ def test_an_arrangement_is_read_and_pinned_into_the_fire(registered, monkeypatch
     _, scene = registered
     seen = {}
 
-    def fire(state, seed, zone, zone_target, values=None):
+    def fire(state, seed, zone, zone_target, values=None, zones=None):
         seen.update(values=values, zone=zone)
         return {"plate_position": [[0.1, 0.2, 0.0]]}
 
@@ -47,7 +47,7 @@ def test_an_arrangement_is_read_and_pinned_into_the_fire(registered, monkeypatch
 def test_a_free_draw_pins_nothing(registered, monkeypatch):
     _, scene = registered
     seen = {}
-    monkeypatch.setattr(rg, "fire", lambda state, seed, zone, zone_target, values=None: seen.update(values=values) or {})
+    monkeypatch.setattr(rg, "fire", lambda state, seed, zone, zone_target, values=None, zones=None: seen.update(values=values) or {})
     assert scene.randomize().arrangement is None and seen["values"] is None
 
 

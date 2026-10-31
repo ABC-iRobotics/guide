@@ -202,7 +202,7 @@ def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_modu
                "oscbf": {"robot": "fr3", "mode": "velocity", "rate": 60}}]
     manager = SimpleNamespace(
         get_scene_usd_path=lambda i: None, get_scene_robot_graphs=lambda i: robots,
-        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None, _config=config, build_stage=lambda: None)],
+        get_scene_camera_graphs=lambda i: None, _scenes=[SimpleNamespace(replicator_files=None, _config=config, build_stage=lambda: None, motion_hosts={})],
     )
     controls = []
     runtime = host(

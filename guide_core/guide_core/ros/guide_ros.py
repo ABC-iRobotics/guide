@@ -499,7 +499,7 @@ def zone_map(objects, zones) -> dict | None:
 
 def target_from_msg(msg: MotionTarget) -> Target:
     """guide_msgs/MotionTarget -> guide_motion Target (the pose is read for MODE_POSE only)."""
-    p, o, v, w = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+    p, o, v, w, c = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular, msg.clean
     rotation = Rotation.from_quat([o.x, o.y, o.z, o.w]).as_matrix() if msg.mode == POSE else np.eye(3)
     return Target(
         mode=int(msg.mode),
@@ -508,6 +508,7 @@ def target_from_msg(msg: MotionTarget) -> Target:
         twist=np.array([v.x, v.y, v.z, w.x, w.y, w.z]),
         joints=np.asarray(msg.joints, float),
         gripper_width=float(msg.gripper_width),
+        clean=np.array([c.x, c.y, c.z]),
     )
 
 

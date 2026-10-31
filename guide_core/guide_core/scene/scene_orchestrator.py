@@ -236,6 +236,8 @@ class SceneOrchestrator(ABC):
 
         # The procedure-level prompt, drawn at randomization.
         self.task = ""
+        # {robot name: OscbfHost} of the robots under controller: oscbf (set at registration)
+        self.motion_hosts = {}
         # The GUIDE-EX task and subtask being worked on, set through
         # SceneManager.set_prompt; "" = none. The task is each frame's LeRobot task.
         self.prompts = {"task": "", "subtask": ""}
@@ -1293,10 +1295,17 @@ class SceneOrchestrator(ABC):
                             vals = vals[0]
                         elif not hasattr(vals, "__iter__"):
                             vals = [vals]
+                        host = getattr(self, "motion_hosts", {}).get(r_name)
+                        if attr == "pos" and joint_indices and host is not None and host.joint_target is not None:
+                            # An OSCBF arm runs on efforts: its position drives keep the home targets, so the
+                            # action is the posture the controller tracks (the fingers stay on their drives).
+                            planned = dict(zip(host.model.arm_joints, host.joint_target))
+                            vals = [planned.get(view.dof_names[i], v) for i, v in zip(joint_indices, vals)]
                         for val, key in zip(vals, mask["keys"]):
                             action[key] = float(val)
 
         # Cartesian Pose Delta from End Effector View
+        dart = None
         if hasattr(self, "ee_views") and self.ee_views:
             dataset_cfg = self._config.get("dataset", {})
             cartesian_robot = dataset_cfg.get("cartesian_velocity_robot")
@@ -1360,6 +1369,13 @@ class SceneOrchestrator(ABC):
                     action["ry"] = float(obs_delta_rotvec[1])
                     action["rz"] = float(obs_delta_rotvec[2])
 
+                    # DART's label needs the unperturbed target the OSCBF host tracks now (the recorder
+                    # pairs the next frame's with this frame's pose); both in the robot base frame.
+                    host = getattr(self, "motion_hosts", {}).get(cartesian_robot)
+                    if host is not None and host.clean_target is not None:
+                        dart = {"clean": [*map(float, host.clean_target), *map(float, R.from_matrix(host.clean_rotation).as_rotvec())],
+                                "measured": [*map(float, curr_pos), *map(float, abs_rotvec)]}
+
         ex = getattr(self, "_extras", None)
         if ex:
             extras = self._record_extras()
@@ -1372,6 +1388,7 @@ class SceneOrchestrator(ABC):
             # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
             # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
             # go in as language prompts; a camera transition's frames carry its label as subtask.
+            "dart": dart,
             "task": self.prompts["task"] or self.task,
             "prompts": {
                 "procedure": self.task,
