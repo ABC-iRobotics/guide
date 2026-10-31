@@ -107,6 +107,17 @@ def build_tree(robot, plan):
     return load_recipe("Episode", robot, plan)
 
 
+def without_recoveries(node):
+    """Drop every recovery (fallback) in the tree: a failing step then ends the episode. The tower's
+    rebuild passes (route 4) are the loop's own work and stay."""
+    if getattr(node, "fallbacks", None):
+        node.fallbacks = {}
+    for child in [*getattr(node, "children", []), getattr(node, "true_branch", None), getattr(node, "false_branch", None)]:
+        if child is not None:
+            without_recoveries(child)
+    return node
+
+
 def episode_context(robot, sim_namespace, scene_id, plan, path=""):
     """What the tree starts from: the robot, where things are, and the drawn plan with its
     prompts at every layer (scene.plan)."""
@@ -135,18 +146,25 @@ def episode_context(robot, sim_namespace, scene_id, plan, path=""):
     }
 
 
-def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene_seed=None):
+def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene_seed=None, zones=None,
+               clean=False, no_recovery=False):
     """Randomize the scene, build the episode's tree and run it. True if saved. `scene_seed` pins the
-    layout (Randomize use_seed), so draws of the motion noise can be compared on one scene."""
+    layout (Randomize use_seed), so draws of the motion noise can be compared on one scene; `zones`
+    ({cube prim name: zone}) places each cube in its own cell; clean = no route perturbed; no_recovery =
+    a failing step ends the episode instead of running its recovery."""
+    zones = zones or {}
     reply = robot.callService(
         robot.randomize,
         srv.Randomize.Request(id=scene_id, use_zone=zone is not None, zone=int(zone or 0),
-                              use_seed=scene_seed is not None, seed=int(scene_seed or 0)),
+                              use_seed=scene_seed is not None, seed=int(scene_seed or 0),
+                              zone_objects=list(zones), object_zones=[int(z) for z in zones.values()]),
     )
+    if not reply.success:
+        raise RuntimeError(f"Randomize failed: {reply.message}")
     plan = json.loads(reply.message)
     log = robot.node.get_logger()
     log.info(f"Task: {plan['task']} Order (bottom first): {plan['order']}")
-    master = robot.motion_episode(scene_id, draw)  # the trajectories' own seed, apart from the scene's
+    master = robot.motion_episode(scene_id, draw, clean=clean)  # the trajectories' own seed, apart from the scene's
     if master is not None:
         log.info(f"Motion noise: trajectory master seed {master}, key (scene {scene_id}, draw {draw})")
 
@@ -154,6 +172,8 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene
     time.sleep(5)
 
     tree = build_tree(robot, plan)
+    if no_recovery:
+        without_recoveries(tree)
     result = tree.execute(episode_context(robot, sim_namespace, scene_id, plan, path))
 
     if result.status == DemoStatus.PERFECT and result.outputs.get("task_success"):
@@ -165,6 +185,79 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene
 
 
 _generating = threading.Lock()
+SEED_BLOCK = 1000  # scenario i draws its layouts from scene seeds i * SEED_BLOCK, i * SEED_BLOCK + 1, ...
+
+
+def discard_open_episode(robot, scene_id):
+    """Route 5: an attempt that broke off leaves its episode open; drop it (a no-op when none is)."""
+    try:
+        robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False),
+                          timeout_sec=300.0)
+    except TimeoutError as e:
+        robot.node.get_logger().error(f"Cleanup stop_recording timed out: {e}")
+
+
+def finalize(robot, scene_id):
+    """Saved episodes are unreadable until the dataset is finalized."""
+    try:
+        robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=600.0)
+        robot.node.get_logger().info("Recording dataset finalized.")
+    except Exception as e:
+        robot.node.get_logger().error(f"Finalize failed: {e}")
+
+
+def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path=""):
+    """Scenario mode of the Demonstration service: per scenario ({cube: zone}), `layouts` scene seeds,
+    each recorded `trajectories` times -- first unperturbed, then perturbed. A seed whose unperturbed
+    run fails is skipped for the scenario's next one, a perturbed run that fails is drawn again; no run
+    recovers. Every attempt is logged to <path>.provenance.jsonl ("saved" ones in dataset order)."""
+    log = robot.node.get_logger()
+    record = Path(f"{path.rstrip('/')}.provenance.jsonl")
+    draws = errors = 0
+
+    def attempt(**key):
+        nonlocal draws, errors
+        draws += 1
+        try:
+            saved = solve_task(scene_id, robot, sim_namespace, path=path, draw=draws, scene_seed=key["seed"],
+                               zones=scenarios[key["scenario"]], clean=key["trajectory"] == 0, no_recovery=True)
+            errors = 0
+        except Exception as e:  # a timed-out sim call costs this attempt; five in a row, the run
+            errors += 1
+            log.error(f"Attempt failed ({errors} in a row): {e}")
+            if errors >= 5:
+                raise
+            saved = False
+        discard_open_episode(robot, scene_id)
+        with record.open("a") as f:
+            f.write(json.dumps({**key, "zones": scenarios[key["scenario"]], "draw": draws, "scene_id": scene_id,
+                                "master": robot._noise.master if robot._noise else None, "saved": saved}) + "\n")
+        return saved
+
+    try:
+        for s in range(len(scenarios)):
+            seed = s * SEED_BLOCK
+            for layout in range(layouts):
+                for _ in range(MAX_ATTEMPTS):
+                    log.info(f"--- scenario {s} layout {layout}: seed {seed}, unperturbed ---")
+                    ok = attempt(scenario=s, layout=layout, seed=seed, trajectory=0)
+                    seed += 1
+                    if ok:
+                        break
+                else:
+                    raise RuntimeError(f"scenario {s}: {MAX_ATTEMPTS} seeds in a row failed unperturbed")
+                for t in range(1, trajectories):
+                    for n in range(MAX_ATTEMPTS):
+                        log.info(f"--- scenario {s} layout {layout} (seed {seed - 1}) trajectory {t}, try {n + 1} ---")
+                        if attempt(scenario=s, layout=layout, seed=seed - 1, trajectory=t):
+                            break
+                    else:
+                        log.error(f"scenario {s} layout {layout} trajectory {t}: {MAX_ATTEMPTS} failures, skipped")
+    except Exception as e:
+        log.error(f"Error during generation: {e}")
+    finally:
+        finalize(robot, scene_id)
+        _generating.release()
 
 
 def generate(plan, scene_id, robot, sim_namespace, path=""):
@@ -189,32 +282,14 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
                     raise
                 saved = False
 
-            # Route 5: an attempt that broke off leaves its episode open; drop it.
-            # stop_recording is a no-op when nothing is open.
-            try:
-                robot.callService(
-                    robot.stop_recording,
-                    srv.StopRecording.Request(id=scene_id, save_episode=False),
-                    timeout_sec=300.0,
-                )
-            except TimeoutError as e:
-                log.error(f"Cleanup stop_recording timed out: {e}")
+            discard_open_episode(robot, scene_id)
 
             if saved:
                 done, attempts = done + 1, 0
     except Exception as e:
         log.error(f"Error during generation: {e}")
     finally:
-        # Saved episodes are unreadable until the dataset is finalized.
-        try:
-            robot.callService(
-                robot.finalize_recording,
-                srv.FinalizeRecording.Request(id=scene_id),
-                timeout_sec=600.0,
-            )
-            log.info("Recording dataset finalized.")
-        except Exception as e:
-            log.error(f"Finalize failed: {e}")
+        finalize(robot, scene_id)
         _generating.release()
 
 
@@ -269,6 +344,20 @@ def main():
     def handle(request, response):
         if not _generating.acquire(blocking=False):
             response.success, response.message = False, "Generation is already in progress."
+            return response
+        if request.scenarios:
+            refusal = ("Scenario mode needs layouts >= 1 and trajectories >= 1." if min(request.layouts, request.trajectories) < 1
+                       else "Perturbed trajectories need the solver's --motion-noise." if request.trajectories > 1
+                       and robot.config.motion_noise is None else None)
+            if refusal:
+                _generating.release()
+                response.success, response.message = False, refusal
+                return response
+            scenarios = [dict(zip(s.zone_objects, s.object_zones)) for s in request.scenarios]
+            threading.Thread(target=generate_scenarios, args=(
+                scenarios, request.layouts, request.trajectories, scene_id, robot, sim_namespace, request.path)).start()
+            n = len(scenarios) * request.layouts * request.trajectories
+            response.success, response.message = True, f"Started generating {n} demonstrations."
             return response
         # zones: [] = free draws; [-1] = every zone of the starting cube's grid.
         grid = zone_grid(

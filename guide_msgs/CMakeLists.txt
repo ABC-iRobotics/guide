@@ -18,6 +18,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   # Messages
   "msg/MotionTarget.msg"
+  "msg/Scenario.msg"
 
   # Services
   "srv/Attribute.srv"

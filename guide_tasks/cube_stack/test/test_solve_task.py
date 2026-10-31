@@ -5,6 +5,7 @@ physics (cubes follow a closed gripper, fall onto whatever is below when let go)
 the tree runs exactly as built for Isaac, minus Isaac.
 """
 
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -232,6 +233,17 @@ def test_route_5_beyond_recovery_the_episode_fails(world):
     assert world.saved is None  # never stopped by the tree: generation discards it
 
 
+@pytest.mark.parametrize("trouble", [{"misses": 1}, {"slips": 1}, {"failing_moves": ["MoveOverCube"]}])
+def test_with_recoveries_off_a_failure_ends_the_episode_unsaved(world, trouble):
+    for k, v in trouble.items():
+        setattr(world, k, v)
+    drawn = plan(COLOURS)
+    tree = st.without_recoveries(st.build_tree(ROBOT, drawn))
+
+    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.FAILURE
+    assert world.saved is None
+
+
 @pytest.mark.parametrize("trouble", [{}, {"misses": 1}, {"slips": 1}, {"slides": 2}])
 def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world, monkeypatch, trouble):
     """Asked from the scene alone, the oracle agrees with the tree at both levels: at every
@@ -288,3 +300,22 @@ def test_the_tree_works_in_the_robot_base_frame():
 
     assert context["scene_path"] == "/fr3/fr3_link0"
     assert np.allclose(context["rest_pose"].position.to_numpy(), [0.3, 0.0, 0.5])
+
+
+def test_scenarios_replace_a_failing_layout_and_redraw_a_failing_trajectory(monkeypatch, tmp_path):
+    runs, outcomes = [], iter([False, True, True, False, True])  # seed 0 fails clean; trajectory 2 fails once
+    monkeypatch.setattr(st, "solve_task", lambda *a, **k: runs.append(k) or next(outcomes))
+    monkeypatch.setattr(st, "discard_open_episode", lambda *a: None)
+    monkeypatch.setattr(st, "finalize", lambda *a: None)
+    log = SimpleNamespace(info=print, error=print)
+    robot = SimpleNamespace(node=SimpleNamespace(get_logger=lambda: log), _noise=None)
+    st._generating.acquire()
+
+    st.generate_scenarios([{"red_block": 3}], 1, 3, 0, robot, "/Sim_0", str(tmp_path / "set"))
+
+    assert [(k["scene_seed"], k["clean"], k["no_recovery"]) for k in runs] == [
+        (0, True, True), (1, True, True), (1, False, True), (1, False, True), (1, False, True)]
+    assert all(k["zones"] == {"red_block": 3} for k in runs) and len({k["draw"] for k in runs}) == 5
+    lines = (tmp_path / "set.provenance.jsonl").read_text().splitlines()
+    assert [json.loads(line)["saved"] for line in lines] == [False, True, True, False, True]
+    assert not st._generating.locked()

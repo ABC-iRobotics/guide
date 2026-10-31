@@ -118,9 +118,10 @@ class Noise:
         self.master = int(params.seed if params.seed is not None else np.random.SeedSequence().entropy % 2**63)
         self.episode()
 
-    def episode(self, *key) -> None:
-        """Start an episode: moves are seeded (master, *key, move number), so a key repeats its routes."""
-        self.key, self._move, self.prev = tuple(int(k) for k in key), 0, None
+    def episode(self, *key, clean=False) -> None:
+        """Start an episode: moves are seeded (master, *key, move number), so a key repeats its routes.
+        clean: no route is perturbed (speed factors and goal jitter still apply)."""
+        self.key, self._move, self.prev, self.clean = tuple(int(k) for k in key), 0, None, clean
 
     def move(self) -> np.random.Generator:
         """The next move's generator (its speed factor, start offset and route draw from it)."""
@@ -151,7 +152,7 @@ class Noise:
         if np.linalg.norm(np.diff(points, axis=0), axis=1).sum() < 1e-6:
             return None
         route = Route(points, tangent, u)
-        sigma = P.sigma if perturb and rng.random() < P.p_perturb else 0.0
+        sigma = P.sigma if perturb and not self.clean and rng.random() < P.p_perturb else 0.0
         if sigma > 0 or carry is not None:
             route = Route(points, tangent, u, self._control(rng, route.length, v, sigma, carry, free_end))
         self.prev = SimpleNamespace(route=route, carries=free_end and route.ctrl is not None)

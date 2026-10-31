@@ -1,6 +1,17 @@
+# Where the dataset goes.
 string path
+# Zone mode: counts[i] episodes with the task's zone target in zones[i]; [] = free draws,
+# [-1] = every zone.
 int32[] zones
 int32[] counts
+# Scenario mode (used when scenarios is not empty; zones/counts are then ignored): for every
+# scenario, `layouts` layouts (scene seeds), and for each layout `trajectories` episodes of
+# different motion: the first unperturbed, the rest with the solver's --motion-noise. A layout
+# whose unperturbed episode fails is replaced by the scenario's next seed; a perturbed episode
+# that fails is drawn again. Episodes never contain a recovery.
+Scenario[] scenarios
+int32 layouts
+int32 trajectories
 ---
 bool success
 string message
