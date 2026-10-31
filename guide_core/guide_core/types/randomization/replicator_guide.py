@@ -145,6 +145,135 @@ def zone(distribution: str, path_pattern: str, resolution: float = 0.1):
     _registered.update(grid=g, zone_slots=slots, zone_distribution=distribution)
 
 
+def axis_angle(axis, angle):
+    """Uniform rotation about a principal axis, ``angle`` = [min, max] degrees, as Euler."""
+    import omni.replicator.core as rep
+
+    lo, hi = (float(x) for x in _quat.as_vec(angle, 2))
+    if lo > hi:
+        raise ValueError("angle must be [min, max]")
+    lower, upper = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    idx = principal_axis(axis)
+    lower[idx], upper[idx] = lo, hi
+    return rep.distribution.uniform(lower=lower, upper=upper)
+
+
+def fixture_pose(path_pattern: str, position, rotation):
+    """Place the one fixture ``path_pattern`` matches by its world weld (spike K). ``position`` (scene
+    frame, m) and ``rotation`` (Euler XYZ, degrees, as modify.pose) are the pose of the fixture's
+    articulation root link, the weld's body1: a distribution.uniform or a constant each.
+
+    At build (registration): body0 released, so PhysX reads the anchor as a world pose at parse time
+    as it does at run time, and the anchor written at the middle of the distributions, so the first
+    draw is a small move. The fixture's root prim gets the same pose, so the weld is not "disjoint" at
+    parse: PhysX otherwise snaps the body onto the anchor in the first step (a LIBERO cabinet rotated
+    ~155 deg and 0.27 m from its authored origin came out non-finite, Isaac 6.0.1, 2026-10-20).
+    Per fire, after the trigger: localPos0/localRot0 = scene origin * pose *
+    the weld's body1 frame (fire). The distributions are wired into the trigger through a
+    guide:fixture* attribute on the fixture, so the graph draws them every fire."""
+    import omni.usd
+
+    from guide_core.types.randomization import fixtures
+
+    stage = omni.usd.get_context().get_stage()
+    root = fixtures.only(stage, path_pattern, "guide.fixture_pose")
+    weld = fixtures.world_weld(root)
+    fixtures.release_body0(weld)
+    frame = fixtures.local1(weld)
+    fixtures.write_weld(weld, *fixtures.weld_world_pose(
+        fixtures.scene_matrix(stage, _registered["prefix"]), midpoint(position), midpoint(rotation), *frame))
+    fixtures.place_root(root, midpoint(position), midpoint(rotation))
+    prims = _sampled(path_pattern, {"guide:fixturePosition": position, "guide:fixtureRotation": rotation})
+    _registered.setdefault("fixtures", []).append({"weld": weld, "position": position, "rotation": rotation, "local1": frame})
+    return prims
+
+
+def joint_state(path_pattern: str, distribution):
+    """Set the one prismatic or revolute joint ``path_pattern`` matches to ``distribution`` (SI: m or
+    rad; a distribution.uniform or a constant) through PhysX's JointStateAPI, velocity zeroed (spike J).
+    Goes under the guide_randomize_joints trigger, which fire() sends JOINT_DELAY_FRAMES physics frames
+    after the pose event. At build: JointStateAPI applied, any holding drive's stiffness zeroed."""
+    import omni.usd
+
+    from guide_core.types.randomization import fixtures
+
+    joint = fixtures.only(omni.usd.get_context().get_stage(), path_pattern, "guide.joint_state")
+    kind = fixtures.prepare_joint(joint)
+    prims = _sampled(path_pattern, {"guide:jointState": distribution})
+    _registered.setdefault("joints", []).append({"joint": joint, "kind": kind, "value": distribution})
+    return prims
+
+
+def _sampled(path_pattern: str, attributes: dict):
+    """Wire each distribution among ``attributes`` into the trigger being parsed: a write to a guide:*
+    attribute of the matched prim, so the graph draws it every fire (a distribution nothing consumes
+    never evaluates). fire() reads the samples, not the attribute."""
+    import omni.replicator.core as rep
+
+    prims = rep.get.prims(path_pattern=path_pattern, cache_result=False)
+    with prims:
+        for name, value in attributes.items():
+            node = getattr(value, "node", None)
+            if node is not None:
+                rep.modify.attribute(name, value, attribute_type=attribute_type(node))
+    return prims
+
+
+def _require_uniform(node) -> None:
+    if node.get_type_name() != UNIFORM:
+        raise ValueError(f"guide.fixture_pose and guide.joint_state take a distribution.uniform or a constant; "
+                         f"got a {node.get_type_name()}")
+
+
+def attribute_type(node) -> str:
+    """The guide:* attribute a node's distribution is written into: float for one value, float3 for three."""
+    _require_uniform(node)
+    size = len(np.atleast_1d(_get(node, "inputs:lower")))
+    if size not in (1, 3):
+        raise ValueError(f"guide.* distributions draw one or three values; this one draws {size}")
+    return "float" if size == 1 else "float3"
+
+
+def midpoint(value) -> np.ndarray:
+    """A guide.* argument's middle: (lower + upper) / 2 of a distribution.uniform, else the constant."""
+    node = getattr(value, "node", None)
+    if node is None:
+        return np.asarray(value, float)
+    _require_uniform(node)
+    return (np.asarray(_get(node, "inputs:lower"), float) + np.asarray(_get(node, "inputs:upper"), float)) / 2
+
+
+def drawn(value) -> np.ndarray:
+    """A guide.* argument as this fire drew it: the distribution's (one prim's) sample, else the constant."""
+    node = getattr(value, "node", None)
+    if node is None:
+        return np.asarray(value, float)
+    return np.asarray(_get(node, "outputs:samples"), float)[0]
+
+
+def joint_delay_updates(physics_dt: float, rendering_dt: float, frames: int = JOINT_DELAY_FRAMES) -> int:
+    """App updates that run at least ``frames`` physics frames (an update steps rendering_dt / physics_dt)."""
+    return max(1, math.ceil(frames * physics_dt / rendering_dt - 1e-9))
+
+
+def _dts() -> tuple[float, float]:
+    """(physics dt, rendering dt) of GUIDE's World."""
+    from isaacsim.core.api import SimulationContext
+
+    context = SimulationContext.instance()
+    return context.get_physics_dt(), context.get_rendering_dt()
+
+
+def attach() -> None:
+    import omni.replicator.core as rep
+    import sys
+
+    rep.guide = sys.modules[__name__]
+
+
+# --------------------------------------------------------------------------- #
+# graph build + per-episode driving (Isaac side)
+# --------------------------------------------------------------------------- #
 def build(yaml_path: Path, scene_prefix: str) -> dict[str, Any]:
     """Parse the task's Replicator YAML for one scene; returns what the scene keeps."""
     import omni.replicator.core as rep
