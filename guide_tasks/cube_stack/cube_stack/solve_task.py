@@ -185,7 +185,7 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene
 
 
 _generating = threading.Lock()
-SEED_BLOCK = 1000  # scenario i draws its layouts from scene seeds i * SEED_BLOCK, i * SEED_BLOCK + 1, ...
+SEED_BLOCK = 1000  # scenario i draws its layouts from scene seeds seed_base + i * SEED_BLOCK, ... + 1, ...
 
 
 def discard_open_episode(robot, scene_id):
@@ -206,7 +206,7 @@ def finalize(robot, scene_id):
         robot.node.get_logger().error(f"Finalize failed: {e}")
 
 
-def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path=""):
+def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path="", seed_base=0):
     """Scenario mode of the Demonstration service: per scenario ({cube: zone}), `layouts` scene seeds,
     each recorded `trajectories` times -- first unperturbed, then perturbed. A seed whose unperturbed
     run fails is skipped for the scenario's next one, a perturbed run that fails is drawn again; no run
@@ -236,7 +236,7 @@ def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_na
 
     try:
         for s in range(len(scenarios)):
-            seed = s * SEED_BLOCK
+            seed = seed_base + s * SEED_BLOCK
             for layout in range(layouts):
                 for _ in range(MAX_ATTEMPTS):
                     log.info(f"--- scenario {s} layout {layout}: seed {seed}, unperturbed ---")
@@ -302,6 +302,8 @@ def main():
         help="perturbed demonstrations (controller: oscbf): guide_motion.noise.NoiseParams' defaults, "
              'or a JSON object of overrides, e.g. \'{"sigma": 0.008, "seed": 7}\'',
     )
+    parser.add_argument("--seed-base", type=int, default=0,
+                        help="first scene seed of scenario mode; give parallel solvers disjoint bases")
     args, _ = parser.parse_known_args()
     namespace = args.namespace  # e.g. /Sim_0/Scene_0
     sim_namespace = "/" + namespace.split("/")[1]
@@ -355,7 +357,8 @@ def main():
                 return response
             scenarios = [dict(zip(s.zone_objects, s.object_zones)) for s in request.scenarios]
             threading.Thread(target=generate_scenarios, args=(
-                scenarios, request.layouts, request.trajectories, scene_id, robot, sim_namespace, request.path)).start()
+                scenarios, request.layouts, request.trajectories, scene_id, robot, sim_namespace, request.path,
+                args.seed_base)).start()
             n = len(scenarios) * request.layouts * request.trajectories
             response.success, response.message = True, f"Started generating {n} demonstrations."
             return response
