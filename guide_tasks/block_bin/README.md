@@ -17,7 +17,7 @@ up and drops it into that bin, moved by the OSCBF controller (the default; `cont
 | `config/reset.yaml` | Replicator YAML for the Reset service: blocks in a row, bins, arm and fingers at home. |
 | `config/success.yaml` | `is_prim_contained`: the block inside the bin. |
 | `launch/bringup.launch.py` | Per scene (`num_env`, default 1): MoveIt (`franka_fr3_moveit_config`'s `guide_moveit.launch.py`, only for `controller: moveit`) and the `solve_task` node under the `.venv` Python, given the controller, the camera transition's duration and `dataset.fps` from `config/init.yaml`; WaitForCameras holds the arm for the duration plus one frame period. |
-| `assets/` | `block_bin.usd`, the scene, and the RealSense D435 camera mount it references. |
+| `assets/` | `block_bin.usd`, the scene, and the RealSense D455 camera mount it references (`RealSenseD455_Camera_Mount.usd`, from the `.stl` beside it; black matte: NVIDIA vMaterials_2 `Plastic_Standardized_Surface_Finish_V33`, loaded by URL, NVIDIA Omniverse License). |
 
 ## Usage
 

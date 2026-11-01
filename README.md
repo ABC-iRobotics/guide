@@ -248,7 +248,7 @@ guide_tasks/block_bin/
 │   └── bringup.launch.py     the solver per scene (+ MoveIt under controller: moveit)
 ├── assets/
 │   ├── block_bin.usd         the scene
-│   └── RealSenseD435_Camera_Mount.usd
+│   └── RealSenseD455_Camera_Mount.usd
 ├── test/                     ament lint tests; test_dry_run.py: the tree on a fake robot
 ├── package.xml
 └── setup.py
