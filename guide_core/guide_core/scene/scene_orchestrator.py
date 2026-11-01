@@ -1359,8 +1359,8 @@ class SceneOrchestrator(ABC):
                     observation["ry"] = float(abs_rotvec[1])
                     observation["rz"] = float(abs_rotvec[2])
 
-                    # Without kinematics solver, we don't have the target pose.
-                    # We copy the actual execution delta to the action.
+                    # The executed delta; with an OSCBF host's clean target (`dart` below) the
+                    # recorder replaces it by the DART label c[t+1] (-) s[t].
                     action["x"] = float(obs_delta_pos[0])
                     action["y"] = float(obs_delta_pos[1])
                     action["z"] = float(obs_delta_pos[2])

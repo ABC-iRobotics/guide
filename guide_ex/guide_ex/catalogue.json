@@ -288,7 +288,7 @@
       ]
     },
     {
-      "doc": "Set what is held down on the support and let go: lower slowly to the release height (0.0665 m over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), open, and rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.",
+      "doc": "Set what is held down on the support and let go: lower to 4 cm over the release height (0.0665 m over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), slowly the rest of the way, open, and rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.",
       "inputs": [
         "over_support_pose",
         "robot",
@@ -461,7 +461,8 @@
         "min_fraction=0.95",
         "perturb=False",
         "precise_end=True",
-        "jitter=None"
+        "jitter=None",
+        "aim=False"
       ],
       "kind": "leaf",
       "level": "STEP",

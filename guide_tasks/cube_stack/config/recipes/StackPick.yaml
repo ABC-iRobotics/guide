@@ -1,5 +1,6 @@
-# Pick the next cube (top) up: announce it, 0.275 m over its centre (the TCP ~30 cm over the table),
-# grasp 1 cm above its centre, close, lift back up, and fail (NotHolding) unless it is in the fingers.
+# Pick the next cube (top) up: announce it, 0.275 m over its centre (the TCP ~30 cm over the table; a
+# perturbed episode misses it there, the descent corrects), down to 6 cm over the centre, slowly the
+# last 5 cm to the grasp 1 cm above it, close, lift back up, and fail (NotHolding) unless it is in the fingers.
 # Every move detours through the home joints before it is tried again.
 node_type: CompositeNode
 name: Pick
@@ -26,7 +27,17 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveOverCube
     dynamic_map: {robot: robot, target_pose: over_cube_pose}
-    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
+    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false, aim: true}
+  - ref: TransformPose
+    alias: PreGraspPose
+    dynamic_map: {r_pose: cube_pose}
+    static_args:
+      l_pose: {position: [0.0, 0.0, 0.06]}
+    output_map: {pose: pre_grasp_pose}
+  - ref: MoveToCartesianPose
+    alias: MoveToPreGrasp
+    dynamic_map: {robot: robot, target_pose: pre_grasp_pose}
+    static_args: {speed: 0.2, cartesian: true, precise_end: false}
   - ref: TransformPose
     alias: GraspPose
     dynamic_map: {r_pose: cube_pose}
@@ -36,7 +47,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToGrasp
     dynamic_map: {robot: robot, target_pose: grasp_pose}
-    static_args: {speed: 0.2, cartesian: true}
+    static_args: {speed: 0.05, cartesian: true}
   - ref: CloseGripper
   - ref: WaitForSeconds
     alias: CloseGripperSettle
@@ -67,6 +78,15 @@ fallbacks:
     max_retries: 2
     children:
       - {ref: MoveHome, alias: OverCubeViaHomeToHome}
+  MoveToPreGrasp:
+    node_type: RecoveryNode
+    name: PreGraspViaHome
+    level: SEQUENCE
+    dynamic_map: {robot: robot}
+    resume_target: MoveOverCube
+    max_retries: 2
+    children:
+      - {ref: MoveHome, alias: PreGraspViaHomeToHome}
   MoveToGrasp:
     node_type: RecoveryNode
     name: GraspViaHome

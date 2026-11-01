@@ -68,7 +68,8 @@ def camera_transition(config: dict) -> dict | None:
 
 def register_guide_styles() -> None:
     """Make LeRobot accept GUIDE's ``procedure`` style as a persistent one and ``dart`` (the
-    DART label, one row per frame) as an event-only one (idempotent)."""
+    DART label rows of the 2026-10-31 recordings, before it moved into the action) as an event-only
+    one (idempotent)."""
     from lerobot.datasets import language
 
     language.EXTENDED_STYLES.update({"procedure", "dart"})
@@ -76,19 +77,14 @@ def register_guide_styles() -> None:
     language.EVENT_ONLY_STYLES.add("dart")
 
 
-def dart_labels(frames) -> list:
-    """DART labels of an episode's frames [(c, s, gripper)], c the unperturbed target being tracked and
-    s the measured TCP pose, both [x y z rx ry rz] in the robot base frame: c[t+1] (-) s[t] (position
-    difference, rotation vector of R_c[t+1] R_s[t]^T, the action's own composition), then the frame's
-    absolute gripper action when it has one. The last frame takes its own c."""
+def dart_action(c, s) -> list:
+    """The DART label c (-) s of a frame: c the unperturbed target tracked one frame later, s the frame's
+    measured TCP pose, both [x y z rx ry rz] in the robot base frame; position difference, rotation
+    vector of R_c R_s^T."""
     from scipy.spatial.transform import Rotation
 
-    labels = []
-    for t, (_, s, gripper) in enumerate(frames):
-        c = frames[min(t + 1, len(frames) - 1)][0]
-        dw = Rotation.from_rotvec(c[3:]) * Rotation.from_rotvec(s[3:]).inv()
-        labels.append([*np.subtract(c[:3], s[:3]), *dw.as_rotvec()] + ([] if gripper is None else [gripper]))
-    return labels
+    dw = Rotation.from_rotvec(c[3:]) * Rotation.from_rotvec(s[3:]).inv()
+    return [*np.subtract(c[:3], s[:3]), *dw.as_rotvec()]
 
 
 def write_language(root: Path, language: dict) -> bool:
@@ -176,7 +172,7 @@ class SceneRecorder(Thread):
         self._saved_language: dict = {}
         # Under motion noise: this episode's (clean target, measured pose, gripper) per frame, for its
         # DART labels (dart_labels), written as the `dart` language style with the prompts.
-        self._dart: list = []
+        self._held = None  # (frame, dart): a frame waiting for the next one's clean target
         # The camera transition's label, which ends with its frames (see _process_frame).
         self._transition_label = (camera_transition(config) or {}).get("label")
 
@@ -443,11 +439,13 @@ class SceneRecorder(Thread):
         dart = item.pop("dart", None)
         frame = {**observation_frame, **action_frame, "task": task_str}
 
-        self.dataset.add_frame(frame)
-        if dart is not None and len(self._dart) == self._episode_frames:  # every frame so far has one
-            names = list(features["action"]["names"])
-            gripper = float(action_frame["action"][names.index("gripper.pos")]) if "gripper.pos" in names else None
-            self._dart.append((dart["clean"], dart["measured"], gripper))
+        # With a clean target (OSCBF host), the pose action is the DART label c[t+1] (-) s[t]: the frame
+        # waits for the next one; without, it keeps the orchestrator's executed delta.
+        self._flush(dart and dart["clean"])
+        if dart is None:
+            self.dataset.add_frame(frame)
+        else:
+            self._held = (frame, dart)
         # LeRobot numbers an episode's frames 0, 1, ... in the order they are added. A
         # level is recorded where it changes to a new prompt. "" is not recorded: LeRobot
         # keeps a persistent row active until the next one, so a level keeps its last prompt
@@ -465,8 +463,22 @@ class SceneRecorder(Thread):
         )
         return episode_start_time
 
+    def _flush(self, clean_next=None) -> None:
+        """Add the held frame, its pose action c (-) s from the next frame's clean target (its own at
+        an episode's end)."""
+        if self._held is None:
+            return
+        frame, dart = self._held
+        self._held = None
+        names = list(self.dataset.features["action"]["names"])
+        pose = [names.index(k) for k in ("x", "y", "z", "rx", "ry", "rz")]
+        action = np.array(frame["action"], copy=True)
+        action[pose] = dart_action(clean_next or dart["clean"], dart["measured"])
+        self.dataset.add_frame({**frame, "action": action})
+
     def _finalize_episode(self):
         if self.dataset is not None:
+            self._flush()
             # LeRobot counts only saved episodes, so the index the about-to-be-saved
             # episode takes is the current total (read before save_episode increments it).
             meta_obj = getattr(self.dataset, "meta", None)
@@ -478,12 +490,9 @@ class SceneRecorder(Thread):
             self.dataset.save_episode(parallel_encoding=False)
             self._logger.info("Episode successfully saved.")
             self._write_episode_meta(episode_index)
-            if self._dart and len(self._dart) == self._episode_frames:
-                self._language["dart"] = [(t, json.dumps(np.round(label, 7).tolist()))
-                                          for t, label in enumerate(dart_labels(self._dart))]
             if any(self._language.values()):
                 self._saved_language[episode_index] = self._language
-        self._language, self._episode_frames, self._dart = {}, 0, []
+        self._language, self._episode_frames, self._held = {}, 0, None
         self._pending_episode_meta = None
         self.start_recording_event.clear()
         self.stop_recording_event.set()
@@ -501,7 +510,7 @@ class SceneRecorder(Thread):
             for key in self.dataset.meta.video_keys:
                 shutil.rmtree(writer._get_image_file_dir(episode_index, key), ignore_errors=True)
             self._logger.info("Episode buffer cleared.")
-        self._language, self._episode_frames, self._dart = {}, 0, []
+        self._language, self._episode_frames, self._held = {}, 0, None
         # Drop the pending sidecar payload so only saved episodes are recorded.
         self._pending_episode_meta = None
         self.start_recording_event.clear()

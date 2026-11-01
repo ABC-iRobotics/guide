@@ -82,3 +82,17 @@ def test_p_perturb_leaves_some_moves_clean():
     noise = Noise(NoiseParams(seed=3))
     clean = sum(noise.route(noise.move(), P0, GOAL, v=0.25).ctrl is None for _ in range(200))
     assert 50 < clean < 110  # ~40 % of 200
+
+
+def test_an_aimed_free_end_misses_its_clean_point_and_the_next_move_corrects():
+    noise = Noise(NoiseParams(seed=9, sigma=0.0))  # the miss alone
+    a = noise.route(noise.move(), P0, GOAL, v=0.25, free_end=True, aim=True)
+    h = 1.0 - noise.params.blend / a.length  # handed over at the blend, as ROS2Robot does
+    miss = a.at(h) - a.clean(h)
+    assert 0 < np.linalg.norm(miss) <= noise.params.aim and miss[2] == 0  # horizontal, full at the hand-over
+    assert np.allclose(a.at(0.0), P0)
+    b = noise.route(noise.move(), None, NEXT, v=0.1, handover=h)
+    assert np.allclose(b.at(0.0), a.at(h), atol=1e-3)  # continuous
+    assert np.allclose(b.at(1.0), NEXT) and np.allclose(b.at(0.8), b.clean(0.8))  # faded before the end
+    noise.episode(clean=True)
+    assert np.allclose(noise.route(noise.move(), P0, GOAL, v=0.25, free_end=True, aim=True).miss(1.0), 0)

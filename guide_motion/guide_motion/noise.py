@@ -36,6 +36,8 @@ class NoiseParams:
     p_perturb: float = 0.6  # the chance a move asked to be perturbed is (clean routes stay the mode)
     blend: float = 0.04  # m: the corner a free junction cuts
     speed_scale: tuple = (0.7, 1.3)  # each move's speed factor, drawn uniformly
+    aim: float = 0.03  # m: an aimed free end's horizontal miss, uniform over a disc of this radius
+    aim_ramp: float = 0.1  # m: the miss builds up over the move's last aim_ramp, fades over the next's first
     seed: int | None = None  # the trajectory master seed; None draws one
 
 
@@ -56,6 +58,12 @@ def _bezier(xs, ys, samples=BEZIER_SAMPLES):
     lc = np.array([math.lgamma(n) - math.lgamma(j + 1) - math.lgamma(n - j) for j in i])
     w = np.exp(lc + i * np.log(t) + (n - 1 - i) * np.log1p(-t))  # Bernstein weights, in log space
     return np.r_[xs[0], w @ xs, xs[-1]], np.vstack([ys[0], w @ ys, ys[-1]])
+
+
+def _smooth(x) -> float:
+    """Smoothstep, 0 at x <= 0 to 1 at x >= 1."""
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3.0 - 2.0 * x)
 
 
 class Route:
@@ -80,8 +88,23 @@ class Route:
             us.append(transport(a, b, us[-1]))
         self.us = np.array(us)
         self.ctrl, self.s = ctrl, None
+        self.aim()
         if ctrl is not None:
             self._bs, self._bn = _bezier(np.asarray(ctrl[0], float), np.asarray(ctrl[1], float))
+
+    def aim(self, start=None, end=None, ramp=0.1, lead=0.0) -> None:
+        """A miss off the clean path, in metres: `start` (carried in) fades out over the first `ramp`
+        (at most 80 % of the route), `end` builds up over the `ramp` before the last `lead` (the blend a
+        free end hands over at), so the route ends at goal + end while clean() still ends at the goal."""
+        self.aim_in = np.zeros(3) if start is None else np.asarray(start, float)
+        self.aim_out = np.zeros(3) if end is None else np.asarray(end, float)
+        self._lead = min(lead, 0.45 * self.length)
+        self._ramp_in, self._ramp_out = min(ramp, 0.8 * self.length), min(ramp, self.length - self._lead)
+
+    def miss(self, s) -> np.ndarray:
+        d = s * self.length
+        return (self.aim_in * (1.0 - _smooth(d / self._ramp_in))
+                + self.aim_out * _smooth(1.0 - (self.length - self._lead - d) / self._ramp_out))
 
     def _segment(self, s):
         return int(np.clip(np.searchsorted(self._cum, s * self.length, "right") - 1, 0, len(self.dirs) - 1))
@@ -107,7 +130,7 @@ class Route:
 
     def at(self, s) -> np.ndarray:
         (u, w), (a, b) = self.frame(s), self.offset(s)
-        return self.clean(s) + a * u + b * w
+        return self.clean(s) + a * u + b * w + self.miss(s)
 
 
 class Noise:
@@ -128,12 +151,14 @@ class Noise:
         self._move += 1
         return np.random.default_rng(np.random.SeedSequence([self.master, *self.key, self._move]))
 
-    def route(self, rng, p0, goal, v, perturb=True, free_end=False, handover=None) -> Route | None:
+    def route(self, rng, p0, goal, v, perturb=True, free_end=False, handover=None, aim=False) -> Route | None:
         """The route from p0 (or, handed over at path parameter `handover` of the previous route, from
-        there through a blend) to goal at cruise speed v. None when p0 is the goal."""
+        there through a blend) to goal at cruise speed v. None when p0 is the goal. aim (free ends of
+        perturbed episodes): the route ends a horizontal miss off the goal, its clean point on it; the
+        next move, handed over, fades the miss out."""
         P, prev = self.params, self.prev
         goal = np.asarray(goal, float)
-        carry, tangent, u = None, None, None
+        carry, tangent, u, aim_in = None, None, None, None
         if handover is not None and prev is not None:
             A = prev.route
             start, corner = A.clean(handover), A.clean(1.0)
@@ -145,6 +170,7 @@ class Noise:
             tangent, u = A.tangent(handover), A.frame(handover)[0]
             if prev.carries:
                 carry = (A.offset(handover), A.sigma(handover))
+            aim_in = A.miss(handover)
         else:
             points = np.vstack([p0, goal])
             if prev is not None:
@@ -155,6 +181,11 @@ class Noise:
         sigma = P.sigma if perturb and not self.clean and rng.random() < P.p_perturb else 0.0
         if sigma > 0 or carry is not None:
             route = Route(points, tangent, u, self._control(rng, route.length, v, sigma, carry, free_end))
+        aim_out = None
+        if aim and free_end and not self.clean:
+            r, th = P.aim * math.sqrt(rng.random()), rng.uniform(0.0, 2.0 * math.pi)
+            aim_out = [r * math.cos(th), r * math.sin(th), 0.0]
+        route.aim(aim_in, aim_out, P.aim_ramp, lead=P.blend if free_end else 0.0)
         self.prev = SimpleNamespace(route=route, carries=free_end and route.ctrl is not None)
         return route
 

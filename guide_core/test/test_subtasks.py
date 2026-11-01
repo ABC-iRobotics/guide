@@ -147,7 +147,7 @@ def test_an_empty_subtask_row_round_trips_through_write_language(tmp_path):
     assert active(root, "subtask") == {0: ["Startup"] * 3 + [""] * 2}
 
 
-def test_each_saved_frame_gets_its_dart_label_in_language_events(tmp_path):
+def test_the_pose_action_is_the_dart_label_when_a_clean_target_is_tracked(tmp_path):
     recorder = SceneRecorder("pkg", "dart", {"dataset": {"fps": 10}})
     recorder._logger = logging.getLogger("test_subtasks")
     recorder.LeRobotDataset = lerobot_dataset.LeRobotDataset
@@ -156,15 +156,18 @@ def test_each_saved_frame_gets_its_dart_label_in_language_events(tmp_path):
     for i in range(3):  # the clean target runs 1 cm ahead in x and 0.1 rad about z
         start = recorder._process_frame({
             "timestamp": i, "observation": {"joint1.pos": 0.0, **POSE},
-            "action": {"joint1.pos": 0.0, "gripper.pos": 0.04, **POSE}, "task": PROCEDURE,
+            "action": {"joint1.pos": 0.5, "gripper.pos": 0.04, **POSE}, "task": PROCEDURE,
             "dart": {"clean": [0.01 * (i + 1), 0, 0, 0, 0, 0.1], "measured": [0.01 * i, 0, 0, 0, 0, 0]}}, start)
+    recorder._process_frame({"timestamp": 3, "observation": {"joint1.pos": 0.0, **POSE},  # no host: as recorded
+                             "action": {"joint1.pos": 0.5, "gripper.pos": 0.04, **POSE, "x": 0.07}, "task": PROCEDURE}, start)
     recorder._finalize_episode()
     root = recorder.dataset.root
+    names = recorder.dataset.features["action"]["names"]
     recorder._finalize_dataset()
 
-    register_guide_styles()
     ds = lerobot_dataset.LeRobotDataset("pkg", root=root)
-    labels = [[json.loads(r["content"]) for r in row if r["style"] == "dart"] for row in ds.hf_dataset["language_events"]]
-    # c[t+1] - s[t]: 2 cm, then the last frame's own target, 1 cm; then rz and the gripper
-    assert [[round(v, 6) for v in label] for (label,) in labels] == [
-        [0.02, 0, 0, 0, 0, 0.1, 0.04], [0.02, 0, 0, 0, 0, 0.1, 0.04], [0.01, 0, 0, 0, 0, 0.1, 0.04]]
+    actions = [dict(zip(names, (round(float(v), 6) for v in ds[i]["action"]))) for i in range(len(ds))]
+    # c[t+1] - s[t]: 2 cm; the frame before the host-less one takes its own target (1 cm); then the
+    # host-less frame's own delta. The other dimensions stay as recorded.
+    assert [(a["x"], a["rz"]) for a in actions] == [(0.02, 0.1), (0.02, 0.1), (0.01, 0.1), (0.07, 0.0)]
+    assert {(a["joint1.pos"], a["gripper.pos"]) for a in actions} == {(0.5, 0.04)}
