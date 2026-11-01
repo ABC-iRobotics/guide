@@ -26,7 +26,7 @@ children:
   - ref: MoveToCartesianPose
     alias: LowerOntoSupport
     dynamic_map: {robot: robot, target_pose: place_pose}
-    static_args: {speed: 0.05, cartesian: true}
+    static_args: {speed: 0.1, cartesian: true}
   - ref: OpenGripper
   - ref: WaitForSeconds
     alias: OpenGripperSettle

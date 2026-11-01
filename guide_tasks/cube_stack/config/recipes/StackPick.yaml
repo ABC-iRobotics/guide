@@ -47,7 +47,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToGrasp
     dynamic_map: {robot: robot, target_pose: grasp_pose}
-    static_args: {speed: 0.05, cartesian: true}
+    static_args: {speed: 0.1, cartesian: true}
   - ref: CloseGripper
   - ref: WaitForSeconds
     alias: CloseGripperSettle
