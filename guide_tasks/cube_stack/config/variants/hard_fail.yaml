@@ -1,0 +1,8 @@
+# Hard fail: the attempt fails outright and is retried. The release lands 3-4 cm off the support's
+# centre, past its edge, so the cube falls and the tower loop picks it up again; the grasp stops 4.5-6 cm
+# beside the cube along the fingers' free axis, the hand closes on air, and PutOn's Regrasp reopens and
+# picks it. Each miss: {p: chance, axes: span in the target's frame (x the fingers' free axis, y their
+# closing axis, z down), r: [lo, hi] m}; once per goal and episode (guide_ex MissPose).
+miss:
+  grasp: {p: 0.3, axes: x, r: [0.045, 0.06]}
+  place: {p: 0.5, axes: xy, r: [0.03, 0.04]}

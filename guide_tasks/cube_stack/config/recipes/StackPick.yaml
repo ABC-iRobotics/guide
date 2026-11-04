@@ -1,6 +1,10 @@
 # Pick the next cube (top) up: announce it, 0.275 m over its centre (the TCP ~30 cm over the table; a
 # perturbed episode misses it there, the descent corrects), down to 6 cm over the centre, slowly the
 # last 5 cm to the grasp 1 cm above it, close, lift back up, and fail (NotHolding) unless it is in the fingers.
+# Retry demonstrations (the solver's --recipe, config/variants, MissPose): the pre-grasp target may lie
+# off the cube, the descent correcting it (miss.pre_grasp); the grasp target may lie beside it
+# (miss.grasp): the hand closes on air, lifts, fails NotHolding, and PutOn's Regrasp reopens and picks
+# it again, at the cube this time (MissPose misses a goal once).
 # Every move detours through the home joints before it is tried again.
 node_type: CompositeNode
 name: Pick
@@ -34,9 +38,14 @@ children:
     static_args:
       l_pose: {position: [0.0, 0.0, 0.06]}
     output_map: {pose: pre_grasp_pose}
+  - ref: MissPose
+    alias: MissPreGrasp
+    dynamic_map: {pose: pre_grasp_pose}
+    static_args: {miss: "${oc.select:miss.pre_grasp,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: pre_grasp_target}
   - ref: MoveToCartesianPose
     alias: MoveToPreGrasp
-    dynamic_map: {robot: robot, target_pose: pre_grasp_pose}
+    dynamic_map: {robot: robot, target_pose: pre_grasp_target}
     static_args: {speed: 0.2, cartesian: true, precise_end: false}
   - ref: TransformPose
     alias: GraspPose
@@ -44,9 +53,14 @@ children:
     static_args:
       l_pose: {position: [0.0, 0.0, 0.01]}
     output_map: {pose: grasp_pose}
+  - ref: MissPose
+    alias: MissGrasp
+    dynamic_map: {pose: grasp_pose}
+    static_args: {miss: "${oc.select:miss.grasp,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: grasp_target}
   - ref: MoveToCartesianPose
     alias: MoveToGrasp
-    dynamic_map: {robot: robot, target_pose: grasp_pose}
+    dynamic_map: {robot: robot, target_pose: grasp_target}
     static_args: {speed: 0.1, cartesian: true}
   - ref: CloseGripper
   - ref: WaitForSeconds

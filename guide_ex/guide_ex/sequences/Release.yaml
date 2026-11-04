@@ -2,6 +2,9 @@
 # over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), slowly the
 # rest of the way, open, and
 # rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.
+# Retry demonstrations (MissPose; recipe values miss.pre_place, miss.place = {p, axes, r} and miss.seed;
+# unset = off): the pre-place target may lie off the support, the descent correcting it; the release
+# target may lie off it, so the cube stands askew or falls, and the caller places or picks it again.
 node_type: CompositeNode
 name: Release
 level: SEQUENCE
@@ -19,13 +22,23 @@ children:
     static_args:
       l_pose: {position: [0.0, 0.0, 0.1065]}
     output_map: {pose: pre_place_pose}
+  - ref: MissPose
+    alias: MissPrePlace
+    dynamic_map: {pose: pre_place_pose}
+    static_args: {miss: "${oc.select:miss.pre_place,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: pre_place_target}
+  - ref: MissPose
+    alias: MissPlace
+    dynamic_map: {pose: place_pose}
+    static_args: {miss: "${oc.select:miss.place,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: place_target}
   - ref: MoveToCartesianPose
     alias: MoveToPrePlace
-    dynamic_map: {robot: robot, target_pose: pre_place_pose}
+    dynamic_map: {robot: robot, target_pose: pre_place_target}
     static_args: {speed: 0.2, cartesian: true, precise_end: false}
   - ref: MoveToCartesianPose
     alias: LowerOntoSupport
-    dynamic_map: {robot: robot, target_pose: place_pose}
+    dynamic_map: {robot: robot, target_pose: place_target}
     static_args: {speed: 0.1, cartesian: true}
   - ref: OpenGripper
   - ref: WaitForSeconds

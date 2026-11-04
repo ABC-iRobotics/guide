@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from guide_core.types.geometry import Pose, Transform
+from guide_core.types.geometry import Point, Pose, Transform
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
 from guide_ex.recipe import node
@@ -190,3 +190,58 @@ class PushPoses(BaseNode):
 
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={
             "start_pose": hand(obj[:2] - along * (reach + gap)), "end_pose": hand(goal[:2] - along * reach)})
+
+
+def miss_offset(rng, axes, r) -> np.ndarray:
+    """An offset of length uniform in [r[0], r[1]] in the span of `axes` (x, y, z in any combination
+    and order: "x" is +-x, "xy" a ring, "xyz" a shell), its direction uniform there."""
+    if not axes or set(axes) - set("xyz") or len(set(axes)) != len(axes):
+        raise ValueError(f"axes must be distinct letters of 'xyz', not {axes!r}")
+    d = np.zeros(3)
+    idx = ["xyz".index(a) for a in sorted(axes)]
+    d[idx] = rng.standard_normal(len(idx))
+    return rng.uniform(*r) * d / np.linalg.norm(d)
+
+
+@node()
+class MissPose(BaseNode):
+    """
+    An intentional miss for retry demonstrations: `pose` moved off its goal, so the move to it
+    ends beside the goal and the gripper closes or opens there.
+
+    `miss` = {p, axes, r}: with chance p (default 1), an offset of length uniform in r = [lo, hi] m,
+    direction uniform in the span of `axes` -- "x", "y", "z", "xy", "xz", "yz", "xyz" in any order --
+    of the pose's own frame (a top-down grasp: x the fingers' free axis, y the one they close
+    along, z down). None passes the pose through. The node misses a goal once: a pose within
+    `forget` of one it already missed comes back unchanged, so a retry (a recovery that resumes
+    it, the next loop pass) reaches the goal. The node instance keeps what it missed and draws
+    from (seed, its call count): built per episode with a per-episode seed, an episode's misses repeat.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("MissPose", alias, dynamic_map, static_args, output_map)
+        self._missed, self._calls = [], 0
+
+    def run(self, pose: Pose, miss: dict | None = None, seed: int = 0, forget: float = 0.02) -> ExecutionResult:
+        """
+        Args:
+            pose (Pose): The goal.
+            miss (dict): {p: chance, axes: e.g. "xy", r: [lo, hi] metres}; None: no miss.
+            seed (int): The episode's seed.
+            forget (float): Metres: a goal this close to one already missed is not missed again.
+        Returns:
+            ExecutionResult: outputs `pose`, the goal or the miss.
+        """
+        self._calls += 1
+        goal = pose.position.to_numpy()
+        if miss is None or any(np.linalg.norm(goal - g) < forget for g in self._missed):
+            return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+        rng = np.random.default_rng([int(seed), self._calls])
+        if rng.random() >= miss.get("p", 1.0):
+            return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+        offset = pose.orientation.to_numpy() @ miss_offset(rng, miss["axes"], miss["r"])
+        self._missed.append(goal)
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={
+            "pose": Pose(position=Point.from_numpy(goal + offset), orientation=pose.orientation)})

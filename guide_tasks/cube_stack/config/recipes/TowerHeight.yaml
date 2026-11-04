@@ -1,9 +1,9 @@
 # How many cubes of the tower stand on each other from the bottom (built), and whether all do (done):
-# each one cube edge (${cube.edge}) above the last, within ${cube.stacked} per axis.
+# each one cube edge (${cube.edge}) above the last, within ${tower.stacked} per axis (the variant's, else the scene's).
 ref: ChainLength
 alias: TowerHeight
 dynamic_map: {poses: tower_poses}
 static_args:
   offset: [0.0, 0.0, "${cube.edge}"]
-  tolerance: ${cube.stacked}
+  tolerance: ${tower.stacked}
 output_map: {length: built, complete: done}

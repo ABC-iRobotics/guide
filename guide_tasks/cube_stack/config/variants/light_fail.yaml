@@ -1,0 +1,12 @@
+# Light fail: a misplacement that stands. The release lands 1.2-1.8 cm off the support's centre (any
+# horizontal direction), the cube stays up, and the tower loop -- its tolerance tightened to 8 mm per
+# axis, which any such miss exceeds on one axis at least -- picks it off the support and places it again.
+# The pre-grasp and pre-place may end off their goal too; the descent corrects them before the commit.
+# Each miss: {p: chance, axes: span in the target's frame (x the fingers' free axis, y their closing
+# axis, z down), r: [lo, hi] m}; once per goal and episode (guide_ex MissPose).
+miss:
+  pre_grasp: {p: 0.3, axes: xy, r: [0.01, 0.025]}
+  pre_place: {p: 0.3, axes: xy, r: [0.01, 0.025]}
+  place: {p: 0.5, axes: xy, r: [0.012, 0.018]}
+tower:
+  stacked: [0.008, 0.008, 0.01]

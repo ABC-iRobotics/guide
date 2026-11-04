@@ -32,6 +32,9 @@ Recovery routes, for the failures most likely in this task (most likely first):
 1. Grasp misses (fingers empty after the lift; block_bin's 5 failed attempts in 300
    were all this). Pick checks the fingers; on a miss PutOn's Regrasp opens, measures
    the cube again (the attempt may have nudged it) and grasps the other pair of faces.
+   The hard_fail recipe (--recipe, config/variants/) causes this on purpose, and the place's
+   twin (a release off the support, the cube falls, route 4 picks it again); scenario mode,
+   which runs without recoveries, then keeps this route.
 2. An arm motion fails: no path or an aborted trajectory (under OSCBF, the default, only
    these); under controller: moveit also a straight-line path MoveIt can only partly
    compute (~1% of block_bin's moves, most near the robot base). MoveToCartesianPose
@@ -70,6 +73,7 @@ from irob_lerobot_ros.ros2robot import ROS2Robot
 
 # pyrefly: ignore [missing-import]
 from scipy.spatial.transform import Rotation as R
+import yaml
 
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import zone_plan
@@ -85,36 +89,48 @@ REBUILDS = 3  # loop passes beyond one per layer, for placements that did not ho
 MAX_ATTEMPTS = 8
 
 
-def recipe_values(robot, plan) -> dict:
+def variant(name) -> dict:
+    """config/variants/<name>.yaml: a stacking recipe's misses (guide_ex MissPose's `miss` per target:
+    pre_grasp, grasp, pre_place, place) and tower tolerance -- flawless, light_fail, hard_fail."""
+    return yaml.safe_load((recipes_dir("cube_stack", __file__).parent / "variants" / f"{name}.yaml").read_text())
+
+
+def recipe_values(robot, plan, miss=None, stacked=None, tilt=0.0) -> dict:
     """What config/recipes/ interpolate: the robot's gripper joint and home, the drawn plan's
-    prompts, the loop's passes, and the tower geometry the scene's success check uses too."""
+    prompts, the loop's passes (one more per placement a miss may undo) and the tower tolerance (default
+    the scene's success check's), the cube edge, the misses (a variant's, with their seed) and the grasp
+    tilt (rad)."""
+    miss = miss or {}
     return {
         "robot": robot_values(robot.config, recipes_dir("cube_stack", __file__).parent / "init.yaml"),
         "plan": plan,
-        "tower": {"max_loops": len(plan["order"]) + REBUILDS},
-        "cube": {"edge": CUBE, "stacked": list(STACKED)},
+        "tower": {"max_loops": len(plan["order"]) + REBUILDS + (len(plan["order"]) - 1) * bool(miss.get("place")),
+                  "stacked": list(stacked or STACKED)},
+        "cube": {"edge": CUBE},
+        "miss": miss,
+        "grasp": {"tilt": float(tilt)},
     }
 
 
-def load_recipe(name, robot, plan):
-    """config/recipes/<name>.yaml as a GUIDE-EX tree, for this robot and plan."""
+def load_recipe(name, robot, plan, **variation):
+    """config/recipes/<name>.yaml as a GUIDE-EX tree, for this robot and plan (variation: recipe_values')."""
     recipes = recipes_dir("cube_stack", __file__)
-    return load(recipes / f"{name}.yaml", values=recipe_values(robot, plan), search_paths=[recipes])
+    return load(recipes / f"{name}.yaml", values=recipe_values(robot, plan, **variation), search_paths=[recipes])
 
 
-def build_tree(robot, plan):
+def build_tree(robot, plan, **variation):
     """The episode's tree, layered as GUIDE-EX means the layers (see the module docstring)."""
-    return load_recipe("Episode", robot, plan)
+    return load_recipe("Episode", robot, plan, **variation)
 
 
-def without_recoveries(node):
-    """Drop every recovery (fallback) in the tree: a failing step then ends the episode. The tower's
-    rebuild passes (route 4) are the loop's own work and stay."""
+def without_recoveries(node, keep=()):
+    """Drop every recovery (fallback) in the tree but those of the children named in `keep`: a failing
+    step then ends the episode. The tower's rebuild passes (route 4) are the loop's own work and stay."""
     if getattr(node, "fallbacks", None):
-        node.fallbacks = {}
+        node.fallbacks = {k: v for k, v in node.fallbacks.items() if k in keep}
     for child in [*getattr(node, "children", []), getattr(node, "true_branch", None), getattr(node, "false_branch", None)]:
         if child is not None:
-            without_recoveries(child)
+            without_recoveries(child, keep)
     return node
 
 
@@ -147,11 +163,13 @@ def episode_context(robot, sim_namespace, scene_id, plan, path=""):
 
 
 def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene_seed=None, zones=None,
-               clean=False, no_recovery=False):
+               clean=False, no_recovery=False, recipe="flawless", tilt_deg=0.0):
     """Randomize the scene, build the episode's tree and run it. True if saved. `scene_seed` pins the
     layout (Randomize use_seed), so draws of the motion noise can be compared on one scene; `zones`
     ({cube prim name: zone}) places each cube in its own cell; clean = no route perturbed; no_recovery =
-    a failing step ends the episode instead of running its recovery."""
+    a failing step ends the episode instead of running its recovery (Regrasp stays with misses on);
+    recipe: the stacking variant (config/variants/; a clean run is flawless); tilt_deg: the episode's
+    grasp tilt, uniform in +-tilt_deg, drawn from the trajectory seed and key."""
     zones = zones or {}
     reply = robot.callService(
         robot.randomize,
@@ -171,9 +189,15 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene
     # Let the layout settle (the bins drop onto the floor) before solving.
     time.sleep(5)
 
-    tree = build_tree(robot, plan)
+    # The episode's own draws, from the trajectory seed and key: the grasp tilt and the misses' seed.
+    rng = np.random.default_rng(None if master is None else [master, scene_id, draw, 7])
+    tilt = np.radians(rng.uniform(-tilt_deg, tilt_deg)) if tilt_deg else 0.0
+    v = variant("flawless" if clean else recipe)
+    miss = {**v["miss"], "seed": int(rng.integers(2**31))}
+    log.info(f"Recipe {'flawless' if clean else recipe}: misses {v['miss']}, grasp tilt {np.degrees(tilt):+.1f} deg")
+    tree = build_tree(robot, plan, miss=miss, stacked=v.get("tower", {}).get("stacked"), tilt=tilt)
     if no_recovery:
-        without_recoveries(tree)
+        without_recoveries(tree, keep=("Pick",) if v["miss"] else ())
     result = tree.execute(episode_context(robot, sim_namespace, scene_id, plan, path))
 
     if result.status == DemoStatus.PERFECT and result.outputs.get("task_success"):
@@ -206,7 +230,8 @@ def finalize(robot, scene_id):
         robot.node.get_logger().error(f"Finalize failed: {e}")
 
 
-def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path="", seed_base=0):
+def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path="", seed_base=0,
+                       variation=None):
     """Scenario mode of the Demonstration service: per scenario ({cube: zone}), `layouts` scene seeds,
     each recorded `trajectories` times -- first unperturbed, then perturbed. A seed whose unperturbed
     run fails is skipped for the scenario's next one, a perturbed run that fails is drawn again; no run
@@ -220,7 +245,8 @@ def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_na
         draws += 1
         try:
             saved = solve_task(scene_id, robot, sim_namespace, path=path, draw=draws, scene_seed=key["seed"],
-                               zones=scenarios[key["scenario"]], clean=key["trajectory"] == 0, no_recovery=True)
+                               zones=scenarios[key["scenario"]], clean=key["trajectory"] == 0, no_recovery=True,
+                               **cycle(variation, draws))
             errors = 0
         except Exception as e:  # a timed-out sim call costs this attempt; five in a row, the run
             errors += 1
@@ -260,7 +286,14 @@ def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_na
         _generating.release()
 
 
-def generate(plan, scene_id, robot, sim_namespace, path=""):
+def cycle(variation, i) -> dict:
+    """solve_task's keywords from the CLI's variation for episode (or draw) i: its recipes in turn."""
+    v = dict(variation or {})
+    recipes = v.pop("recipes", None)
+    return {**v, **({"recipe": recipes[i % len(recipes)]} if recipes else {})}
+
+
+def generate(plan, scene_id, robot, sim_namespace, path="", variation=None):
     """Record one episode per `plan` entry; a failed attempt is discarded and redrawn."""
     log = robot.node.get_logger()
     try:
@@ -272,7 +305,8 @@ def generate(plan, scene_id, robot, sim_namespace, path=""):
             draws += 1
             log.info(f"--- Episode {done + 1}/{len(plan)} | attempt {attempts} ---")
             try:
-                saved = solve_task(scene_id, robot, sim_namespace, zone=plan[done], path=path, draw=draws)
+                saved = solve_task(scene_id, robot, sim_namespace, zone=plan[done], path=path, draw=draws,
+                                   **cycle(variation, done))
                 errors = 0
             except Exception as e:
                 # A timed-out sim call costs this attempt; five in a row, the run.
@@ -304,7 +338,15 @@ def main():
     )
     parser.add_argument("--seed-base", type=int, default=0,
                         help="first scene seed of scenario mode; give parallel solvers disjoint bases")
+    parser.add_argument("--recipe", default="flawless", metavar="NAME[,NAME...]",
+                        help="stacking recipe(s) from config/variants/ (flawless, light_fail, hard_fail), "
+                             "taken in turn episode by episode")
+    parser.add_argument("--grasp-tilt", type=float, default=0.0, metavar="DEG",
+                        help="each episode's grasp tilt about the fingers' free axis, uniform in +-DEG")
     args, _ = parser.parse_known_args()
+    variation = {"recipes": args.recipe.split(","), "tilt_deg": args.grasp_tilt}
+    for name in variation["recipes"]:
+        variant(name)  # an unknown recipe stops here, not mid-run
     namespace = args.namespace  # e.g. /Sim_0/Scene_0
     sim_namespace = "/" + namespace.split("/")[1]
     match = re.search(r"\d+$", namespace.split("/")[-1])
@@ -358,7 +400,7 @@ def main():
             scenarios = [dict(zip(s.zone_objects, s.object_zones)) for s in request.scenarios]
             threading.Thread(target=generate_scenarios, args=(
                 scenarios, request.layouts, request.trajectories, scene_id, robot, sim_namespace, request.path,
-                args.seed_base)).start()
+                args.seed_base, variation)).start()
             n = len(scenarios) * request.layouts * request.trajectories
             response.success, response.message = True, f"Started generating {n} demonstrations."
             return response
@@ -368,7 +410,7 @@ def main():
         )
         plan = zone_plan(request.zones, request.counts, grid.num_zones if grid else 1)
         threading.Thread(
-            target=generate, args=(plan, scene_id, robot, sim_namespace, request.path)
+            target=generate, args=(plan, scene_id, robot, sim_namespace, request.path, variation)
         ).start()
         response.success, response.message = True, f"Started generating {len(plan)} demonstrations."
         return response

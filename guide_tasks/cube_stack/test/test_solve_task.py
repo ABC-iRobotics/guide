@@ -319,3 +319,19 @@ def test_scenarios_replace_a_failing_layout_and_redraw_a_failing_trajectory(monk
     lines = (tmp_path / "set.provenance.jsonl").read_text().splitlines()
     assert [json.loads(line)["saved"] for line in lines] == [False, True, True, False, True]
     assert not st._generating.locked()
+
+
+@pytest.mark.parametrize("name", ["flawless", "light_fail", "hard_fail"])
+def test_each_stacking_recipe_still_builds_the_tower(world, name):
+    """Every miss of the recipe on (p = 1), recoveries off but Regrasp (scenario mode): a first grasp
+    closes on air and is regrasped, a first release is picked again, and the tower stands."""
+    drawn = plan(COLOURS)
+    v = st.variant(name)
+    m = {k: {**x, "p": 1.0} for k, x in v["miss"].items()}
+    tree = st.build_tree(ROBOT, drawn, miss={**m, "seed": 3}, stacked=v.get("tower", {}).get("stacked"), tilt=0.05)
+    tree = st.without_recoveries(tree, keep=("Pick",) if m else ())
+
+    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.PERFECT
+    assert world.tower() and world.saved is True
+    if "place" in m:  # misplaced cubes are picked again
+        assert world.moves.count("MoveToGrasp") > len(ORDER) - 1

@@ -288,11 +288,14 @@
       ]
     },
     {
-      "doc": "Set what is held down on the support and let go: lower to 4 cm over the release height (0.0665 m over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), slowly the rest of the way, open, and rise slowly straight up so the fingers do not drag it along. Failed moves detour through home.",
+      "doc": "Set what is held down on the support and let go: lower to 4 cm over the release height (0.0665 m over the support's centre: a 0.0515 m cube edge, the 0.01 m grasp height and a 5 mm drop), slowly the rest of the way, open, and rise slowly straight up so the fingers do not drag it along. Failed moves detour through home. Retry demonstrations (MissPose; recipe values miss.pre_place, miss.place = {p, axes, r} and miss.seed; unset = off): the pre-place target may lie off the support, the descent correcting it; the release target may lie off it, so the cube stands askew or falls, and the caller places or picks it again.",
       "inputs": [
         "over_support_pose",
         "robot",
-        "support_pose"
+        "support_pose",
+        "${oc.select:miss.place,null}",
+        "${oc.select:miss.pre_place,null}",
+        "${oc.select:miss.seed,0}"
       ],
       "kind": "recipe",
       "level": "SEQUENCE",
@@ -637,6 +640,25 @@
       ],
       "source": "utility/pose.py",
       "used_by": []
+    },
+    {
+      "doc": "An intentional miss for retry demonstrations: `pose` moved off its goal, so the move to it ends beside the goal and the gripper closes or opens there.",
+      "inputs": [
+        "pose",
+        "miss=None",
+        "seed=0",
+        "forget=0.02"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "MissPose",
+      "outputs": [
+        "pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": [
+        "Release"
+      ]
     },
     {
       "doc": "",

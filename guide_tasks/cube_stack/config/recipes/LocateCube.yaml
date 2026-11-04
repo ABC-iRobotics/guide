@@ -30,3 +30,10 @@ children:
     static_args:
       r_pose: {orientation: {euler: ['x', 3.141592653589793]}}
     output_map: {pose: cube_pose}
+  # The episode's grasp tilt about the fingers' free axis (the solver's --grasp-tilt; 0 = straight down).
+  - ref: TransformPose
+    alias: TiltGrasp
+    dynamic_map: {l_pose: cube_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['x', "${grasp.tilt}"]}}
+    output_map: {pose: cube_pose}
