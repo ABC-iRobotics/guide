@@ -8,7 +8,7 @@
 node_type: CompositeNode
 name: Release
 level: SEQUENCE
-dynamic_map: {robot: robot, support_pose: support_pose, over_support_pose: over_support_pose}
+dynamic_map: {robot: robot, support: support, support_pose: support_pose, over_support_pose: over_support_pose}
 children:
   - ref: TransformPose
     alias: PlacePose
@@ -24,12 +24,12 @@ children:
     output_map: {pose: pre_place_pose}
   - ref: MissPose
     alias: MissPrePlace
-    dynamic_map: {pose: pre_place_pose}
+    dynamic_map: {pose: pre_place_pose, key: support}
     static_args: {miss: "${oc.select:miss.pre_place,null}", seed: "${oc.select:miss.seed,0}"}
     output_map: {pose: pre_place_target}
   - ref: MissPose
     alias: MissPlace
-    dynamic_map: {pose: place_pose}
+    dynamic_map: {pose: place_pose, key: support}
     static_args: {miss: "${oc.select:miss.place,null}", seed: "${oc.select:miss.seed,0}"}
     output_map: {pose: place_target}
   - ref: MoveToCartesianPose

@@ -292,6 +292,7 @@
       "inputs": [
         "over_support_pose",
         "robot",
+        "support",
         "support_pose",
         "${oc.select:miss.place,null}",
         "${oc.select:miss.pre_place,null}",
@@ -612,6 +613,23 @@
       "used_by": []
     },
     {
+      "doc": "A top-down grasp near an obstacle, turned about the vertical (in steps of 2 pi / symmetry, the grasped object's symmetry) so the hand's narrow side faces the obstacle: the pose's own x axis (the fingers' free axis) points at it and the fingers close tangentially, the hand's 20 cm body along y kept clear of it. A cube that fell next to the tower is then re-picked without touching the tower. Farther than `near` (horizontally) the pose comes back unchanged.",
+      "inputs": [
+        "pose",
+        "obstacle",
+        "near=0.15",
+        "symmetry=4"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "FaceNarrowSide",
+      "outputs": [
+        "pose"
+      ],
+      "source": "utility/pose.py",
+      "used_by": []
+    },
+    {
       "doc": "``items[index + shift]``: pick from a list by an index another node computed.",
       "inputs": [
         "items",
@@ -647,7 +665,8 @@
         "pose",
         "miss=None",
         "seed=0",
-        "forget=0.02"
+        "forget=0.02",
+        "key=None"
       ],
       "kind": "leaf",
       "level": "UTILITY",

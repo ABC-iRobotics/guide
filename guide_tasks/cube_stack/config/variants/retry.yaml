@@ -1,0 +1,16 @@
+# Retry: every episode fails 1-3 times (40 / 35 / 25%) at distinct (stage, placement) cells drawn at
+# random, and recovers from each: misses at any stage of any cube, never twice at one cell, never on
+# a recovery (guide_ex MissPose planned misses, keyed on the cube picked or the cube placed on).
+# A stage moves MissPose targets, {target: {axes, r}}: span in the target's frame (x the fingers' free
+# axis, y their closing axis, z down) and length [lo, hi] m. Stages moving one target exclude each
+# other at a placement. The solver draws them per episode (solve_task.planned_misses).
+failures: {counts: [1, 2, 3], weights: [0.40, 0.35, 0.25]}
+stages:
+  pick_aim: {pre_grasp: {axes: xy, r: [0.01, 0.025]}}   # pre-grasp beside the cube, the descent corrects
+  air_grasp: {grasp: {axes: x, r: [0.045, 0.06]}}       # closes beside it, lifts empty, Regrasp
+  place_aim: {pre_place: {axes: xy, r: [0.01, 0.025]}}  # pre-place beside the tower, the descent corrects
+  askew: {place: {axes: xy, r: [0.012, 0.018]}}         # stands askew on the tower: lifted, placed again
+  fall: {place: {axes: xy, r: [0.03, 0.04]}}            # past the edge, falls: re-picked beside the tower
+# Tower tolerance (m, x y z): an askew cube counts as not stacked, so the loop places it again.
+tower:
+  stacked: [0.008, 0.008, 0.01]

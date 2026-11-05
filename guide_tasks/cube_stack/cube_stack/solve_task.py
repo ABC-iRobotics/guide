@@ -95,16 +95,44 @@ def variant(name) -> dict:
     return yaml.safe_load((recipes_dir("cube_stack", __file__).parent / "variants" / f"{name}.yaml").read_text())
 
 
+PICK_TARGETS = ("pre_grasp", "grasp")  # MissPose targets keyed on the cube picked; the rest on its support
+
+
+def planned_misses(v, order, rng) -> tuple[dict, list[str]]:
+    """A retry variant's misses for one episode (config/variants/retry.yaml): n failures, n drawn from
+    failures.counts with failures.weights, at distinct (stage, placement) cells. Placement i puts
+    order[i] on order[i - 1]; a stage's pick targets are keyed on order[i], its place targets on
+    order[i - 1]. A cell whose target is already missed at that key is skipped. Returns MissPose's
+    `miss` ({target: {at: {key: {axes, r}}}}) and the cells, e.g. ["fall@2"]."""
+    cells = [(stage, i) for stage in v["stages"] for i in range(1, len(order))]
+    n = int(rng.choice(v["failures"]["counts"], p=v["failures"]["weights"]))
+    miss, chosen = {}, []
+    for j in rng.permutation(len(cells)):
+        if len(chosen) == n:
+            break
+        stage, i = cells[j]
+        targets = v["stages"][stage]
+        keys = {t: order[i] if t in PICK_TARGETS else order[i - 1] for t in targets}
+        if any(keys[t] in miss.get(t, {}).get("at", {}) for t in targets):
+            continue
+        for t, spec in targets.items():
+            miss.setdefault(t, {"at": {}})["at"][keys[t]] = dict(spec)
+        chosen.append(f"{stage}@{i}")
+    return miss, chosen
+
+
 def recipe_values(robot, plan, miss=None, stacked=None, tilt=0.0) -> dict:
     """What config/recipes/ interpolate: the robot's gripper joint and home, the drawn plan's
     prompts, the loop's passes (one more per placement a miss may undo) and the tower tolerance (default
     the scene's success check's), the cube edge, the misses (a variant's, with their seed) and the grasp
     tilt (rad)."""
     miss = miss or {}
+    place = miss.get("place") or {}
+    undone = len(place["at"]) if "at" in place else (len(plan["order"]) - 1) * bool(place)  # placements a miss undoes
     return {
         "robot": robot_values(robot.config, recipes_dir("cube_stack", __file__).parent / "init.yaml"),
         "plan": plan,
-        "tower": {"max_loops": len(plan["order"]) + REBUILDS + (len(plan["order"]) - 1) * bool(miss.get("place")),
+        "tower": {"max_loops": len(plan["order"]) + REBUILDS + undone,
                   "stacked": list(stacked or STACKED)},
         "cube": {"edge": CUBE},
         "miss": miss,
@@ -193,8 +221,13 @@ def solve_task(scene_id, robot, sim_namespace, zone=None, path="", draw=0, scene
     rng = np.random.default_rng(None if master is None else [master, scene_id, draw, 7])
     tilt = np.radians(rng.uniform(-tilt_deg, tilt_deg)) if tilt_deg else 0.0
     v = variant("flawless" if clean else recipe)
+    cells = []
+    if "stages" in v:  # a retry variant: this episode's failures, drawn per (stage, placement)
+        planned, cells = planned_misses(v, plan["order"], rng)
+        v = {**v, "miss": planned}
     miss = {**v["miss"], "seed": int(rng.integers(2**31))}
-    log.info(f"Recipe {'flawless' if clean else recipe}: misses {v['miss']}, grasp tilt {np.degrees(tilt):+.1f} deg")
+    log.info(f"Recipe {'flawless' if clean else recipe}: misses {v['miss']}{f' (failures {cells})' if cells else ''}, "
+             f"grasp tilt {np.degrees(tilt):+.1f} deg")
     tree = build_tree(robot, plan, miss=miss, stacked=v.get("tower", {}).get("stacked"), tilt=tilt)
     if no_recovery:
         without_recoveries(tree, keep=("Pick",) if v["miss"] else ())

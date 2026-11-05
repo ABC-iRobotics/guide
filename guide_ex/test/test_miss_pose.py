@@ -42,3 +42,27 @@ def test_off_and_seeded():
     assert MissPose().run(pose=GOAL, miss=None).outputs["pose"] is GOAL
     a, b = miss(MissPose(), seed=9), miss(MissPose(), seed=9)
     assert np.allclose(a.position.to_numpy(), b.position.to_numpy())
+
+
+def test_planned_misses_fire_on_the_listed_keys_once_even_if_the_goal_moved():
+    node, m = MissPose(), {"at": {"/blocks/red_block": {"axes": "x", "r": [0.045, 0.06]}}}
+    run = lambda key, pose=GOAL: node.run(pose=pose, miss=m, seed=3, key=key).outputs["pose"]
+    assert run("/blocks/blue_block") is GOAL  # not listed
+    assert run("/blocks/red_block") is not GOAL  # listed: missed
+    moved = Pose.from_numpy(GOAL.position.to_numpy() + [0.08, 0.02, 0], GOAL.orientation.to_scipy())
+    assert run("/blocks/red_block", moved) is moved  # the fallen cube's re-pick is not missed again
+    assert run(None) is GOAL  # a recipe without a key never misses
+
+
+def test_face_narrow_side_turns_the_hands_x_at_a_near_obstacle_only():
+    from guide_ex.utility.pose import FaceNarrowSide
+
+    grasp = Pose.from_numpy(np.array([0.4, 0.0, 0.03]), R.from_euler("z", 0.1) * R.from_euler("x", np.pi))
+    tower = Pose.from_numpy(np.array([0.4, 0.07, 0.03]), R.identity())  # 7 cm along +y
+    out = FaceNarrowSide().run(pose=grasp, obstacle=tower).outputs["pose"]
+    x = out.orientation.to_numpy()[:, 0]
+    assert abs(x[1]) > 0.99  # the hand's x points at the tower, its 20 cm y body runs along it
+    assert np.allclose(out.position.to_numpy(), grasp.position.to_numpy())
+    assert np.allclose(out.orientation.to_numpy()[:, 2], grasp.orientation.to_numpy()[:, 2])  # still top-down
+    far = Pose.from_numpy(np.array([0.4, 0.3, 0.03]), R.identity())
+    assert FaceNarrowSide().run(pose=grasp, obstacle=far).outputs["pose"] is grasp

@@ -335,3 +335,29 @@ def test_each_stacking_recipe_still_builds_the_tower(world, name):
     assert world.tower() and world.saved is True
     if "place" in m:  # misplaced cubes are picked again
         assert world.moves.count("MoveToGrasp") > len(ORDER) - 1
+
+
+def test_planned_misses_draw_distinct_cells_keyed_on_the_right_cube():
+    v = st.variant("retry")
+    for seed in range(50):
+        miss, cells = st.planned_misses(v, ORDER, np.random.default_rng(seed))
+        assert 1 <= len(cells) <= 3 and len(set(cells)) == len(cells)
+        for cell in cells:
+            stage, i = cell.split("@")
+            for target, spec in v["stages"][stage].items():
+                key = ORDER[int(i)] if target in st.PICK_TARGETS else ORDER[int(i) - 1]
+                assert miss[target]["at"][key] == spec
+        assert sum(len(t["at"]) for t in miss.values()) == sum(len(v["stages"][c.split("@")[0]]) for c in cells)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_a_retry_episode_recovers_from_its_failures_and_builds_the_tower(world, seed):
+    drawn = plan(COLOURS)
+    v = st.variant("retry")
+    v["failures"] = {"counts": [3], "weights": [1.0]}
+    miss, cells = st.planned_misses(v, drawn["order"], np.random.default_rng(seed))
+    tree = st.build_tree(ROBOT, drawn, miss={**miss, "seed": seed}, stacked=v["tower"]["stacked"])
+    tree = st.without_recoveries(tree, keep=("Pick",))
+
+    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.PERFECT, cells
+    assert world.tower() and world.saved is True

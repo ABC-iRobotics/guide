@@ -216,32 +216,90 @@ class MissPose(BaseNode):
     `forget` of one it already missed comes back unchanged, so a retry (a recovery that resumes
     it, the next loop pass) reaches the goal. The node instance keeps what it missed and draws
     from (seed, its call count): built per episode with a per-episode seed, an episode's misses repeat.
+
+    Planned misses: with `key` (what the goal belongs to, e.g. the cube picked or the support placed
+    on) and miss = {at: {key: {axes, r}}}, the node misses exactly the listed keys, each once, and
+    never p-draws. A goal that moved (a cube that fell) keeps its key, so its re-pick is not missed.
     """
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("MissPose", alias, dynamic_map, static_args, output_map)
-        self._missed, self._calls = [], 0
+        self._missed, self._keys, self._calls = [], set(), 0
 
-    def run(self, pose: Pose, miss: dict | None = None, seed: int = 0, forget: float = 0.02) -> ExecutionResult:
+    def run(self, pose: Pose, miss: dict | None = None, seed: int = 0, forget: float = 0.02,
+            key: str | None = None) -> ExecutionResult:
         """
         Args:
             pose (Pose): The goal.
-            miss (dict): {p: chance, axes: e.g. "xy", r: [lo, hi] metres}; None: no miss.
+            miss (dict): {p: chance, axes: e.g. "xy", r: [lo, hi] metres} or {at: {key: {axes, r}}};
+                None: no miss.
             seed (int): The episode's seed.
             forget (float): Metres: a goal this close to one already missed is not missed again.
+            key (str): What the goal belongs to, for planned misses (`at`).
         Returns:
             ExecutionResult: outputs `pose`, the goal or the miss.
         """
         self._calls += 1
         goal = pose.position.to_numpy()
-        if miss is None or any(np.linalg.norm(goal - g) < forget for g in self._missed):
+        if miss is None:
             return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
-        rng = np.random.default_rng([int(seed), self._calls])
-        if rng.random() >= miss.get("p", 1.0):
-            return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+        if "at" in miss:
+            if key is None or key not in miss["at"] or key in self._keys:
+                return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+            rng = np.random.default_rng([int(seed), self._calls])
+            self._keys.add(key)
+            miss = miss["at"][key]
+        else:
+            if any(np.linalg.norm(goal - g) < forget for g in self._missed):
+                return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+            rng = np.random.default_rng([int(seed), self._calls])
+            if rng.random() >= miss.get("p", 1.0):
+                return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+            self._missed.append(goal)
         offset = pose.orientation.to_numpy() @ miss_offset(rng, miss["axes"], miss["r"])
-        self._missed.append(goal)
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={
             "pose": Pose(position=Point.from_numpy(goal + offset), orientation=pose.orientation)})
+
+
+@node()
+class FaceNarrowSide(BaseNode):
+    """
+    A top-down grasp near an obstacle, turned about the vertical (in steps of 2 pi / symmetry, the
+    grasped object's symmetry) so the hand's narrow side faces the obstacle: the pose's own x axis
+    (the fingers' free axis) points at it and the fingers close tangentially, the hand's 20 cm body
+    along y kept clear of it. A cube that fell next to the tower is then re-picked without touching
+    the tower. Farther than `near` (horizontally) the pose comes back unchanged.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("FaceNarrowSide", alias, dynamic_map, static_args, output_map)
+
+    def run(self, pose: Pose, obstacle: Pose, near: float = 0.15, symmetry: int = 4) -> ExecutionResult:
+        """
+        Args:
+            pose (Pose): The grasp, same frame as `obstacle` (z up).
+            obstacle (Pose): What to keep clear of (its centre).
+            near (float): Metres: farther than this the grasp is not turned.
+            symmetry (int): Turns allowed: multiples of 2 pi / symmetry.
+        Returns:
+            ExecutionResult: outputs `pose`.
+        """
+        p = pose.position.to_numpy()
+        d = obstacle.position.to_numpy()[:2] - p[:2]
+        dist = np.linalg.norm(d)
+        if dist > near or dist < 1e-6:
+            return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": pose})
+
+        def turned(k):
+            return R.from_euler("z", 2 * np.pi * k / symmetry) * pose.orientation.rot
+
+        def facing(k):  # |cos| between the hand's x (horizontal part) and the way to the obstacle
+            x = turned(k).as_matrix()[:2, 0]
+            return abs(x @ d) / (np.linalg.norm(x) * dist + 1e-9)
+
+        k = max(range(symmetry), key=lambda k: (round(facing(k), 3), -min(k, symmetry - k)))
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": Pose.from_numpy(p, turned(k))})
