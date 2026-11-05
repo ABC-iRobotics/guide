@@ -66,3 +66,13 @@ def test_face_narrow_side_turns_the_hands_x_at_a_near_obstacle_only():
     assert np.allclose(out.orientation.to_numpy()[:, 2], grasp.orientation.to_numpy()[:, 2])  # still top-down
     far = Pose.from_numpy(np.array([0.4, 0.3, 0.03]), R.identity())
     assert FaceNarrowSide().run(pose=grasp, obstacle=far).outputs["pose"] is grasp
+
+
+def test_face_narrow_side_takes_the_turn_joint_7_can_reach():
+    from guide_ex.utility.pose import FaceNarrowSide
+
+    # Hand x at +45 deg, tower on the -45 deg diagonal: +90 deg needs |q7| = pi, -90 deg q7 = 0.
+    grasp = Pose.from_numpy(np.array([0.4, 0.0, 0.03]), R.from_euler("z", np.pi / 4) * R.from_euler("x", np.pi))
+    tower = Pose.from_numpy(np.array([0.45, -0.05, 0.03]), R.identity())
+    x = FaceNarrowSide().run(pose=grasp, obstacle=tower).outputs["pose"].orientation.to_numpy()[:, 0]
+    assert np.allclose(x[:2], [np.sqrt(0.5), -np.sqrt(0.5)], atol=1e-6)

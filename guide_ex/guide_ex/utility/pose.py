@@ -278,13 +278,16 @@ class FaceNarrowSide(BaseNode):
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("FaceNarrowSide", alias, dynamic_map, static_args, output_map)
 
-    def run(self, pose: Pose, obstacle: Pose, near: float = 0.15, symmetry: int = 4) -> ExecutionResult:
+    def run(self, pose: Pose, obstacle: Pose, near: float = 0.15, symmetry: int = 4,
+            q7_home: float = np.pi / 4, q7_limit: float = 2.8) -> ExecutionResult:
         """
         Args:
-            pose (Pose): The grasp, same frame as `obstacle` (z up).
+            pose (Pose): The grasp, in the robot base frame, same frame as `obstacle` (z up).
             obstacle (Pose): What to keep clear of (its centre).
             near (float): Metres: farther than this the grasp is not turned.
             symmetry (int): Turns allowed: multiples of 2 pi / symmetry.
+            q7_home (float): Joint 7 at hand yaw 0 and q1 = 0 (FR3 home: pi/4).
+            q7_limit (float): Largest |q7| allowed (FR3: 2.8973, less a margin).
         Returns:
             ExecutionResult: outputs `pose`.
         """
@@ -301,5 +304,12 @@ class FaceNarrowSide(BaseNode):
             x = turned(k).as_matrix()[:2, 0]
             return abs(x @ d) / (np.linalg.norm(x) * dist + 1e-9)
 
-        k = max(range(symmetry), key=lambda k: (round(facing(k), 3), -min(k, symmetry - k)))
+        def q7(k):  # joint 7 for a down-pointing hand, as in ChooseClearanceYaw (pose in the base frame)
+            x = turned(k).as_matrix()[:2, 0]
+            a = np.arctan2(p[1], p[0]) - (np.arctan2(x[1], x[0]) + np.pi / 2)
+            return abs(q7_home + (a + np.pi) % (2 * np.pi) - np.pi)
+
+        # Two turns 180 deg apart face it equally: take one joint 7 can reach, then the smaller turn.
+        k = max(range(symmetry), key=lambda k: (round(facing(k), 3), q7(k) <= q7_limit,
+                                                -min(k, symmetry - k), -q7(k)))
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": Pose.from_numpy(p, turned(k))})
