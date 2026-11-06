@@ -177,3 +177,13 @@ def test_put_in_and_put_on_tilted_are_put_on_with_their_overrides():
         np.testing.assert_allclose(child(carry, name).static_args["r_pose"].position.to_numpy(), 0.0)
     flat = child(child(load({"ref": "PutOn"}, values=VALUES), "Place"), "CarryToSupport")
     assert child(flat, "FlattenSupport").node_type == "ProjectRotationToBaseZ"
+
+
+def test_free_yaw_place_turns_the_target_to_the_held_object_only_when_asked():
+    def names(values):
+        carry = child(child(load({"ref": "PutOn"}, values=values), "Place"), "CarryToSupport")
+        return [c.name for c in carry.children]
+
+    assert "KeepHeldYaw" not in names(VALUES)
+    on = names({**VALUES, "place": {"free_yaw": True}})
+    assert on.index("FlattenSupport") < on.index("KeepHeldYaw") < on.index("MinimizeSupportTurn")

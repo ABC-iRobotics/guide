@@ -27,6 +27,23 @@ children:
     dynamic_map: {pose: support_pose}
     static_args: {heading_axis: auto}
     output_map: {pose: support_pose}
+  # place.free_yaw (unset = off): the held object's yaw, not the support's, so it is set down at any turn
+  # and the wrist does not turn while carrying (cube_stack: a cube only has to face the one below).
+  - ref: GetPrimPose
+    alias: GetHeldPose
+    when: ${oc.select:place.free_yaw,false}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, prim_path: top}
+    output_map: {pose: held_pose}
+  - ref: TransformPose
+    alias: HeldInScene
+    when: ${oc.select:place.free_yaw,false}
+    dynamic_map: {l_pose: scene_pose_inv, r_pose: held_pose}
+    output_map: {pose: held_pose}
+  - ref: CopyYaw
+    alias: KeepHeldYaw
+    when: ${oc.select:place.free_yaw,false}
+    dynamic_map: {pose: support_pose, like: held_pose}
+    output_map: {pose: support_pose}
   - ref: ReduceRotationToSymmetry
     alias: MinimizeSupportTurn
     dynamic_map: {pose: support_pose}

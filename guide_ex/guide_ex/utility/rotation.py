@@ -145,6 +145,27 @@ class ReduceRotationToSymmetry(BaseNode):
         )
 
 
+@node()
+class CopyYaw(BaseNode):
+    """
+    Give `pose` the base-Z rotation of `like` (its flattest axis' heading, as ProjectRotationToBaseZ
+    "auto"), keeping `pose`'s position: e.g. a support's place target turned to the held object, so it
+    is set down at whatever yaw it is held and the wrist need not turn while carrying.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("CopyYaw", alias, dynamic_map, static_args, output_map)
+
+    def run(self, pose: Pose | Transform, like: Pose | Transform) -> ExecutionResult:
+        yaw = _base_yaw(_decompose(like)[0], "auto")
+        return ExecutionResult(
+            status=DemoStatus.PERFECT,
+            outputs={"pose": _decompose(pose)[1](R.from_euler("z", yaw)), "yaw": yaw},
+        )
+
+
 def _rect(centre, yaw: float, half_x: float, half_y: float):
     c, s = np.cos(yaw), np.sin(yaw)
     return np.asarray(centre, float), np.array([[c, s], [-s, c]]), (half_x, half_y)

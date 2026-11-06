@@ -241,7 +241,8 @@
         "scene_pose_inv",
         "sim_namespace",
         "support",
-        "top"
+        "top",
+        "${oc.select:place.free_yaw,false}"
       ],
       "kind": "recipe",
       "level": "SEQUENCE",
@@ -611,6 +612,24 @@
       ],
       "source": "utility/rotation.py",
       "used_by": []
+    },
+    {
+      "doc": "Give `pose` the base-Z rotation of `like` (its flattest axis' heading, as ProjectRotationToBaseZ \"auto\"), keeping `pose`'s position: e.g. a support's place target turned to the held object, so it is set down at whatever yaw it is held and the wrist need not turn while carrying.",
+      "inputs": [
+        "pose",
+        "like"
+      ],
+      "kind": "leaf",
+      "level": "UTILITY",
+      "name": "CopyYaw",
+      "outputs": [
+        "pose",
+        "yaw"
+      ],
+      "source": "utility/rotation.py",
+      "used_by": [
+        "CarryToSupport"
+      ]
     },
     {
       "doc": "A top-down grasp near an obstacle, turned about the vertical (in steps of 2 pi / symmetry, the grasped object's symmetry) so the hand's narrow side faces the obstacle: the pose's own x axis (the fingers' free axis) points at it and the fingers close tangentially, the hand's 20 cm body along y kept clear of it. A cube that fell next to the tower is then re-picked without touching the tower. Farther than `near` (horizontally) the pose comes back unchanged.",

@@ -125,8 +125,8 @@ def planned_misses(v, order, rng) -> tuple[dict, list[str]]:
 def recipe_values(robot, plan, miss=None, stacked=None, tilt=0.0) -> dict:
     """What config/recipes/ interpolate: the robot's gripper joint and home, the drawn plan's
     prompts, the loop's passes (one more per placement a miss may undo) and the tower tolerance (default
-    the scene's success check's), the cube edge, the misses (a variant's, with their seed) and the grasp
-    tilt (rad)."""
+    the scene's success check's), the cube edge, the misses (a variant's, with their seed), the grasp
+    tilt (rad) and the free-yaw place (CarryToSupport's place.free_yaw)."""
     miss = miss or {}
     place = miss.get("place") or {}
     undone = len(place["at"]) if "at" in place else (len(plan["order"]) - 1) * bool(place)  # placements a miss undoes
@@ -138,6 +138,7 @@ def recipe_values(robot, plan, miss=None, stacked=None, tilt=0.0) -> dict:
         "cube": {"edge": CUBE},
         "miss": miss,
         "grasp": {"tilt": float(tilt)},
+        "place": {"free_yaw": True},  # a cube only has to face the one below: any yaw, no wrist turn
     }
 
 

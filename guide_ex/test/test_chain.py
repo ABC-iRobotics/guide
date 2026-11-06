@@ -62,6 +62,16 @@ def test_auto_heading_survives_a_cube_rolled_onto_its_side():
     assert np.isclose(np.degrees(yaw) % 90, 30)
 
 
+def test_copy_yaw_keeps_the_position_and_takes_the_held_objects_heading():
+    from guide_ex.utility.rotation import CopyYaw
+
+    held = Pose(position=Point([1, 2, 3]), orientation=Rotation.from_scipy(R.from_euler("ZX", [40, 5], degrees=True)))
+    out = CopyYaw().run(at(0.4, 0.1, 0.05), held).outputs
+    assert np.allclose(out["pose"].position.to_numpy(), [0.4, 0.1, 0.05])
+    assert np.isclose(np.degrees(out["yaw"]), 40)
+    assert np.allclose(out["pose"].orientation.to_scipy().as_euler("zyx", degrees=True), [40, 0, 0])
+
+
 # --- the loop + condition composition a stacking task builds from these nodes --------
 
 ORDER = ["a", "b", "c", "d"]
