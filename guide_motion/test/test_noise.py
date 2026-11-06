@@ -96,3 +96,16 @@ def test_an_aimed_free_end_misses_its_clean_point_and_the_next_move_corrects():
     assert np.allclose(b.at(1.0), NEXT) and np.allclose(b.at(0.8), b.clean(0.8))  # faded before the end
     noise.episode(clean=True)
     assert np.allclose(noise.route(noise.move(), P0, GOAL, v=0.25, free_end=True, aim=True).miss(1.0), 0)
+
+
+def test_a_late_aim_is_held_down_the_next_move_and_corrected_near_its_goal():
+    misses = {}
+    for late in (False, True):
+        noise = Noise(NoiseParams(seed=9, sigma=0.0, aim_late=late))
+        a = noise.route(noise.move(), P0, GOAL, v=0.25, free_end=True, aim=True)
+        h = 1.0 - noise.params.blend / a.length
+        b = noise.route(noise.move(), None, NEXT, v=0.1, handover=h)  # 26 cm down: fade over the last 10
+        misses[late] = [np.linalg.norm(b.miss(s)) for s in (0.0, 0.5, 1.0)]
+    full = misses[True][0]
+    assert full > 0 and misses[False][1] < 1e-9  # early: gone by mid-descent
+    assert np.isclose(misses[True][1], full) and misses[True][2] < 1e-9  # late: held, corrected at the end

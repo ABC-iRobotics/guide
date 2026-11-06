@@ -38,6 +38,7 @@ class NoiseParams:
     speed_scale: tuple = (0.7, 1.3)  # each move's speed factor, drawn uniformly
     aim: float = 0.03  # m: an aimed free end's horizontal miss, uniform over a disc of this radius
     aim_ramp: float = 0.1  # m: the miss builds up over the move's last aim_ramp, fades over the next's first
+    aim_late: bool = False  # fade it over the next move's last aim_ramp instead: corrected near that goal
     seed: int | None = None  # the trajectory master seed; None draws one
 
 
@@ -92,18 +93,21 @@ class Route:
         if ctrl is not None:
             self._bs, self._bn = _bezier(np.asarray(ctrl[0], float), np.asarray(ctrl[1], float))
 
-    def aim(self, start=None, end=None, ramp=0.1, lead=0.0) -> None:
+    def aim(self, start=None, end=None, ramp=0.1, lead=0.0, late=False) -> None:
         """A miss off the clean path, in metres: `start` (carried in) fades out over the first `ramp`
-        (at most 80 % of the route), `end` builds up over the `ramp` before the last `lead` (the blend a
-        free end hands over at), so the route ends at goal + end while clean() still ends at the goal."""
+        (at most 80 % of the route; `late`: held, then faded over the `ramp` before the last `lead`, so
+        it is corrected close to this route's goal), `end` builds up over the `ramp` before the last
+        `lead` (the blend a free end hands over at), so the route ends at goal + end while clean()
+        still ends at the goal."""
         self.aim_in = np.zeros(3) if start is None else np.asarray(start, float)
         self.aim_out = np.zeros(3) if end is None else np.asarray(end, float)
         self._lead = min(lead, 0.45 * self.length)
         self._ramp_in, self._ramp_out = min(ramp, 0.8 * self.length), min(ramp, self.length - self._lead)
+        self._fade_from = max(self.length - self._lead - self._ramp_in, 0.0) if late else 0.0
 
     def miss(self, s) -> np.ndarray:
         d = s * self.length
-        return (self.aim_in * (1.0 - _smooth(d / self._ramp_in))
+        return (self.aim_in * (1.0 - _smooth((d - self._fade_from) / self._ramp_in))
                 + self.aim_out * _smooth(1.0 - (self.length - self._lead - d) / self._ramp_out))
 
     def _segment(self, s):
@@ -185,7 +189,7 @@ class Noise:
         if aim and free_end and not self.clean:
             r, th = P.aim * math.sqrt(rng.random()), rng.uniform(0.0, 2.0 * math.pi)
             aim_out = [r * math.cos(th), r * math.sin(th), 0.0]
-        route.aim(aim_in, aim_out, P.aim_ramp, lead=P.blend if free_end else 0.0)
+        route.aim(aim_in, aim_out, P.aim_ramp, lead=P.blend if free_end else 0.0, late=P.aim_late)
         self.prev = SimpleNamespace(route=route, carries=free_end and route.ctrl is not None)
         return route
 

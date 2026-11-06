@@ -368,7 +368,8 @@ def main():
     parser.add_argument("--controller", choices=["moveit", "oscbf"], default="oscbf")
     parser.add_argument(
         "--motion-noise", nargs="?", const="{}", default=None, metavar="JSON",
-        help="perturbed demonstrations (controller: oscbf): guide_motion.noise.NoiseParams' defaults, "
+        help="perturbed demonstrations (controller: oscbf): guide_motion.noise.NoiseParams' defaults "
+             "with aim_late on (the hover miss corrected near the cube, where a policy's aim error shows), "
              'or a JSON object of overrides, e.g. \'{"sigma": 0.008, "seed": 7}\'',
     )
     parser.add_argument("--seed-base", type=int, default=0,
@@ -395,7 +396,8 @@ def main():
         max_acceleration=1.0,
         gripper_action_type=ActionType.JOINT_POSITION,
         controller=args.controller,
-        motion_noise=None if args.motion_noise is None else NoiseParams(**json.loads(args.motion_noise)),
+        motion_noise=None if args.motion_noise is None
+        else NoiseParams(**{"aim_late": True, **json.loads(args.motion_noise)}),
     )
     config.arm_action_type = ActionType.CARTESIAN_POSE
     config.cameras = {}  # the recorder captures images sim-side; the solver needs none
