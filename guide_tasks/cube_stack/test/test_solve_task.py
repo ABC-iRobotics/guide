@@ -350,6 +350,13 @@ def test_planned_misses_draw_distinct_cells_keyed_on_the_right_cube():
         assert sum(len(t["at"]) for t in miss.values()) == sum(len(v["stages"][c.split("@")[0]]) for c in cells)
 
 
+def test_retry_mixed_draws_noise_only_episodes_and_no_aim_misses():
+    v = st.variant("retry_mixed")
+    counts = [len(st.planned_misses(v, ORDER, np.random.default_rng(s))[1]) for s in range(400)]
+    assert min(counts) == 0 and max(counts) == 3 and 0.3 < counts.count(0) / 400 < 0.5
+    assert not {"pick_aim", "place_aim"} & set(v["stages"])
+
+
 @pytest.mark.parametrize("seed", range(6))
 def test_a_retry_episode_recovers_from_its_failures_and_builds_the_tower(world, seed):
     drawn = plan(COLOURS)

@@ -1,0 +1,12 @@
+# Retry, mixed: as retry.yaml, but 40% of episodes do not fail (motion noise only) and the rest fail
+# 1-3 times (30 / 20 / 10%), so one run records noise-only and recovery episodes. No pick_aim /
+# place_aim: the motion noise's late aim miss (guide_motion aim_late) gives that correction with
+# labels on the clean path, where a MissPose aim miss labels the way to the miss.
+failures: {counts: [0, 1, 2, 3], weights: [0.40, 0.30, 0.20, 0.10]}
+stages:
+  air_grasp: {grasp: {axes: x, r: [0.045, 0.06]}}       # closes beside it, lifts empty, Regrasp
+  askew: {place: {axes: xy, r: [0.012, 0.018]}}         # stands askew on the tower: lifted, placed again
+  fall: {place: {axes: xy, r: [0.03, 0.04]}}            # past the edge, falls: re-picked beside the tower
+# Tower tolerance (m, x y z): an askew cube counts as not stacked, so the loop places it again.
+tower:
+  stacked: [0.008, 0.008, 0.01]

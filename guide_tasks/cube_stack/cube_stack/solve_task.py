@@ -266,11 +266,12 @@ def finalize(robot, scene_id):
 
 
 def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_namespace, path="", seed_base=0,
-                       variation=None):
+                       variation=None, perturb_all=False):
     """Scenario mode of the Demonstration service: per scenario ({cube: zone}), `layouts` scene seeds,
-    each recorded `trajectories` times -- first unperturbed, then perturbed. A seed whose unperturbed
-    run fails is skipped for the scenario's next one, a perturbed run that fails is drawn again; no run
-    recovers. Every attempt is logged to <path>.provenance.jsonl ("saved" ones in dataset order)."""
+    each recorded `trajectories` times -- first unperturbed (perturb_all: perturbed too), then perturbed.
+    A seed whose first run fails is skipped for the scenario's next one, a later run that fails is
+    drawn again; no run recovers. Every attempt is logged to <path>.provenance.jsonl ("saved" ones in
+    dataset order)."""
     log = robot.node.get_logger()
     record = Path(f"{path.rstrip('/')}.provenance.jsonl")
     draws = errors = 0
@@ -280,7 +281,8 @@ def generate_scenarios(scenarios, layouts, trajectories, scene_id, robot, sim_na
         draws += 1
         try:
             saved = solve_task(scene_id, robot, sim_namespace, path=path, draw=draws, scene_seed=key["seed"],
-                               zones=scenarios[key["scenario"]], clean=key["trajectory"] == 0, no_recovery=True,
+                               zones=scenarios[key["scenario"]], clean=key["trajectory"] == 0 and not perturb_all,
+                               no_recovery=True,
                                **cycle(variation, draws))
             errors = 0
         except Exception as e:  # a timed-out sim call costs this attempt; five in a row, the run
@@ -374,8 +376,10 @@ def main():
     )
     parser.add_argument("--seed-base", type=int, default=0,
                         help="first scene seed of scenario mode; give parallel solvers disjoint bases")
+    parser.add_argument("--perturb-all", action="store_true",
+                        help="scenario mode: every trajectory perturbed, the first too (one run per layout)")
     parser.add_argument("--recipe", default="flawless", metavar="NAME[,NAME...]",
-                        help="stacking recipe(s) from config/variants/ (flawless, light_fail, hard_fail), "
+                        help="stacking recipe(s) from config/variants/ (flawless, light_fail, hard_fail, retry, retry_mixed), "
                              "taken in turn episode by episode")
     parser.add_argument("--grasp-tilt", type=float, default=0.0, metavar="DEG",
                         help="each episode's grasp tilt about the fingers' free axis, uniform in +-DEG")
@@ -428,8 +432,8 @@ def main():
             return response
         if request.scenarios:
             refusal = ("Scenario mode needs layouts >= 1 and trajectories >= 1." if min(request.layouts, request.trajectories) < 1
-                       else "Perturbed trajectories need the solver's --motion-noise." if request.trajectories > 1
-                       and robot.config.motion_noise is None else None)
+                       else "Perturbed trajectories need the solver's --motion-noise."
+                       if (request.trajectories > 1 or args.perturb_all) and robot.config.motion_noise is None else None)
             if refusal:
                 _generating.release()
                 response.success, response.message = False, refusal
@@ -437,7 +441,7 @@ def main():
             scenarios = [dict(zip(s.zone_objects, s.object_zones)) for s in request.scenarios]
             threading.Thread(target=generate_scenarios, args=(
                 scenarios, request.layouts, request.trajectories, scene_id, robot, sim_namespace, request.path,
-                args.seed_base, variation)).start()
+                args.seed_base, variation, args.perturb_all)).start()
             n = len(scenarios) * request.layouts * request.trajectories
             response.success, response.message = True, f"Started generating {n} demonstrations."
             return response
