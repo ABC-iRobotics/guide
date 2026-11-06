@@ -28,6 +28,9 @@ children:
     children:
       - ref: MeasureTower
       - ref: TowerHeight
+      # A stacked cube knocked off (built dropped) is a collapse: the episode fails and is
+      # discarded, so no demo shows a tower rebuilt (catastrophic, not a recovery).
+      - {ref: NoDrop, alias: TowerIntact, dynamic_map: {value: built}}
     mode: condition
     condition_expr: done
     true_branch: {ref: Finish}

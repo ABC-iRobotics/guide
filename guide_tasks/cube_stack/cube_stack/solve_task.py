@@ -48,9 +48,10 @@ Recovery routes, for the failures most likely in this task (most likely first):
    subtask, "Set it down." -- sets it down where it was picked (opening
    wherever the arm is would drop it from height onto the tower) and resumes at Pick,
    from wherever the cube is.
-4. A placed cube does not stay, or the tower is knocked. Nothing in PutOn trusts a
-   placement: each loop pass measures the whole tower and rebuilds from the lowest
-   layer that is out of place, within REBUILDS extra passes.
+4. A placed cube does not stay. Nothing in PutOn trusts a placement: each loop pass
+   measures the whole tower and stacks onto the highest cube in place, within REBUILDS
+   extra passes. A tower knocked over (fewer cubes in place than before: NoDrop) is a
+   collapse, not a recovery: the tree fails and the episode is discarded (5).
 5. Anything else -- a cube knocked off the table, retries used up: the tree fails, the
    episode is discarded, and generation draws a new layout and tries again, up to
    MAX_ATTEMPTS times before it stops the run.

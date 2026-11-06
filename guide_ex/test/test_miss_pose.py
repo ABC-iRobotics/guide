@@ -68,6 +68,15 @@ def test_face_narrow_side_turns_the_hands_x_at_a_near_obstacle_only():
     assert FaceNarrowSide().run(pose=grasp, obstacle=far).outputs["pose"] is grasp
 
 
+def test_no_drop_fails_only_when_the_count_falls_below_its_peak():
+    from guide_ex.core.states import DemoStatus
+    from guide_ex.utility.collection import NoDrop
+
+    node = NoDrop()
+    assert [node.run(value=v).status for v in (1, 1, 2, 3)] == [DemoStatus.PERFECT] * 4
+    assert node.run(value=2).status == DemoStatus.FAILURE
+
+
 def test_face_narrow_side_takes_the_turn_joint_7_can_reach():
     from guide_ex.utility.pose import FaceNarrowSide
 

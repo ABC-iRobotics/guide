@@ -28,3 +28,31 @@ class GetItem(BaseNode):
                 error_message=f"[{self.name}] no item {position} in a list of {len(items)}",
             )
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"item": items[position]})
+
+
+@node()
+class NoDrop(BaseNode):
+    """
+    Fails once `value` falls below the highest it reached since the node was built (one episode's
+    tree): a count that may only grow, e.g. the cubes standing in a tower, which drops only when the
+    tower is knocked over.
+    """
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("NoDrop", alias, dynamic_map, static_args, output_map)
+        self._peak = None
+
+    def run(self, value) -> ExecutionResult:
+        """
+        Args:
+            value: The count.
+        Returns:
+            ExecutionResult: outputs `peak`; FAILURE if `value` is below it.
+        """
+        if self._peak is not None and value < self._peak:
+            return ExecutionResult(status=DemoStatus.FAILURE,
+                                   error_message=f"[{self.name}] {value} dropped below {self._peak}")
+        self._peak = value
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"peak": value})
