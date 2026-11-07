@@ -108,6 +108,10 @@ class ReduceRotationToSymmetry(BaseNode):
     half a period. The yaw is wrapped into ``[-pi/n, pi/n]``, minimising the wrist
     travel while landing on a symmetry-equivalent orientation. ``symmetry=4`` is a
     cube/square, ``symmetry=1`` disables reduction (plain angle normalisation).
+
+    With ``near`` (a down-pointing hand, e.g. the grasp) the equivalent yaw nearest that hand's
+    instead, so a held object is set down without turning the wrist; if joint 7 cannot make it there
+    (``q7 = q7_home + q1 - yaw``, q1 the heading of ``pose`` from the base) the nearest one it can.
     """
 
     level = Layer.UTILITY
@@ -116,13 +120,17 @@ class ReduceRotationToSymmetry(BaseNode):
         super().__init__("ReduceRotationToSymmetry", alias, dynamic_map, static_args, output_map)
 
     def run(
-        self, pose: Pose | Transform, symmetry: int = 1, heading_axis: str = "x"
+        self, pose: Pose | Transform, symmetry: int = 1, heading_axis: str = "x",
+        near: Pose | None = None, q7_home: float = np.pi / 4, q7_limit: float = 2.8,
     ) -> ExecutionResult:
         """
         Args:
             pose: A (Z-projected) pose/transform in the base frame.
             symmetry: Order of the rotational symmetry about Z (identical faces).
             heading_axis: Body axis used to read the current yaw.
+            near: A hand pose (base frame) whose x heading the result should keep, or None.
+            q7_home: Joint 7 at hand yaw 0 and q1 = 0 (FR3 home: pi/4); only with ``near``.
+            q7_limit: Largest |q7| allowed (FR3: 2.8973, less a margin); only with ``near``.
         Returns:
             ExecutionResult with ``pose`` carrying the minimal Z rotation and the
             reduced ``yaw`` in radians.
@@ -137,6 +145,17 @@ class ReduceRotationToSymmetry(BaseNode):
 
         period = 2.0 * np.pi / symmetry
         reduced = float(yaw - period * np.round(yaw / period))
+        if near is not None:
+            hand = _base_yaw(near.orientation.to_scipy(), "x")
+            base = yaw + period * np.round((hand - yaw) / period)
+            xy = (pose.position if isinstance(pose, Pose) else pose.translation).to_numpy()[:2]
+
+            def q7(c):  # wrap only the difference, as in ChooseClearanceYaw
+                return abs(q7_home + (np.arctan2(xy[1], xy[0]) - c + np.pi) % (2 * np.pi) - np.pi)
+
+            turns = [base + k * period for k in range(-symmetry, symmetry + 1)]
+            ok = [c for c in turns if q7(c) <= q7_limit] or [base]
+            reduced = float(min(ok, key=lambda c: (round(abs(c - hand), 6), q7(c))))
         z_only = R.from_euler("z", reduced)
 
         return ExecutionResult(

@@ -43,3 +43,17 @@ def test_turn_reachable_but_recovery_not_keeps_the_yaw():
     assert np.isclose(choose(green, [yellow]), 0.0)
     turned = ChooseClearanceYaw().run(green, [yellow], q7_limit=4.0).outputs["pose"]  # same case, wider limit: it turns
     assert np.isclose(np.arctan2(*turned.orientation.to_scipy().as_matrix()[1::-1, 0]), np.pi / 2)
+
+
+def test_reduce_near_keeps_the_hands_turn_while_carrying():
+    from guide_ex.utility.rotation import ReduceRotationToSymmetry
+
+    def reduced(support, hand_yaw):
+        out = ReduceRotationToSymmetry().run(support, symmetry=4, near=pose(0.3, 0.0, hand_yaw, flip=True))
+        return np.degrees(np.arctan2(*out.outputs["pose"].orientation.to_scipy().as_matrix()[1::-1, 0]))
+
+    # cube held at 10 deg by a hand turned to 100 (FaceNarrowSide / Regrasp): place at 100, not 10
+    assert np.isclose(reduced(pose(0.4, 0.1, np.radians(10)), np.radians(100)), 100)
+    assert np.isclose(reduced(pose(0.4, 0.1, np.radians(10)), np.radians(-10)), 10)
+    # hand at -160 over q1 = 0 would need q7 = 45 + 160 = 205 deg: the reachable +-90 with the smaller |q7|
+    assert np.isclose(reduced(pose(0.4, 0.0, np.radians(20)), np.radians(-160)), 110)

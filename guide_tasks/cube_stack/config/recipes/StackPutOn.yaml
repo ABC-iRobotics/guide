@@ -30,7 +30,13 @@ children:
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, task: task_prompt, subtask: pick}
   - ref: LocateCube
   - ref: StackPick
+  # grasp_pose: the hand's yaw at the grasp, kept while carrying (place.free_yaw, CarryToSupport's KeepHandTurn)
   - ref: PlaceOn
+    dynamic_map: {grasp_pose: grasp_pose}
+overrides:
+  Place.CarryToSupport:
+    ref: CarryToSupport
+    dynamic_map: {grasp_pose: grasp_pose}
 fallbacks:
   # Route 1: the other pair of faces, on a freshly measured cube.
   Pick:

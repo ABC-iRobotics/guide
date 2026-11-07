@@ -49,6 +49,14 @@ children:
     dynamic_map: {pose: support_pose}
     static_args: {symmetry: 4}
     output_map: {pose: support_pose}
+  # place.free_yaw: of the cube's 4 equivalent yaws, the one the hand already has (grasp_pose, which the
+  # caller then maps in), so a grasp turned by 90 deg (FaceNarrowSide, Regrasp) is not turned back in the air.
+  - ref: ReduceRotationToSymmetry
+    alias: KeepHandTurn
+    when: ${oc.select:place.free_yaw,false}
+    dynamic_map: {pose: support_pose, near: grasp_pose}
+    static_args: {symmetry: 4}
+    output_map: {pose: support_pose}
   - ref: TransformPose
     alias: SupportGripperDown
     dynamic_map: {l_pose: support_pose}

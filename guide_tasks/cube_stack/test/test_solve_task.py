@@ -38,6 +38,7 @@ class World:
         self.misses = self.slips = self.slides = 0
         self.failing_moves = []
         self.prompts, self.moves, self.saved = [], [], None
+        self.yaws = []  # (move, heading of the hand's x in degrees)
         self.scattered = 0  # cubes let go of from height
 
     def landing(self, cube, x, y):
@@ -72,6 +73,8 @@ def world(monkeypatch):
 
     def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, jitter=None, aim=False):
         w.moves.append(self.name)
+        x = target_pose.orientation.to_scipy().as_matrix()[:2, 0]
+        w.yaws.append((self.name, round(float(np.degrees(np.arctan2(x[1], x[0]))) % 360, 3)))
         if self.name in w.failing_moves:
             w.failing_moves.remove(self.name)
             return ExecutionResult(DemoStatus.FAILURE, error_message="no path")
@@ -194,6 +197,11 @@ def test_route_1_a_missed_grasp_is_regrasped(world):
 
     assert run(world).status == DemoStatus.PERFECT
     assert world.tower() and world.moves.count("MoveToGrasp") == 4
+    # the regrasp turns the hand 90 deg; the carry keeps that turn (place.free_yaw): no wrist turn in the air
+    assert len({y for n, y in world.yaws if n == "MoveToGrasp"}) == 2
+    for i, (n, y) in enumerate(world.yaws):
+        if n == "MoveOverSupport":
+            assert y == next(g for m, g in reversed(world.yaws[:i]) if m == "MoveToGrasp")
 
 
 def test_route_2_a_failed_move_detours_through_home(world):

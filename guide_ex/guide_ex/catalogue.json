@@ -811,7 +811,10 @@
       "inputs": [
         "pose",
         "symmetry=1",
-        "heading_axis='x'"
+        "heading_axis='x'",
+        "near=None",
+        "q7_home=0.7853981633974483",
+        "q7_limit=2.8"
       ],
       "kind": "leaf",
       "level": "UTILITY",
