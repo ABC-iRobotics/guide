@@ -109,3 +109,16 @@ def test_a_late_aim_is_held_down_the_next_move_and_corrected_near_its_goal():
     full = misses[True][0]
     assert full > 0 and misses[False][1] < 1e-9  # early: gone by mid-descent
     assert np.isclose(misses[True][1], full) and misses[True][2] < 1e-9  # late: held, corrected at the end
+
+
+def test_a_late_aim_on_a_free_descent_carries_its_rest_into_the_final_descent():
+    """Hover -> pre-grasp (free end, blends) -> grasp: the miss is not gone at the blend, it fades to 0 at the grasp."""
+    noise = Noise(NoiseParams(seed=9, sigma=0.0, aim_late=True))
+    hover, pre, grasp = np.array([0.4, 0.0, 0.2]), np.array([0.4, 0.0, 0.05]), np.array([0.4, 0.0, 0.0])
+    a = noise.route(noise.move(), P0, hover, v=0.25, free_end=True, aim=True)
+    b = noise.route(noise.move(), None, pre, v=0.1, free_end=True, handover=1.0 - noise.params.blend / a.length)
+    h = 1.0 - noise.params.blend / b.length
+    c = noise.route(noise.move(), None, grasp, v=0.05, handover=h)
+    full = np.linalg.norm(b.miss(0.0))
+    assert full > 0 and 0.2 * full < np.linalg.norm(b.miss(h)) < full  # rest left at the blend, 9 cm up
+    assert np.allclose(c.aim_in, b.miss(h)) and np.linalg.norm(c.miss(1.0)) < 1e-9  # clean at the grasp

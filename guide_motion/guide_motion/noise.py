@@ -95,15 +95,16 @@ class Route:
 
     def aim(self, start=None, end=None, ramp=0.1, lead=0.0, late=False) -> None:
         """A miss off the clean path, in metres: `start` (carried in) fades out over the first `ramp`
-        (at most 80 % of the route; `late`: held, then faded over the `ramp` before the last `lead`, so
-        it is corrected close to this route's goal), `end` builds up over the `ramp` before the last
+        (at most 80 % of the route; `late`: held, then faded over the route's last `ramp`, so it is
+        corrected close to this route's goal; a free end hands the rest over at its `lead`, and the next
+        route fades that late in turn), `end` builds up over the `ramp` before the last
         `lead` (the blend a free end hands over at), so the route ends at goal + end while clean()
         still ends at the goal."""
         self.aim_in = np.zeros(3) if start is None else np.asarray(start, float)
         self.aim_out = np.zeros(3) if end is None else np.asarray(end, float)
         self._lead = min(lead, 0.45 * self.length)
         self._ramp_in, self._ramp_out = min(ramp, 0.8 * self.length), min(ramp, self.length - self._lead)
-        self._fade_from = max(self.length - self._lead - self._ramp_in, 0.0) if late else 0.0
+        self._fade_from = max(self.length - self._ramp_in, 0.0) if late else 0.0
 
     def miss(self, s) -> np.ndarray:
         d = s * self.length
