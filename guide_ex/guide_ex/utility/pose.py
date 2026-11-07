@@ -304,9 +304,9 @@ class FaceNarrowSide(BaseNode):
             x = turned(k).as_matrix()[:2, 0]
             return abs(x @ d) / (np.linalg.norm(x) * dist + 1e-9)
 
-        def q7(k):  # joint 7 for a down-pointing hand, as in ChooseClearanceYaw (pose in the base frame)
+        def q7(k):  # joint 7 for a down-pointing hand: q7_home + q1 - yaw of the hand's x (pose in the base frame)
             x = turned(k).as_matrix()[:2, 0]
-            a = np.arctan2(p[1], p[0]) - (np.arctan2(x[1], x[0]) + np.pi / 2)
+            a = np.arctan2(p[1], p[0]) - np.arctan2(x[1], x[0])
             return abs(q7_home + (a + np.pi) % (2 * np.pi) - np.pi)
 
         # Two turns 180 deg apart face it equally: take one joint 7 can reach, then the smaller turn.

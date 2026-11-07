@@ -80,8 +80,9 @@ def test_no_drop_fails_only_when_the_count_falls_below_its_peak():
 def test_face_narrow_side_takes_the_turn_joint_7_can_reach():
     from guide_ex.utility.pose import FaceNarrowSide
 
-    # Hand x at +45 deg, tower on the -45 deg diagonal: +90 deg needs |q7| = pi, -90 deg q7 = 0.
-    grasp = Pose.from_numpy(np.array([0.4, 0.0, 0.03]), R.from_euler("z", np.pi / 4) * R.from_euler("x", np.pi))
-    tower = Pose.from_numpy(np.array([0.45, -0.05, 0.03]), R.identity())
+    # q1 = 0, hand x at -30 deg, tower at +60 deg: x at +60 (+90 turn) gives q7 = 45 - 60 = -15 deg,
+    # x at -120 (-90 turn) q7 = 45 + 120 = 165 deg, past the limit (the pick that pinned joint 7).
+    grasp = Pose.from_numpy(np.array([0.4, 0.0, 0.03]), R.from_euler("z", -np.pi / 6) * R.from_euler("x", np.pi))
+    tower = Pose.from_numpy(np.array([0.4 + 0.07 * np.cos(np.pi / 3), 0.07 * np.sin(np.pi / 3), 0.03]), R.identity())
     x = FaceNarrowSide().run(pose=grasp, obstacle=tower).outputs["pose"].orientation.to_numpy()[:, 0]
-    assert np.allclose(x[:2], [np.sqrt(0.5), -np.sqrt(0.5)], atol=1e-6)
+    assert np.allclose(x[:2], [0.5, np.sqrt(0.75)], atol=1e-6)
