@@ -117,3 +117,23 @@ def test_psm_prismatic():
     np.testing.assert_allclose(tip, [0.0, 0.0, -model.home[2] - 0.0028], atol=2e-4)
     deeper, _ = model.ee_pose(model.home + [0, 0, 0.05, 0, 0, 0])
     np.testing.assert_allclose(deeper - tip, [0.0, 0.0, -0.05], atol=1e-6)
+
+
+def test_a_tilted_base_gets_its_gravity_in_the_base_frame():
+    """The dVRK arms sit tilted on their setup joints: OSCBF's gravity (base -z) is replaced by the
+    base-frame one, matching Pinocchio with the same gravity; setting it again keeps the compiled model."""
+    from scipy.spatial.transform import Rotation
+
+    from guide_motion.model import GRAVITY, Model
+
+    model = Model.load("psm")
+    gravity = Rotation.from_euler("xz", [45, 30], degrees=True).inv().apply(GRAVITY)
+    upright = np.asarray(model.manipulator.gravity_vector(model.home))
+    assert model.set_gravity(gravity) and not model.set_gravity(gravity)
+    man = model.manipulator
+    data = model.pin_model.createData()
+    model.pin_model.gravity.linear = gravity
+    for q in random_q(model, 3):
+        np.testing.assert_allclose(np.asarray(man.gravity_vector(q)), pin.computeGeneralizedGravity(model.pin_model, data, q), atol=1e-9)
+    assert not np.allclose(np.asarray(man.gravity_vector(model.home)), upright)
+    assert model.manipulator is man

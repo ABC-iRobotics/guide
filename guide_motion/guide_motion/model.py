@@ -3,7 +3,7 @@
 import json
 import tempfile
 import xml.etree.ElementTree as ET
-from functools import cached_property
+from functools import cached_property, partial
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +11,8 @@ import pinocchio as pin
 import yaml
 
 from guide_motion import description
+
+GRAVITY = (0.0, 0.0, -9.81)  # m/s^2 in the base frame of an upright arm (OSCBF's constant)
 
 
 class Model:
@@ -33,6 +35,7 @@ class Model:
         self.gripper_joint = self.gripper_joints[0] if self.gripper_joints else None
         self.gains = meta.get("gains", {})  # {mode: {gain: value}} over control.GAINS[mode]
         self.barriers = meta.get("barriers", {})  # over control.BARRIERS
+        self.gravity = np.array(GRAVITY)  # in the base frame: set_gravity for a base mounted tilted
         self.tool_frame = xrdf["tool_frames"][0]
         root = ET.fromstring(urdf_text)
         children = {j.find("child").get("link") for j in root.iter("joint")}
@@ -100,7 +103,20 @@ class Model:
         with tempfile.NamedTemporaryFile("w", suffix=".urdf") as f:
             f.write(ET.tostring(root, encoding="unicode"))
             f.flush()
-            return Manipulator.from_urdf(f.name, ee_offset=self.ee_offset)
+            manipulator = Manipulator.from_urdf(f.name, ee_offset=self.ee_offset)
+        if not np.allclose(self.gravity, GRAVITY):  # OSCBF's gravity is base -z; a tilted base needs its own
+            manipulator._gravity_vector = partial(_gravity_vector, manipulator, tuple(self.gravity))
+        return manipulator
+
+    def set_gravity(self, gravity) -> bool:
+        """Gravity (m/s^2) in the base frame: an arm mounted tilted (the dVRK's, on its setup joints)
+        sees world -z elsewhere. Returns False, and keeps the compiled dynamics, when unchanged."""
+        gravity = np.asarray(gravity, float)
+        if np.allclose(gravity, self.gravity):
+            return False
+        self.gravity = gravity
+        self.__dict__.pop("manipulator", None)
+        return True
 
     def ee_pose(self, q):
         """(position (3,), rotation (3, 3)) of the tool frame in the base frame."""
@@ -132,3 +148,12 @@ class Model:
         self.urdf_text = text
         self.__dict__.pop("manipulator", None)
         return True
+
+
+def _gravity_vector(manipulator, gravity, joint_transforms):
+    """OSCBF's Manipulator._gravity_vector with the base-frame gravity as a parameter."""
+    import jax.numpy as jnp
+
+    Jv_Ts = manipulator._get_linear_jacobians_transposed(joint_transforms)
+    masses = jnp.asarray(manipulator.link_masses)
+    return -jnp.sum(masses[:, jnp.newaxis, jnp.newaxis] * Jv_Ts @ jnp.asarray(gravity), axis=0)
