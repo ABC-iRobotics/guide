@@ -13,7 +13,9 @@ import yaml
 from scipy.spatial.transform import Rotation as R
 
 from guide_core.scene import robot_profile
-from guide_core.scene.extra_features import CARTESIAN, POSE, TWIST, WRENCH, check_layout, listed, tcp_wrench
+from guide_core.scene.extra_features import (
+    CARTESIAN, POSE, TWIST, WRENCH, bare, cartesian_robots, check_layout, listed, per_robot, pose_names, tcp_wrench,
+)
 from guide_core.scene.predicates import PREDICATE_PATHS
 from guide_core.scene.scene_recorder import DEFAULT_FPS, SceneRecorder, camera_transition
 from guide_core.types.geometry import Point, Pose, Rotation
@@ -1040,7 +1042,7 @@ class SceneOrchestrator(ABC):
             mapping = {}
             for item in cfg_list:
                 for ds_key, target in item.items():
-                    if ds_key in CARTESIAN:
+                    if bare(ds_key) in CARTESIAN:
                         continue
                     parts = target.split(".")
                     if len(parts) >= 3:
@@ -1054,6 +1056,7 @@ class SceneOrchestrator(ABC):
         act_mapping = parse_mapping(act_cfg)
 
         required_robots = {r for r, _, _ in obs_mapping.values()}
+        prim_paths = {}
         # Create views for robots strictly found in config using SingleArticulation
         for r_name in required_robots:
             if r_name in self._config.get("robots", {}):
@@ -1071,6 +1074,7 @@ class SceneOrchestrator(ABC):
                 if not view.handles_initialized:
                     view.initialize()
                 self.robots_views[r_name] = view
+                prim_paths[r_name] = prim_path
                 self._logger.info(f"Robot view '{r_name}': dof_names={view.dof_names}")
 
                 # The end effector, and the base its pose is recorded in (base_name; the
@@ -1095,10 +1099,11 @@ class SceneOrchestrator(ABC):
             for ds_key, (r_name, j_name, attr) in mapping.items():
                 target_robot = r_name
                 if target_robot not in self.robots_views:
-                    for rv_name, rv in self.robots_views.items():
-                        if find_dof_index(rv.dof_names, j_name) is not None:
-                            target_robot = rv_name
-                            break
+                    # the robot that has the joint; with several, the config must say which
+                    owners = [n for n, rv in self.robots_views.items() if find_dof_index(rv.dof_names, j_name) is not None]
+                    if len(owners) > 1:
+                        raise ValueError(f"{ds_key}: joint {j_name} is in {owners}; name the robot")
+                    target_robot = owners[0] if owners else target_robot
 
                 if target_robot in self.robots_views:
                     dof_names = self.robots_views[target_robot].dof_names
@@ -1125,8 +1130,27 @@ class SceneOrchestrator(ABC):
         self._logger.info(f"obs_masks: {self.obs_masks}")
         self._logger.info(f"act_masks: {self.act_masks}")
 
+        # Joint keys of prismatic joints (the PSM's insertion) are in m, m/s and N in the dataset's info.
+        import omni.usd
+        from pxr import Usd, UsdPhysics
+
+        stage = omni.usd.get_context().get_stage()
+        prismatic = set()
+        for masks in (self.obs_masks, self.act_masks):
+            for r_name, attrs in masks.items():
+                slide = {p.GetName() for p in Usd.PrimRange(stage.GetPrimAtPath(prim_paths[r_name])) if p.IsA(UsdPhysics.PrismaticJoint)}
+                dofs = self.robots_views[r_name].dof_names
+                prismatic |= {k for m in attrs.values() for i, k in zip(m["indices"], m["keys"]) if dofs[i] in slide}
+        if getattr(self, "recorder", None) is not None:
+            try:
+                self.recorder.set_prismatic(sorted(prismatic))
+            except Exception as e:  # an adopted recorder server started by an older GUIDE has no set_prismatic
+                self._logger.warning(f"prismatic joint units not passed to the recorder: {e}")
+
         check_layout(dataset_cfg)
         twist, wrench = listed(dataset_cfg, TWIST), listed(dataset_cfg, WRENCH)
+        if (twist or wrench) and len(cartesian_robots(dataset_cfg)) > 1:
+            raise ValueError("dataset vx..wz / fx..tz keys record one robot; dataset.cartesian_robots lists several")
         self._extras = self._setup_extras(dataset_cfg, bool(twist), bool(wrench)) if twist or wrench else None
         if self._extras:
             # the keys each of observation.state and action takes from this tick's extras
@@ -1137,7 +1161,7 @@ class SceneOrchestrator(ABC):
         guide_motion's model of it, and, for the wrench, the hand link and the bodies below it."""
         from guide_motion.model import Model
 
-        r = dataset_cfg.get("cartesian_velocity_robot") or next(iter(self.ee_views), None)
+        r = (cartesian_robots(dataset_cfg) or [next(iter(self.ee_views), None)])[0]
         if r not in self.robots_views or r not in self.ee_views:
             raise ValueError(f"dataset vx..wz / fx..tz keys: robot {r!r} has no articulation view and end_effector_name")
         cfg = self._config["robots"][r]
@@ -1198,8 +1222,13 @@ class SceneOrchestrator(ABC):
         return {k: float(v) for k, v in out.items()}
 
     def record_step(self, current_step: int):
-        observation = dict.fromkeys(POSE, 0.0)
-        action = dict.fromkeys(POSE, 0.0)
+        # The cartesian robots (dataset.cartesian_robots, else the first with an end effector) and their
+        # pose keys: x .. rz for one robot, <robot>.x .. for each of several.
+        dataset_cfg = self._config.get("dataset", {})
+        robots = cartesian_robots(dataset_cfg) or list(getattr(self, "ee_views", {}))[:1]
+        poses = pose_names(robots)
+        observation = dict.fromkeys([k for ks in poses.values() for k in ks] or POSE, 0.0)
+        action = dict.fromkeys(observation, 0.0)
 
         # ~~~~~~~~~~~~~~ Observations ~~~~~~~~~~~~~ #
         # Images
@@ -1304,77 +1333,59 @@ class SceneOrchestrator(ABC):
                         for val, key in zip(vals, mask["keys"]):
                             action[key] = float(val)
 
-        # Cartesian Pose Delta from End Effector View
-        dart = None
-        if hasattr(self, "ee_views") and self.ee_views:
-            dataset_cfg = self._config.get("dataset", {})
-            cartesian_robot = dataset_cfg.get("cartesian_velocity_robot")
-            if cartesian_robot is None:
-                cartesian_robot = list(self.ee_views.keys())[0]
+        # Cartesian Pose Delta from End Effector View, per cartesian robot
+        dart = {}
+        last = getattr(self, "_last_recorded_obs_pose", None) or {}  # robot -> (position, rotation) of its last frame
+        for cartesian_robot in robots:
+            ee_view = getattr(self, "ee_views", {}).get(cartesian_robot)
+            if ee_view is None:
+                continue
+            # Get world pose of the end effector directly
+            curr_pos, curr_rot = ee_view.get_world_poses()
+            if curr_pos is None:
+                continue
+            if curr_pos.ndim > 1:
+                curr_pos = curr_pos[0]
+                curr_rot = curr_rot[0]
 
-            if cartesian_robot in self.ee_views:
-                ee_view = self.ee_views[cartesian_robot]
+            # In the robot's base frame, wherever the scene or the robot sits in the
+            # world (Isaac quaternions are [w, x, y, z]).
+            base_pos, base_rot = self.base_views[cartesian_robot].get_world_poses()
+            r_base = R.from_quat(np.asarray(base_rot).reshape(-1, 4)[0], scalar_first=True)
+            curr_pos = r_base.inv().apply(np.asarray(curr_pos, float) - np.ravel(base_pos))
+            r_curr = r_base.inv() * R.from_quat(curr_rot, scalar_first=True)
+            abs_rotvec = r_curr.as_rotvec()
 
-                # Get world pose of the end effector directly
-                curr_pos, curr_rot = ee_view.get_world_poses()
+            # Calculate deltas based on last recorded data; for the first frame, delta is zero
+            if cartesian_robot not in last:
+                obs_delta_pos = np.zeros(3)
+                obs_delta_rotvec = np.zeros(3)
+            else:
+                last_curr_pos, r_last_curr = last[cartesian_robot]
+                # Observation Delta (current - last_current)
+                obs_delta_pos = curr_pos - last_curr_pos
+                obs_delta_rotvec = (r_curr * r_last_curr.inv()).as_rotvec()
 
-                if curr_pos is not None:
-                    if curr_pos.ndim > 1:
-                        curr_pos = curr_pos[0]
-                        curr_rot = curr_rot[0]
+            # Store current for the next step
+            last[cartesian_robot] = (curr_pos.copy(), r_curr)
 
-                    # In the robot's base frame, wherever the scene or the robot sits in the
-                    # world (Isaac quaternions are [w, x, y, z]).
-                    base_pos, base_rot = self.base_views[cartesian_robot].get_world_poses()
-                    r_base = R.from_quat(np.asarray(base_rot).reshape(-1, 4)[0], scalar_first=True)
-                    curr_pos = r_base.inv().apply(np.asarray(curr_pos, float) - np.ravel(base_pos))
-                    r_curr = r_base.inv() * R.from_quat(curr_rot, scalar_first=True)
-                    abs_rotvec = r_curr.as_rotvec()
+            # The absolute pose into the observation; the executed delta into the action. With an
+            # OSCBF host's clean target (`dart` below) the recorder replaces it by the DART label c[t+1] (-) s[t].
+            keys = poses[cartesian_robot]
+            observation.update(zip(keys, map(float, [*curr_pos, *abs_rotvec])))
+            action.update(zip(keys, map(float, [*obs_delta_pos, *obs_delta_rotvec])))
 
-                    # Calculate deltas based on last recorded data
-                    if (
-                        not hasattr(self, "_last_recorded_obs_pose")
-                        or self._last_recorded_obs_pose is None
-                    ):
-                        # For the first frame, delta is zero
-                        obs_delta_pos = np.zeros(3)
-                        obs_delta_rotvec = np.zeros(3)
-                    else:
-                        last_curr_pos, r_last_curr = self._last_recorded_obs_pose
-
-                        # Observation Delta (current - last_current)
-                        obs_delta_pos = curr_pos - last_curr_pos
-                        obs_delta_r = r_curr * r_last_curr.inv()
-                        obs_delta_rotvec = obs_delta_r.as_rotvec()
-
-                    # Store current for the next step
-                    self._last_recorded_obs_pose = (curr_pos.copy(), r_curr)
-
-                    # Add absolute pose to observation
-                    observation["x"] = float(curr_pos[0])
-                    observation["y"] = float(curr_pos[1])
-                    observation["z"] = float(curr_pos[2])
-
-                    observation["rx"] = float(abs_rotvec[0])
-                    observation["ry"] = float(abs_rotvec[1])
-                    observation["rz"] = float(abs_rotvec[2])
-
-                    # The executed delta; with an OSCBF host's clean target (`dart` below) the
-                    # recorder replaces it by the DART label c[t+1] (-) s[t].
-                    action["x"] = float(obs_delta_pos[0])
-                    action["y"] = float(obs_delta_pos[1])
-                    action["z"] = float(obs_delta_pos[2])
-
-                    action["rx"] = float(obs_delta_rotvec[0])
-                    action["ry"] = float(obs_delta_rotvec[1])
-                    action["rz"] = float(obs_delta_rotvec[2])
-
-                    # DART's label needs the unperturbed target the OSCBF host tracks now (the recorder
-                    # pairs the next frame's with this frame's pose); both in the robot base frame.
-                    host = getattr(self, "motion_hosts", {}).get(cartesian_robot)
-                    if host is not None and host.clean_target is not None:
-                        dart = {"clean": [*map(float, host.clean_target), *map(float, R.from_matrix(host.clean_rotation).as_rotvec())],
-                                "measured": [*map(float, curr_pos), *map(float, abs_rotvec)]}
+            # DART's label needs the unperturbed target the OSCBF host tracks now (the recorder
+            # pairs the next frame's with this frame's pose); both in the robot base frame.
+            host = getattr(self, "motion_hosts", {}).get(cartesian_robot)
+            if host is not None and host.clean_target is not None:
+                dart[cartesian_robot] = {
+                    "clean": [*map(float, host.clean_target), *map(float, R.from_matrix(host.clean_rotation).as_rotvec())],
+                    "measured": [*map(float, curr_pos), *map(float, abs_rotvec)]}
+        self._last_recorded_obs_pose = last
+        if len(robots) > 1:  # per robot: its joints .pos .vel .eff, then its TCP pose
+            observation = per_robot(observation, robots, getattr(self, "obs_masks", {}), poses)
+            action = per_robot(action, robots, getattr(self, "act_masks", {}), poses)
 
         ex = getattr(self, "_extras", None)
         if ex:
@@ -1388,7 +1399,8 @@ class SceneOrchestrator(ABC):
             # The frame's LeRobot task is the GUIDE-EX task under way; a tree that announces
             # no task (block_bin) leaves the scene's own prompt. The procedure and the subtask
             # go in as language prompts; a camera transition's frames carry its label as subtask.
-            "dart": dart,
+            # One robot: its {"clean", "measured"}; several: robot -> that, keyed like the pose keys' prefix.
+            "dart": (dart if len(robots) > 1 else next(iter(dart.values()))) if dart else None,
             "task": self.prompts["task"] or self.task,
             "prompts": {
                 "procedure": self.task,

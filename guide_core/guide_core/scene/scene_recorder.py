@@ -12,7 +12,7 @@ from threading import Event, Thread
 
 import numpy as np
 
-from guide_core.scene.extra_features import POSE, with_info
+from guide_core.scene.extra_features import POSE, cartesian_robots, pose_keys, pose_names, with_info
 
 # Schema version for the GUIDE metadata sidecar (guide_info.json / guide_episodes.jsonl).
 GUIDE_META_SCHEMA = 1
@@ -183,6 +183,11 @@ class SceneRecorder(Thread):
 
         self.dataset = None
         self.LeRobotDataset = None
+        self._prismatic = frozenset()  # joint keys in m, m/s, N (set_prismatic)
+
+    def set_prismatic(self, keys) -> None:
+        """The joint keys of prismatic joints, for the units in the features' info (the orchestrator reads the USD)."""
+        self._prismatic = frozenset(keys)
 
     def set_start_recording(self):
         self.start_recording_event.set()
@@ -370,7 +375,8 @@ class SceneRecorder(Thread):
                 else:
                     obs_features[k] = float
 
-            obs_features = {**obs_features, **dict.fromkeys(POSE, float)}
+            pose = [k for ks in pose_names(cartesian_robots(self.config.get("dataset", {}))).values() for k in ks] or POSE
+            obs_features = {**obs_features, **dict.fromkeys(pose, float)}
 
         # ~~~~~~~~~~~~~~~~ Actions ~~~~~~~~~~~~~~~~ #
         action_features = {}
@@ -378,7 +384,7 @@ class SceneRecorder(Thread):
             for k in first_item["action"].keys():
                 action_features[k] = float
 
-            action_features = {**action_features, **dict.fromkeys(POSE, float)}
+            action_features = {**action_features, **dict.fromkeys(pose, float)}
 
         from lerobot.utils.feature_utils import hw_to_dataset_features
 
@@ -386,9 +392,9 @@ class SceneRecorder(Thread):
         action_features = hw_to_dataset_features(action_features, "action", use_video=True)
         # each key's unit and frame go into the feature's info
         if "action" in action_features:
-            action_features["action"] = with_info(action_features["action"], action=True)
+            action_features["action"] = with_info(action_features["action"], action=True, prismatic=self._prismatic)
         if "observation.state" in obs_features:
-            obs_features["observation.state"] = with_info(obs_features["observation.state"])
+            obs_features["observation.state"] = with_info(obs_features["observation.state"], prismatic=self._prismatic)
         features = {**action_features, **obs_features}
 
         self._logger.info(f"Creating LeRobotDataset with features: {list(features)}")
@@ -437,12 +443,14 @@ class SceneRecorder(Thread):
         task_str = item.pop("task", self.task_name)
         prompts = item.pop("prompts", {})
         dart = item.pop("dart", None)
+        if dart and "clean" in dart:  # one cartesian robot (bare x .. rz); several come as robot -> dart
+            dart = {None: dart}
         frame = {**observation_frame, **action_frame, "task": task_str}
 
         # With a clean target (OSCBF host), the pose action is the DART label c[t+1] (-) s[t]: the frame
         # waits for the next one; without, it keeps the orchestrator's executed delta.
-        self._flush(dart and dart["clean"])
-        if dart is None:
+        self._flush(dart and {r: d["clean"] for r, d in dart.items()})
+        if not dart:
             self.dataset.add_frame(frame)
         else:
             self._held = (frame, dart)
@@ -464,16 +472,17 @@ class SceneRecorder(Thread):
         return episode_start_time
 
     def _flush(self, clean_next=None) -> None:
-        """Add the held frame, its pose action c (-) s from the next frame's clean target (its own at
-        an episode's end)."""
+        """Add the held frame, each robot's pose action c (-) s from the next frame's clean target (its own
+        at an episode's end, or when the next frame has none for that robot). ``clean_next``: robot -> target,
+        robot None for the bare x .. rz of a single cartesian robot."""
         if self._held is None:
             return
         frame, dart = self._held
         self._held = None
         names = list(self.dataset.features["action"]["names"])
-        pose = [names.index(k) for k in ("x", "y", "z", "rx", "ry", "rz")]
         action = np.array(frame["action"], copy=True)
-        action[pose] = dart_action(clean_next or dart["clean"], dart["measured"])
+        for r, d in dart.items():
+            action[[names.index(k) for k in pose_keys(r)]] = dart_action((clean_next or {}).get(r) or d["clean"], d["measured"])
         self.dataset.add_frame({**frame, "action": action})
 
     def _finalize_episode(self):

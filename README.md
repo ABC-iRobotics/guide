@@ -409,8 +409,12 @@ Each frame of a shipped task (10 fps, three cameras: `top`, `base`, `wrist`):
 
 **Coordinates.** The base is the prim named by `robots.<name>.base_name` in the task's
 `config/init.yaml` (`fr3_link0` for both FR3 tasks; the robot prim when unset), so the pose
-is the same whichever scene recorded it. One cartesian robot per scene; several are on
-[TODO.md](TODO.md).
+is the same whichever scene recorded it. `dataset.cartesian_robots: [psm1, psm2]` records several
+robots, each in its own base frame: their pose keys are `psm1.x … psm1.rz`, `psm2.x … psm2.rz`, and the
+state and action go per robot (its joints `.pos`, `.vel`, `.eff`, then its pose). One robot (the old
+`dataset.cartesian_velocity_robot: franka`, or the first robot with an end effector) keeps the bare
+`x … rz`. A joint key whose robot is not named and that two robots share fails the registration;
+`vx … wz` / `fx … tz` record one robot only.
 
 Reading a dataset with LeRobot (the 12-bit depth videos need the `pyav` backend):
 ```python
