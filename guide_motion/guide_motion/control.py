@@ -201,6 +201,11 @@ def _build(model, mode, gains, barriers, obstacle_boxes=0):
             def h_2(self, z, *args, **kwargs):
                 return h(z[:n], *args)
 
+            if n < 6:  # JOINTS only: OSCBF's pose-task objective inverts the singular J M^-1 J^T
+                def _P(self, z, *args, **kwargs):
+                    M_inv = jnp.linalg.inv(man.mass_matrix(z[:n]))
+                    return M_inv.T @ M_inv  # its joint-space term, with no task to project out
+
             def alpha(self, x, *args, **kwargs):
                 return 10.0 * x
 
@@ -227,6 +232,10 @@ def _build(model, mode, gains, barriers, obstacle_boxes=0):
 
             def h_1(self, z, *args, **kwargs):
                 return h(z, *args)
+
+            if n < 6:  # JOINTS only, as in torque mode: the joint-space term alone
+                def _P(self, z, *args, **kwargs):
+                    return jnp.eye(n)
 
             def alpha(self, x, *args, **kwargs):
                 return 10.0 * x
