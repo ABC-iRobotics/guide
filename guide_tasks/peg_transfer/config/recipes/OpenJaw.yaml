@@ -1,4 +1,4 @@
-# Open a PSM's jaws to 1 rad (solve_task.OPEN_RAD through description.json's gripper scale).
+# Open a PSM's jaws for a grasp (solve_task.OPEN_RAD through description.json's gripper scale).
 ref: SetGripperState
 alias: OpenJaw
 dynamic_map: {robot: robot}

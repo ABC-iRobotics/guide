@@ -40,6 +40,7 @@ DROP = PEG_H + 0.010  # m from over the peg (the block's bottom 1 cm over its to
 # Largest turn of the closing axis off the bend-free one: tool_yaw grows with it and with the bend
 # (IK on robots/psm: 15 deg needs <= 0.35 rad of its 0.52 at the lift height).
 MAX_DEVIATION = np.radians(15.0)
+HOLD_TOL = 0.003  # m: a held block's centre lies within this of where the tip's grip puts it
 
 
 def _unit(v):
@@ -70,6 +71,13 @@ def up_of(scene: Pose) -> np.ndarray:
 def tip_for(centre, rot) -> Pose:
     """The tip pose holding a block centred at `centre`, the tip turned `rot`."""
     return Pose.from_numpy(np.asarray(centre, float) + rot @ GRIP, R.from_matrix(rot))
+
+
+def holds(tip: Pose, block: Pose) -> bool:
+    """Whether the jaws hold the block: its centre within HOLD_TOL of the centre tip_for puts at `tip`.
+    Jaws closed on air, beside the block or on its top leave it farther (a bbox clash does not tell)."""
+    centre = tip.position.to_numpy() - tip.orientation.to_numpy() @ GRIP
+    return bool(np.linalg.norm(block.position.to_numpy() - centre) <= HOLD_TOL)
 
 
 def grasp_pose(block: Pose, up) -> Pose:
@@ -209,3 +217,16 @@ class IsSeated(BaseNode):
     def run(self, block: Pose, peg: Pose, scene: Pose) -> ExecutionResult:
         ok = seated(_in_scene(scene, block), _in_scene(scene, peg))
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"seated": ok})
+
+
+@node()
+class IsHeld(BaseNode):
+    """Whether the jaws at `tip` hold `block` (holds), both in the same frame."""
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("IsHeld", alias, dynamic_map, static_args, output_map)
+
+    def run(self, tip: Pose, block: Pose) -> ExecutionResult:
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"held": holds(tip, block)})

@@ -1,5 +1,6 @@
 # The giver opens, comes tool down over the block (targets.GraspPose: across one wall, one jaw in the
-# ring's hole), descends onto it slowly and closes; it fails (NotHolding) unless its jaw holds the block.
+# ring's hole), descends onto it slowly and closes; it fails (NotHolding) unless the block sits in its jaws
+# (targets.IsHeld: the block's centre where the tip's grip puts it).
 # light_fail / retry_mixed (MissPose miss.grasp): the grasp lies 18-22 mm along the wall, off its end:
 # the jaws close on air and Transfer's Regrasp picks again, at the block this time.
 node_type: CompositeNode
@@ -38,11 +39,17 @@ children:
     static_args: {speed: 0.05, cartesian: true}
   - {ref: CloseJaw, alias: CloseOnBlock, dynamic_map: {robot: giver}}
   - {ref: WaitForSeconds, alias: CloseSettle, static_args: {seconds: 1.0}}
-  - ref: IsPrimClashing
-    alias: CheckHolding
+  - ref: GetPrimPose
+    alias: LocateGiverTip
     dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
-    static_args: {prim1_path: "${jaw_prim.giver}", prim2_path: "${plan.block}"}
-    output_map: {has_collided: holding}
+    static_args: {prim_path: "${tip_prim.giver}"}
+    output_map: {pose: giver_tip}
+  - ref: GetPrimPose
+    alias: LocateGrasped
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.block}"}
+    output_map: {pose: grasped}
+  - {ref: IsHeld, alias: CheckHolding, dynamic_map: {tip: giver_tip, block: grasped}, output_map: {held: holding}}
 mode: condition
 condition_expr: holding
 false_branch: {ref: NodeException, alias: NotHolding}

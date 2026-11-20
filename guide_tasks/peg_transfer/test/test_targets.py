@@ -123,3 +123,11 @@ def test_the_prompts_at_three_levels():
         assert plan["tasks"] == [f"Move the {plan['colour']} block from the {side[plan['giver']]} to the "
                                  f"{side[plan['receiver']]} side."]
         assert re.fullmatch(r"Move the \w+ block from the (left|right) to the (left|right) side\.", plan["tasks"][0])
+
+
+def test_held_only_with_the_block_where_the_grip_puts_it():
+    tip = tg.grasp_pose(BLOCK, UP)
+    assert tg.holds(tip, BLOCK)
+    along_wall = tip * Pose(Point([0.0, 0.02, 0.0]))  # a planned miss: closed 20 mm along the wall, on air
+    on_top = tip * Pose(Point([0.0, 0.0, 0.0065]))  # jaws stopped on the block's top (T10, wide open)
+    assert not tg.holds(along_wall, BLOCK) and not tg.holds(on_top, BLOCK)

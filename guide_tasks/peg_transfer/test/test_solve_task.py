@@ -19,7 +19,7 @@ from guide_ex.core.states import DemoStatus, ExecutionResult
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
-from guide_ex.steps.simulation.isaac.prim import GetPrimPose, IsPrimClashing
+from guide_ex.steps.simulation.isaac.prim import GetPrimPose
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility import recording
 from guide_ex.utility.wait import WaitForSeconds
@@ -84,7 +84,9 @@ def world(monkeypatch):
     def get_pose(self, robot, sim_namespace, scene_namespace, prim_path):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
-        return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": BASES[arm(robot)].inv() * w.world(prim_path)})
+        tip = next((k for k in w.tips if prim_path == f"/{k.upper()}/psm/psm_tool_tip_link"), None)
+        world_pose = w.tips[tip] if tip else w.world(prim_path)
+        return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": BASES[arm(robot)].inv() * world_pose})
 
     def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, jitter=None, aim=False):
         w = holder["w"]
@@ -104,17 +106,12 @@ def world(monkeypatch):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
         ((joint, q),) = gripper_goal_pos.items()
-        assert joint == "psm_tool_gripper1_joint" and q in (-0.5, 0.0)  # 1 rad open via description.json's scale
+        assert joint == "psm_tool_gripper1_joint" and q in (-0.5 * st.OPEN_RAD, -0.5 * st.RECEIVE_RAD, 0.0)  # description.json's scale
         if q == 0.0 and np.linalg.norm(w.grip_point(w.tips[arm(robot)]) - w.block) < 0.005:
             w.holders.add(arm(robot))
         elif q != 0.0:
             w.holders.discard(arm(robot))
         return PERFECT
-
-    def clashing(self, robot, sim_namespace, scene_namespace, prim1_path, prim2_path):
-        w = holder["w"]
-        held_by = "psm1" if prim1_path.startswith("/PSM1/") else "psm2"
-        return ExecutionResult(DemoStatus.PERFECT, outputs={"has_collided": prim2_path == w.plan["block"] and held_by in w.holders})
 
     def prompt(self, robot, sim_namespace, scene_id, task="", subtask="", timeout_sec=30.0):
         holder["w"].prompts += [(level, p) for level, p in (("task", task), ("subtask", subtask)) if p]
@@ -130,7 +127,7 @@ def world(monkeypatch):
         return ExecutionResult(DemoStatus.PERFECT, outputs={"success": ok, "reason": "" if ok else "not seated"})
 
     for cls, run in {GetPrimPose: get_pose, MoveToCartesianPose: move, MoveToJointConfiguration: joints,
-                     SetGripperState: grip, IsPrimClashing: clashing, WaitForSeconds: lambda self, seconds, timer=None: PERFECT,
+                     SetGripperState: grip, WaitForSeconds: lambda self, seconds, timer=None: PERFECT,
                      recording.SetPrompt: prompt, recording.StartRecording: lambda self, *a, **k: PERFECT,
                      recording.StopRecording: stop, IsTaskSuccessful: success}.items():
         monkeypatch.setattr(cls, "run", run)

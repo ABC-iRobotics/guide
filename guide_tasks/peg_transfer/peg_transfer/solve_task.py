@@ -38,7 +38,10 @@ from peg_transfer.targets import APPROACH, DROP, LIFT  # importing registers its
 
 SUBTASKS = {"pick": "Pick up the block.", "lift": "Lift it off the peg.", "handover": "Hand it over.",
             "place": "Place it on the peg.", "return": "Return to start."}
-OPEN_RAD = 1.0  # jaw opening (rad) for a grasp; 0 closes
+# Jaw opening (rad between the jaws, 2x each jaw's angle; 0 closes). The grasp straddles the 0.7 mm wall
+# with 0.082 rad per jaw (0.77 mm at the tips); wider jaws land on the peg (T10: tip 6.5-7 mm high).
+OPEN_RAD = 0.164
+RECEIVE_RAD = 0.164  # the receiver's, onto the held block (no peg in the hole)
 ECM_JITTER = (0.02, 0.02, 0.005, 0.0)  # +- per ECM joint: yaw, pitch (rad), insertion (m), tool roll
 ROLL_GAIN = 0.5  # share of the marker's +-30 deg roll the handover takes (tool_yaw saturates beyond ~15)
 # 0.1x cube_stack's motion noise (guide_motion NoiseParams): the PSM works at millimetres
@@ -78,8 +81,8 @@ def ecm_hold(entry, rng) -> dict:
 
 
 def recipe_values(init, plan, miss=None, hold=None) -> dict:
-    """What config/recipes/ interpolate: the roles (hand), the plan, the subtask prompts, each role's jaw
-    prim, the PSM home and jaw (description.json's gripper scale), the ECM hold and the misses."""
+    """What config/recipes/ interpolate: the roles (hand), the plan, the subtask prompts, each role's tool
+    tip prim, the PSM home and jaw (description.json's gripper scale), the ECM hold and the misses."""
     from guide_core.scene.robot_profile import resolve
     from guide_motion.description import ROBOTS_DIR
 
@@ -91,9 +94,10 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
         "hand": roles,
         "plan": plan,
         "prompts": SUBTASKS,
-        "jaw_prim": {role: f"{robots[r]['path']}/psm_tool_gripper1_link" for role, r in roles.items()},
+        "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
         "psm": {"home": {f"{j}.pos": q for j, q in zip(psm["joint_names"], psm["default_joint_states"])}},
-        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "closed": 0.0},
+        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD,
+                "receive": gripper["scale"][0] * RECEIVE_RAD, "closed": 0.0},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
         "handover": {"roll_gain": ROLL_GAIN},
         "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP},  # m along the tool's z
