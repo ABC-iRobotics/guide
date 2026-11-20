@@ -45,11 +45,14 @@ class Controller:
     """step(target, q, qd) -> joint torques (torque mode) or joint velocities (velocity mode)."""
 
     def __init__(self, model, mode: str = "torque", gains=None, barriers=None, q_rest=None, obstacle_boxes: int = 0):
-        """obstacle_boxes: how many obstacle boxes, one barrier row each; set_obstacles places them."""
+        """obstacle_boxes: how many obstacle boxes, one barrier row each; set_obstacles places them.
+
+        gains / barriers: over the model's (description.json), over GAINS[mode] / BARRIERS."""
         assert mode in GAINS, mode
         self.model, self.mode = model, mode
-        self.gains = {**GAINS[mode], **(gains or {})}
-        self.barriers = {**BARRIERS, **(barriers or {})}
+        self.gains = {**GAINS[mode], **model.gains.get(mode, {}), **(gains or {})}
+        self.barriers = {**BARRIERS, **model.barriers, **(barriers or {})}
+        self.pose_targets = model.nq_arm >= 6  # below 6 DOF the pose task is singular: JOINTS goals only
         self.q_rest = np.asarray(model.home if q_rest is None else q_rest, float)
         self.limit = model.max_effort if mode == "torque" else model.max_velocity
         self.events = {"infeasible": 0}
@@ -73,8 +76,9 @@ class Controller:
     def warm_up(self) -> float:
         """Compile the step (seconds taken). Without it the first physics step stalls."""
         start = time.perf_counter()
-        position, rotation = self.model.ee_pose(self.q_rest)
-        self.step(Target(position=position, rotation=rotation), self.q_rest, np.zeros_like(self.q_rest))
+        if self.pose_targets:
+            position, rotation = self.model.ee_pose(self.q_rest)
+            self.step(Target(position=position, rotation=rotation), self.q_rest, np.zeros_like(self.q_rest))
         self.step(Target(mode=JOINTS, joints=self.q_rest), self.q_rest, np.zeros_like(self.q_rest))
         self.gravity(self.q_rest)  # the fallback's, so an infeasible step never compiles mid-episode
         self.barrier_values(self.q_rest)  # the host checks the barriers at registration and attach
@@ -89,6 +93,8 @@ class Controller:
             # pose task held a branch 8 mm / 28 deg off home and the weak posture never unwound it.
             u, violation = self._joint_fn(q, qd, np.asarray(target.joints, float), *self._args())
             return self._checked(u, violation, q, qd)
+        if not self.pose_targets:
+            raise ValueError(f"{self.model.nq_arm}-DOF arm: JOINTS targets only, got {target.mode}")
         if target.mode == TWIST:
             position, rotation = self.model.ee_pose(q)
             twist = np.asarray(target.twist, float)

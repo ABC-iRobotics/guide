@@ -25,7 +25,7 @@ MAX_SPEED = 0.5  # m/s: the cruise speed at GUIDE-EX speed 1.0
 SPEED = 0.1  # m/s: the cruise speed at plan()'s default speed 0.2
 ANGULAR_SPEED = 1.0  # rad/s of hand turn at SPEED; scales with speed like the line
 JOINT_SPEED = 1.0  # rad/s of the fastest joint at SPEED, joint goals; scales likewise
-OMEGA = math.sqrt(GAINS["torque"]["kp"])  # rad/s, the task-space PD's natural frequency
+OMEGA = math.sqrt(GAINS["torque"]["kp"])  # rad/s, the task-space PD's natural frequency (default gains)
 V_FLOOR = 0.005  # m/s, arrival floor
 SUBSTEPS = 10  # integration steps of the profile per target
 POS_TOL, ROT_TOL = 1e-3, math.radians(0.5)  # IK has reached the goal
@@ -36,21 +36,27 @@ class PlanningError(RuntimeError):
     pass
 
 
-def profile(length: float, v_max: float, a_max: float = math.inf, v0: float = 0.0, stop: bool = True) -> np.ndarray:
+def omega(model) -> float:
+    """rad/s, the natural frequency of the model's task-space PD (its torque kp over GAINS')."""
+    return math.sqrt({**GAINS["torque"], **model.gains.get("torque", {})}["kp"])
+
+
+def profile(length: float, v_max: float, a_max: float = math.inf, v0: float = 0.0, stop: bool = True,
+            omega: float = OMEGA) -> np.ndarray:
     """Distances along a path of `length` m at each 50 ms target; the last one is `length`.
 
     v0: the speed the path starts at (a free start, handed over from a moving arm: the ramps begin
     where they give v0). stop=False: a free end, no deceleration onto the end."""
-    lam, floor, dt = v_max / OMEGA, min(V_FLOOR, v_max), DT / SUBSTEPS
+    lam, floor, dt = v_max / omega, min(V_FLOOR, v_max), DT / SUBSTEPS
     v0 = min(v0, 0.999 * v_max)  # ponytail: a faster hand-over steps down to v_max at once; OSC smooths it
-    t0, ta = -math.log1p(-v0 / v_max) / OMEGA, v0 / a_max
+    t0, ta = -math.log1p(-v0 / v_max) / omega, v0 / a_max
     s, t, out = 0.0, 0.0, []
     while True:
         step = 0.0
         for _ in range(SUBSTEPS):
             t += dt
             d = length - s - step
-            v = min(-v_max * math.expm1(-OMEGA * (t + t0)), a_max * (t + ta),
+            v = min(-v_max * math.expm1(-omega * (t + t0)), a_max * (t + ta),
                     -v_max * math.expm1(-d / lam) if stop else v_max)
             step += max(v, floor) * dt
         if length - s <= step:
@@ -80,7 +86,7 @@ def _sigma(model, length: float, delta, v_max: float, v0: float = 0.0, stop: boo
     if length <= v_max * DT:
         return np.ones(1)
     a_max = _path_limit(model.xrdf["cspace"]["acceleration_limits"], rate)
-    return profile(length, v_max, a_max, v0, stop) / length
+    return profile(length, v_max, a_max, v0, stop, omega(model)) / length
 
 
 def plan(model, goal: Target, q, speed: float = SPEED / MAX_SPEED, route=None, v0: float = 0.0,

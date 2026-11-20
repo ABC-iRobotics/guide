@@ -95,3 +95,8 @@ def test_tcp_twist_is_the_tool_frames_finite_difference_velocity(fr3_model):
         np.testing.assert_allclose(twist[:3], R0.T @ (p1 - p0) / dt, atol=1e-5)
         np.testing.assert_allclose(twist[3:], R0.T @ pin.log3(R1 @ R0.T) / dt, atol=1e-5)
         assert np.isclose(fr3_model.ee_speed(q, qd), np.linalg.norm(twist[:3]))
+
+
+def test_gripper_from_description(fr3_model):
+    assert fr3_model.gripper_joints == ["fr3_finger_joint1"] and fr3_model.gripper_unit == "m"
+    np.testing.assert_array_equal(fr3_model.gripper_scale, [0.5])

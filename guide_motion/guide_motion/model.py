@@ -16,12 +16,23 @@ from guide_motion import description
 class Model:
     """Arm kinematics (Pinocchio, fingers locked) and dynamics (OSCBF, built lazily)."""
 
-    def __init__(self, urdf_text: str, xrdf: dict, usd_to_urdf: dict | None = None):
+    def __init__(self, urdf_text: str, xrdf: dict, usd_to_urdf: dict | None = None, meta: dict | None = None):
+        """meta: description.json (gripper, gains, barriers; see guide_motion.description.ROBOTS)."""
+        meta = meta or {}
         self.urdf_text, self.xrdf = urdf_text, xrdf
         self._description_urdf = urdf_text  # set_mass_properties always starts from it, never accumulates
         self.usd_to_urdf = {name: np.asarray(X, float) for name, X in (usd_to_urdf or {}).items()}
         self.arm_joints = list(xrdf["cspace"]["joint_names"])
-        self.gripper_joint = self.arm_joints[0].rsplit("_joint", 1)[0] + "_finger_joint1"
+        self.nq_arm = len(self.arm_joints)
+        # width w -> joint_i = scale_i * w; without an entry, the Franka hand's (null: no gripper)
+        franka = {"joints": [self.arm_joints[0].rsplit("_joint", 1)[0] + "_finger_joint1"], "scale": [0.5], "unit": "m"}
+        gripper = (meta["gripper"] if "gripper" in meta else franka) or {"joints": [], "scale": [], "unit": None}
+        self.gripper_joints = list(gripper["joints"])
+        self.gripper_scale = np.asarray(gripper["scale"], float)
+        self.gripper_unit = gripper["unit"]
+        self.gripper_joint = self.gripper_joints[0] if self.gripper_joints else None
+        self.gains = meta.get("gains", {})  # {mode: {gain: value}} over control.GAINS[mode]
+        self.barriers = meta.get("barriers", {})  # over control.BARRIERS
         self.tool_frame = xrdf["tool_frames"][0]
         root = ET.fromstring(urdf_text)
         children = {j.find("child").get("link") for j in root.iter("joint")}
@@ -61,12 +72,12 @@ class Model:
 
     @classmethod
     def load(cls, robot) -> "Model":
-        """`robot`: a name under guide_motion/robots ('fr3', 'panda') or a directory."""
-        d = Path(robot)
-        if str(robot) in description.ROBOTS or not d.is_dir():  # a known name never means the cwd's dir
-            d = description.ROBOTS_DIR / str(robot)
+        """`robot`: a name under guide_motion/robots (a folder holding <name>.urdf and <name>.xrdf) or a directory."""
+        d = description.ROBOTS_DIR / str(robot)
+        if not ((d / f"{d.name}.urdf").exists() and (d / f"{d.name}.xrdf").exists()):  # a known name never means the cwd's dir
+            d = Path(robot)
         meta = json.loads((d / "description.json").read_text()) if (d / "description.json").exists() else {}
-        model = cls((d / f"{d.name}.urdf").read_text(), yaml.safe_load((d / f"{d.name}.xrdf").read_text()), meta.get("usd_to_urdf"))
+        model = cls((d / f"{d.name}.urdf").read_text(), yaml.safe_load((d / f"{d.name}.xrdf").read_text()), meta.get("usd_to_urdf"), meta)
         model.robot_dir = d
         return model
 

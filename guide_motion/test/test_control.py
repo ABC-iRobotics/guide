@@ -189,3 +189,29 @@ def test_a_joint_goal_unwinds_a_wound_wrist(controller):
             qd = qd + pin.aba(plant.pin_model, plant.pin_data, q, qd, u) / hz
             q = q + qd / hz
     assert np.abs(q - HOME).max() < 0.02
+
+
+def test_controller_takes_model_gains_and_barriers(fr3_model, monkeypatch):
+    monkeypatch.setattr(fr3_model, "gains", {"torque": {"kp": 100.0}})
+    monkeypatch.setattr(fr3_model, "barriers", {"singularity": 1e-6})
+    c = Controller(fr3_model, "torque")
+    assert c.gains["kp"] == 100.0 and c.gains["kd_null"] == GAINS["torque"]["kd_null"] and c.barriers["singularity"] == 1e-6
+    assert Controller(fr3_model, "torque", gains={"kp": 50.0}).gains["kp"] == 50.0  # an explicit gain wins
+
+
+def test_joints_only_below_six_dof(fr3_model):
+    """A 4-DOF arm (the FR3 with joints 5..7 locked): POSE and TWIST raise, JOINTS runs."""
+    import copy
+
+    from guide_motion.model import Model
+
+    xrdf = copy.deepcopy(fr3_model.xrdf)
+    xrdf["cspace"]["joint_names"] = xrdf["cspace"]["joint_names"][:4]
+    model = Model(fr3_model.urdf_text, xrdf)
+    c = Controller(model, "torque")
+    p, R = model.ee_pose(model.home)
+    for target in (Target(position=p, rotation=R), Target(mode=TWIST, twist=np.zeros(6))):
+        with pytest.raises(ValueError):
+            c.step(target, model.home, np.zeros(4))
+    u = c.step(Target(mode=JOINTS, joints=model.home), model.home, np.zeros(4))
+    assert u.shape == (4,) and np.all(np.isfinite(u))

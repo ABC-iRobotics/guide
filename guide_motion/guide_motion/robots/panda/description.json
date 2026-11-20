@@ -400,5 +400,16 @@
    "asset": 0.0140552232041955,
    "override": 0.0291
   }
- }
+ },
+ "tcp": "panda_hand_tcp",
+ "gripper": {
+  "joints": [
+   "panda_finger_joint1"
+  ],
+  "scale": [
+   0.5
+  ],
+  "unit": "m"
+ },
+ "wrist_camera": "panda_hand/wrist_camera"
 }

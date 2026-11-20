@@ -436,5 +436,16 @@
    "asset": 1.0,
    "override": 0.001
   }
- }
+ },
+ "tcp": "fr3_hand_tcp",
+ "gripper": {
+  "joints": [
+   "fr3_finger_joint1"
+  ],
+  "scale": [
+   0.5
+  ],
+  "unit": "m"
+ },
+ "wrist_camera": "fr3_hand/wrist_camera"
 }

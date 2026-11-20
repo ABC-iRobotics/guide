@@ -24,10 +24,21 @@ FRANKA_DESCRIPTION = Path.home() / "ros2_ws" / "src" / "franka_description"
 HOME = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.5708, 0.785398]  # block_bin init.yaml
 TCP_Z = 0.1034  # franka_description franka_hand.xacro tcp_xyz
 FRAME_MASS = (0.001, np.zeros(3), 1e-7 * np.eye(3))  # a frame the asset made a body: 1 g (PhysX needs > 0)
+# The only per-robot table. usd: assets-root-relative, an absolute path or a URL. home: block_bin init.yaml.
+# tcp: (frame, z offset along <robot>_hand to add it at | None: the asset has it). ignore: XRDF self-collision
+# ignore lines {link: [links]} added to the editor's. base_link: the root link. radius_offset: sphere radius
+# offset (default 0.01). gripper (width w -> joint_i = scale_i * w), wrist_camera, gains, barriers: written into
+# description.json. accel / jerk: franka_description for the FR3, Isaac's shipped Panda XRDF for the Panda.
+# datasheet (optional): franka_description arm (franka_inertials, mass_override).
 ROBOTS = {
-    # acceleration / jerk: franka_description for the FR3, Isaac's shipped Panda XRDF for the Panda
     "fr3": {
         "usd": "/Isaac/Robots/FrankaRobotics/FrankaFR3/fr3.usd",
+        "home": HOME,
+        "tcp": ("fr3_hand_tcp", TCP_Z),
+        "base_link": "fr3_link0",
+        "ignore": {"fr3_link7": ["fr3_hand", "fr3_leftfinger", "fr3_rightfinger"]},
+        "gripper": {"joints": ["fr3_finger_joint1"], "scale": [0.5], "unit": "m"},
+        "wrist_camera": "fr3_hand/wrist_camera",
         "accel": [10.0] * 7,
         "jerk": [5000.0] * 7,
         "datasheet": "fr3",
@@ -39,6 +50,12 @@ ROBOTS = {
     },
     "panda": {
         "usd": "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd",
+        "home": HOME,
+        "tcp": ("panda_hand_tcp", TCP_Z),
+        "base_link": "panda_link0",
+        "ignore": {"panda_link7": ["panda_hand", "panda_leftfinger", "panda_rightfinger"]},
+        "gripper": {"joints": ["panda_finger_joint1"], "scale": [0.5], "unit": "m"},
+        "wrist_camera": "panda_hand/wrist_camera",
         "accel": [15.0, 7.5, 10.0, 12.5, 15.0, 20.0, 20.0],
         "jerk": [7500.0, 3750.0, 5000.0, 6250.0, 7500.0, 10000.0, 10000.0],
         "datasheet": "fer",
@@ -47,6 +64,7 @@ ROBOTS = {
         "mass_override": "fer",
     },
 }
+DESCRIPTION_KEYS = ("gripper", "wrist_camera", "gains", "barriers")  # ROBOTS entries copied into description.json
 _DRIVE = re.compile(r"\s*isaac:source_drive\s+(\{.*\})\s*$", re.S)
 
 
@@ -112,15 +130,16 @@ def fix_xrdf(xrdf: dict, robot: str) -> dict:
     Input must be the raw editor output; running it on its own output fails (link0 is already moved).
     """
     x = copy.deepcopy(xrdf)
-    x["tool_frames"] = [f"{robot}_hand_tcp"]
+    spec = ROBOTS[robot]
+    x["tool_frames"] = [spec["tcp"][0]]
     ignore = x["self_collision"].setdefault("ignore", {})
-    hand = {f"{robot}_hand", f"{robot}_leftfinger", f"{robot}_rightfinger"}
-    ignore[f"{robot}_link7"] = sorted(set(ignore.get(f"{robot}_link7", [])) | hand)
-    x["cspace"]["acceleration_limits"] = list(ROBOTS[robot]["accel"])
-    x["cspace"]["jerk_limits"] = list(ROBOTS[robot]["jerk"])
+    for link, others in spec.get("ignore", {}).items():
+        ignore[link] = sorted(set(ignore.get(link, [])) | set(others))
+    x["cspace"]["acceleration_limits"] = list(spec["accel"])
+    x["cspace"]["jerk_limits"] = list(spec["jerk"])
     # link0's spheres reach below the base plane: self-collision only, as Isaac's Panda XRDF does
     world = x["world_collision"]["geometry"]
-    base = f"{robot}_link0"
+    base = spec["base_link"]
     x["geometry"][f"{robot}_self_only"] = {"spheres": {base: x["geometry"][world]["spheres"].pop(base)}}
     x["geometry"][f"{robot}_self"] = {"clone": [world, f"{robot}_self_only"]}
     x["self_collision"]["geometry"] = f"{robot}_self"
@@ -214,7 +233,7 @@ def franka_inertials(arm: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
 def mass_override(robot: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
     """{link: (mass, com, inertia)} in the USD's body frames for the robot's mass override layer ({}: none)."""
     spec = ROBOTS[robot].get("mass_override") or {}
-    sheet = franka_inertials(ROBOTS[robot]["datasheet"], fd) if spec else {}
+    sheet = franka_inertials(ROBOTS[robot]["datasheet"], fd) if spec and "datasheet" in ROBOTS[robot] else {}
     if isinstance(spec, str):  # shorthand: every link of that franka_description arm
         spec = {name: name for name in sheet}
     out = {}
@@ -235,18 +254,21 @@ def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str):
     A missing <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the USD's hand z
     (franka_description's hand frame): the exporter's Panda hand link is that frame turned 90 deg.
     """
+    spec = ROBOTS[robot]
     urdf = fix_urdf(raw_urdf, robot)
     frames = usd_to_urdf(usd_poses, urdf)
-    tcp, hand = f"{robot}_hand_tcp", f"{robot}_hand"
-    if _parse(urdf).find(f"link[@name='{tcp}']") is None:
+    (tcp, tcp_z), hand = spec["tcp"], f"{robot}_hand"
+    if tcp_z is not None and _parse(urdf).find(f"link[@name='{tcp}']") is None:
         along_z = np.eye(4)
-        along_z[2, 3] = TCP_Z
+        along_z[2, 3] = tcp_z
         urdf = set_inertials(urdf, {}, {tcp: (hand, frames[hand] @ along_z)})
     xrdf = reframe_spheres(fix_xrdf(raw_xrdf, robot), frames)
     description = {
         "robot": robot,
         "pipeline_version": PIPELINE_VERSION,
         "usd_to_urdf": {name: X.tolist() for name, X in frames.items()},
+        "tcp": tcp,
+        **{key: spec[key] for key in DESCRIPTION_KEYS if key in spec},
     }
     return urdf, xrdf, description
 
@@ -293,10 +315,14 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Build guide_motion/robots/<robot> from Isaac's robot USD.")
     parser.add_argument("--robot", choices=sorted(ROBOTS), required=True)
     parser.add_argument("--spheres", type=int, default=6, help="collision spheres per link (the XRDF test used 6)")
-    parser.add_argument("--radius-offset", type=float, default=0.01, help="the editor UI's default")
+    parser.add_argument("--radius-offset", type=float, help="default: the robot's radius_offset, else 0.01 (the editor UI's)")
     parser.add_argument("--franka-description", type=Path, default=FRANKA_DESCRIPTION)
+    parser.add_argument("--usd", help="source USD instead of the robot's usd (a path or URL)")
     args = parser.parse_args(argv)
     robot = args.robot
+    spec = ROBOTS[robot]
+    if args.radius_offset is None:
+        args.radius_offset = spec.get("radius_offset", 0.01)
 
     from isaacsim import SimulationApp
 
@@ -326,7 +352,9 @@ def main(argv=None) -> None:
         os._exit(1)  # skip Kit's teardown: nothing to save
 
     tmp = Path(tempfile.mkdtemp(prefix=f"guide_motion_{robot}_"))
-    source = get_assets_root_path() + ROBOTS[robot]["usd"]
+    source = args.usd or spec["usd"]
+    if not (Path(source).is_absolute() or "://" in source):
+        source = get_assets_root_path() + source
     stage_path = source
     context = omni.usd.get_context()
     timeline = omni.timeline.get_timeline_interface()
@@ -357,7 +385,7 @@ def main(argv=None) -> None:
     app.update()
     base = articulation_discovery.find_all_articulation_base_paths(stage)[0]
     bodies = {p.GetName(): p for p in Usd.PrimRange(stage.GetPrimAtPath(base)) if p.HasAPI(UsdPhysics.RigidBodyAPI)}
-    link0 = str(bodies[f"{robot}_link0"].GetPath())
+    link0 = str(bodies[spec["base_link"]].GetPath())
     fixed_root = any(p.IsA(UsdPhysics.FixedJoint) and not UsdPhysics.Joint(p).GetBody0Rel().GetTargets()
                      for p in Usd.PrimRange(stage.GetPrimAtPath(base)))
 
@@ -377,8 +405,8 @@ def main(argv=None) -> None:
         path = editor.link_path(link)
         points, faces, counts = sphere_generation.compute_link_frame_mesh(path, path + mesh)
         editor.collision_sphere_editor.generate_spheres(path, points, faces, counts, args.spheres, args.radius_offset, False)
-    editor.active_joints[:] = [name.startswith(f"{robot}_joint") for name in editor.dof_names]
-    editor.joint_positions = np.array((HOME + [0.0, 0.0])[: editor.num_dof], dtype=float)
+    editor.active_joints[:] = [i < len(spec["home"]) for i in range(editor.num_dof)]  # the arm's DOFs come first
+    editor.joint_positions = np.array((list(spec["home"]) + [0.0] * editor.num_dof)[: editor.num_dof], dtype=float)
     editor.export_xrdf(str(raw / f"{robot}.xrdf"), format_version=2.0)
     urdf, xrdf, meta = build((raw / f"{robot}.urdf").read_text(), yaml.safe_load((raw / f"{robot}.xrdf").read_text()), usd_poses, robot)
 
@@ -397,7 +425,7 @@ def main(argv=None) -> None:
         app.update()
         return arm.get_dof_positions().numpy()[0][arm_dofs].astype(float)
 
-    settle(HOME)
+    settle(spec["home"])
     names = list(arm.link_names)
     unknown = sorted(set(names) - set(meta["usd_to_urdf"]))
     if unknown:
@@ -460,11 +488,12 @@ def main(argv=None) -> None:
     # Spec 9, informational (no tolerance): the FR3's masses come from PhysX's colliders; compare once
     # with franka_description's. Every PhysX link is listed, None where franka_description has no such
     # link: Isaac 6.0's FR3 has 13 PhysX links, fr3_link8 and fr3_hand_tcp being 1.0 kg rigid bodies.
-    datasheet = franka_inertials(ROBOTS[robot]["datasheet"], args.franka_description)
-    meta["mass_check_kg"] = {n: [float(m), datasheet[n][0] if n in datasheet else None] for n, m in zip(names, masses)}
-    for name, (physx, sheet) in meta["mass_check_kg"].items():
-        sheet = "none" if sheet is None else f"{sheet:.3f} kg"
-        print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
+    if "datasheet" in spec:
+        datasheet = franka_inertials(spec["datasheet"], args.franka_description)
+        meta["mass_check_kg"] = {n: [float(m), datasheet[n][0] if n in datasheet else None] for n, m in zip(names, masses)}
+        for name, (physx, sheet) in meta["mass_check_kg"].items():
+            sheet = "none" if sheet is None else f"{sheet:.3f} kg"
+            print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
     meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
     if override:
         meta["mass_override_kg"] = {n: {"asset": asset_kg.get(n), "override": float(v[0])} for n, v in override.items()}
