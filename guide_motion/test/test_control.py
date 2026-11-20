@@ -215,3 +215,45 @@ def test_joints_only_below_six_dof(fr3_model):
             c.step(target, model.home, np.zeros(4))
     u = c.step(Target(mode=JOINTS, joints=model.home), model.home, np.zeros(4))
     assert u.shape == (4,) and np.all(np.isfinite(u))
+
+
+def _rollout(model, target, seconds):
+    """The host's 60 Hz torque step on a 120 Hz Pinocchio plant with the model's masses (explicit Euler):
+    (q, peak |u| per joint, infeasible steps)."""
+    import pinocchio as pin
+
+    from guide_motion.model import Model
+
+    plant, c = Model(model.urdf_text, model.xrdf), Controller(model, "torque")
+    q, qd, peak = model.home.copy(), np.zeros(model.nq_arm), np.zeros(model.nq_arm)
+    for k in range(int(seconds * 120)):
+        if k % 2 == 0:
+            u = c.step(target, q, qd)
+            peak = np.maximum(peak, np.abs(u))
+        qd = qd + pin.aba(plant.pin_model, plant.pin_data, q, qd, u) / 120
+        q = q + qd / 120
+    return q, peak, c.events["infeasible"]
+
+
+def test_the_psm_reaches_a_wrist_offset():
+    """T3: +1 cm x, -1 cm z and the wrist pitched 20 deg, within 0.5 mm / 1 deg in 2 s (wrist links of 0.3 g)."""
+    from scipy.spatial.transform import Rotation
+
+    from guide_motion.model import Model
+
+    model = Model.load("psm")
+    p, _ = model.ee_pose(model.home)
+    _, R = model.ee_pose(model.home + [0, 0, 0, 0, math.radians(20), 0])
+    q, peak, infeasible = _rollout(model, Target(position=p + [0.01, 0, -0.01], rotation=R), 2.0)
+    p_end, R_end = model.ee_pose(q)
+    assert np.all(np.isfinite(q)) and infeasible == 0 and np.all(peak <= model.max_effort)
+    assert np.linalg.norm(p_end - p - [0.01, 0, -0.01]) <= 5e-4 and Rotation.from_matrix(R_end @ R.T).magnitude() <= math.radians(1)
+
+
+def test_the_ecm_takes_a_joint_step():
+    """T3: the 4-DOF ECM (JOINTS only) to home + 0.1 (rad, m) within 0.005 in 2 s."""
+    from guide_motion.model import Model
+
+    model = Model.load("ecm")
+    q, peak, infeasible = _rollout(model, Target(mode=JOINTS, joints=model.home + 0.1), 2.0)
+    assert infeasible == 0 and np.all(peak <= model.max_effort) and np.abs(q - model.home - 0.1).max() <= 5e-3

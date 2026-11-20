@@ -86,6 +86,9 @@ ROBOTS = {
         "home": [0.0, 0.02856, 0.11609, 0.0],
         "tcp": ("ecm_tool_link", None),
         "base_link": "ecm_base_link",
+        # the endoscope rides the insertion carriage along the pitch end link (sphere gap >= 22 mm over random q);
+        # as a barrier row it made a 0.1 rad JOINTS step infeasible (T3, offline)
+        "ignore": {"ecm_pitch_end_link": ["ecm_tool_link"]},
         "gripper": None,
         "accel": [10.0] * 4,
         "jerk": [5000.0] * 4,

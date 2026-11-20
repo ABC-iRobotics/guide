@@ -6,7 +6,8 @@
 hold:   no targets for 5 s, so the host's stale hold: mean tool error over the last 4 s <= 0.1 mm.
 square: 2 s hold, then a 10 cm square at 10 cm/s as a 20 Hz zero-order hold: mean path deviation
         on lap 2 <= 3 mm (torque) / 2 mm (velocity); no NaN; |command| <= the URDF limits. Saves q.
-home:   start 1 rad off home on joints 1, 2 and 4, then host.home() (Reset under oscbf, Ruling 2):
+        --scale shrinks it (the PSM's: 0.1, a 1 cm square at 1 cm/s): then <= 0.5 mm (peg_transfer plan T3).
+home:   start 1 rad (the dVRK arms: 0.5) off home on joints 1, 2 and 4, then host.home() (Reset under oscbf, Ruling 2):
         peak |qd| per joint against the URDF velocity limits (controller, B3b); final error <= 0.01 rad.
 blockbin: block_bin.usd's FR3 (its wrist camera included), registered before play as GUIDE does;
         then the restart check's 2 s stale hold and joint target, with the same gates.
@@ -27,14 +28,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--robot", choices=["fr3", "panda"], required=True)
+parser.add_argument("--robot", choices=["fr3", "panda", "psm", "ecm"], required=True)
 parser.add_argument("--mode", choices=["torque", "velocity", "baseline"], required=True)
 parser.add_argument("--check", choices=["hold", "square", "rtf", "home", "restart", "blockbin"], required=True)
 parser.add_argument("--baseline", help="rtf: the baseline run's JSON")
+parser.add_argument("--scale", type=float, default=1.0, help="square: its size and speed, x the 10 cm at 10 cm/s")
 parser.add_argument("--out", required=True)
 args = parser.parse_args()
 assert args.mode != "baseline" or args.check == "rtf", "the baseline exists for the rtf check only"
 assert args.check != "blockbin" or args.robot == "fr3", "block_bin's robot is the FR3"
+assert args.robot != "ecm" or args.check in ("hold", "home", "restart"), "the 4-DOF ECM takes JOINTS targets only"
 
 from isaacsim import SimulationApp  # noqa: E402
 
@@ -57,10 +60,11 @@ from guide_motion.targets import JOINTS, Target  # noqa: E402
 
 PHYSICS_HZ, FRAME_HZ, TARGET_HZ = 120, 60, 20.0
 HOLD_S, LAP_S, SETTLE_FRAMES = 2.0, 4.0, 30
-SQUARE = np.array([[0, 0, 0], [0, 0.1, 0], [0.1, 0.1, 0], [0.1, 0, 0], [0, 0, 0]], float)  # +y, +x, -y, -x
+SQUARE = args.scale * np.array([[0, 0, 0], [0, 0.1, 0], [0.1, 0.1, 0], [0.1, 0, 0], [0, 0, 0]], float)  # +y, +x, -y, -x
 LIMIT = {"hold": 0.1, "square": {"torque": 3.0, "velocity": 2.0}, "rtf": {"torque": 2.5, "velocity": 1.2}}
-FAR = np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0])  # home check: start offset from home, rad
-MOVED = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # restart check: the joint target's offset from home, rad
+if args.scale < 1.0:  # peg_transfer plan T3: the PSM's 1 cm square
+    LIMIT["square"] = {"torque": 0.5, "velocity": 0.5}
+DVRK = args.robot in ("psm", "ecm")
 RESET_S, MOVE2_S = 5.0, 7.0  # restart check: Reset, then the second joint target
 
 
@@ -76,7 +80,8 @@ def square_offset(t):
 
 world = World(stage_units_in_meters=1.0, physics_dt=1.0 / PHYSICS_HZ, rendering_dt=1.0 / FRAME_HZ)
 world.get_physics_context().enable_gpu_dynamics(False)
-world.scene.add_default_ground_plane()
+if not DVRK:  # the dVRK arms hang below their base (the RCM), through z = 0
+    world.scene.add_default_ground_plane()
 UsdLux.DistantLight.Define(world.stage, "/World/light").CreateIntensityAttr(3000)
 BLOCKBIN = args.check == "blockbin"
 ROOT = "/Scene_0/fr3" if BLOCKBIN else "/World/robot"
@@ -90,6 +95,9 @@ annotator = rep.AnnotatorRegistry.get_annotator("rgb")
 annotator.attach([rep.create.render_product(camera, (640, 480))])  # one camera: the measurement's light load
 
 model = Model.load(args.robot)
+FAR = np.zeros(model.nq_arm)  # home check: start offset from home, rad
+FAR[[0, 1, 3]] = 0.5 if DVRK else 1.0
+MOVED = np.r_[0.3, np.zeros(model.nq_arm - 1)]  # restart check: the joint target's offset from home, rad
 arm = Articulation(ROOT)
 arm.set_sleep_thresholds(0.0)  # awake in every run: a sleeping arm's physics is free and fakes the baseline
 
@@ -105,7 +113,7 @@ host = register() if BLOCKBIN else None  # before play, as in GUIDE: the arm sta
 world.reset()
 dofs = list(arm.dof_names)
 ARM = [dofs.index(j) for j in model.arm_joints]
-FINGER, FINGERS = dofs.index(model.gripper_joint), [i for i, name in enumerate(dofs) if "finger" in name]
+FINGER, FINGERS = dofs.index(model.gripper_joint) if model.gripper_joint else None, [i for i, name in enumerate(dofs) if "finger" in name]
 if not BLOCKBIN:
     home = np.zeros(arm.num_dofs)
     home[ARM] = model.home + (FAR if args.check == "home" else 0.0)
@@ -156,7 +164,7 @@ for i in range(frames):
     world.step(render=True)
     annotator.get_data()
     frame_ms.append(1e3 * (time.perf_counter() - start))
-finger = float(arm.get_dof_positions().numpy()[0][FINGER])
+finger = float(arm.get_dof_positions().numpy()[0][FINGER]) if FINGER is not None else float("nan")
 
 result = {"robot": args.robot, "mode": args.mode, "check": args.check, "frames": frames}
 ok = True
@@ -178,7 +186,8 @@ else:
                   infeasible=host.diagnostics["infeasible"], refused=host.diagnostics["refused"])
     ok = not result["nan"] and result["u_over_limit"] <= 1.0 + 1e-6 and not result["refused"]
     if args.check == "hold":
-        error = 1e3 * np.linalg.norm(p - host._hold.position, axis=1)[t >= 1.0]
+        held = model.ee_pose(host._hold.joints)[0] if host._hold.mode == JOINTS else host._hold.position  # the ECM holds joints
+        error = 1e3 * np.linalg.norm(p - held, axis=1)[t >= 1.0]
         result.update(hold_mm_mean=float(error.mean()), hold_mm_max=float(error.max()), stale=host.diagnostics["stale"])
         ok = ok and result["hold_mm_mean"] <= LIMIT["hold"] and result["stale"]
     elif args.check == "home":

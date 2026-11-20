@@ -33,6 +33,7 @@ self_collision:
     - ecm_pitch_end_link
     ecm_pitch_end_link:
     - ecm_main_insertion_link
+    - ecm_tool_link
     ecm_main_insertion_link:
     - ecm_tool_link
     ecm_tool_link:
