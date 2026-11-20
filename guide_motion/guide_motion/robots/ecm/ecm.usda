@@ -1,0 +1,42 @@
+#usda 1.0
+(
+    defaultPrim = "ecm"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "ecm" (
+    prepend references = @../../../../guide_tasks/peg_transfer/assets/dvrk/ecm/ecm.usd@
+)
+{
+    over "ecm_remote_center_link" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0, 0)
+        float3 physics:diagonalInertia = (1e-7, 1e-7, 1e-7)
+        float physics:mass = 0.001
+        quatf physics:principalAxes = (1, 0, 0, 0)
+    }
+
+    over "ecm_end_link" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0, 0)
+        float3 physics:diagonalInertia = (1e-7, 1e-7, 1e-7)
+        float physics:mass = 0.001
+        quatf physics:principalAxes = (1, 0, 0, 0)
+    }
+
+    over "ecm_tip_link" (
+        prepend apiSchemas = ["PhysicsMassAPI"]
+    )
+    {
+        point3f physics:centerOfMass = (0, 0, 0)
+        float3 physics:diagonalInertia = (1e-7, 1e-7, 1e-7)
+        float physics:mass = 0.001
+        quatf physics:principalAxes = (1, 0, 0, 0)
+    }
+}
+

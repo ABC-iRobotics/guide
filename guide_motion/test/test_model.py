@@ -100,3 +100,20 @@ def test_tcp_twist_is_the_tool_frames_finite_difference_velocity(fr3_model):
 def test_gripper_from_description(fr3_model):
     assert fr3_model.gripper_joints == ["fr3_finger_joint1"] and fr3_model.gripper_unit == "m"
     np.testing.assert_array_equal(fr3_model.gripper_scale, [0.5])
+
+
+def test_psm_prismatic():
+    """The insertion reaches the URDF prismatic with the USD's limits, and the tip hangs below the RCM by the
+    insertion (+2.8 mm): the exporter's 0.0565 m authored offset of the shaft is undone (fix_urdf G)."""
+    import xml.etree.ElementTree as ET
+
+    from guide_motion.model import Model
+
+    model = Model.load("psm")
+    joint = ET.fromstring(model.urdf_text).find("joint[@name='psm_main_insertion_joint']")
+    assert joint.get("type") == "prismatic"
+    np.testing.assert_allclose([model.lower[2], model.upper[2]], [0.0565, 0.24], atol=1e-6)
+    tip, _ = model.ee_pose(model.home)
+    np.testing.assert_allclose(tip, [0.0, 0.0, -model.home[2] - 0.0028], atol=2e-4)
+    deeper, _ = model.ee_pose(model.home + [0, 0, 0.05, 0, 0, 0])
+    np.testing.assert_allclose(deeper - tip, [0.0, 0.0, -0.05], atol=1e-6)

@@ -214,3 +214,16 @@ def test_the_panda_override_is_franka_description_on_every_link():
     o = description.mass_override("panda")
     assert set(o) == {f"panda_link{i}" for i in range(8)} | {"panda_hand", "panda_leftfinger", "panda_rightfinger"}
     assert o["panda_hand"][0] == 0.6544
+
+
+def test_a_prismatic_joints_authored_offset_is_taken_off_its_childs_joints():
+    """G (i4h's PSM): the exporter put the shaft's joints where the authored pose (insertion 0.0565 m) has them."""
+    text = """<robot name="r"><link name="a"/><link name="b"/><link name="c"/>
+      <joint name="slide" type="prismatic"><origin xyz="0 0 0" rpy="0 0 0"/><parent link="a"/><child link="b"/>
+        <axis xyz="-1 0 0"/><limit lower="0.0565" upper="0.24" velocity="0.01745329"/>
+        <!-- isaac:source_drive {"drive": {"max_force": 1.0}} --></joint>
+      <joint name="fix" type="fixed"><origin xyz="-0.0565 0 0.1" rpy="0 0 0"/><parent link="b"/><child link="c"/></joint>
+    </robot>"""
+    fixed = joints(description.fix_urdf(text, "psm", {"slide": 0.0565}))
+    np.testing.assert_allclose(np.array(fixed["fix"].find("origin").get("xyz").split(), float), [0, 0, 0.1], atol=1e-12)
+    assert joints(description.fix_urdf(text, "psm"))["fix"].find("origin").get("xyz") == "-0.0565 0 0.1"  # none given: untouched

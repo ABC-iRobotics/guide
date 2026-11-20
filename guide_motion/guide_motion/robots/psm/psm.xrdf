@@ -1,0 +1,262 @@
+format: xrdf
+format_version: 2.0
+default_joint_positions:
+  psm_yaw_joint: 0.0
+  psm_pitch_end_joint: 0.0
+  psm_main_insertion_joint: 0.1745
+  psm_tool_roll_joint: 0.0
+  psm_tool_pitch_joint: 0.0
+  psm_tool_yaw_joint: 0.0
+  psm_tool_gripper1_joint: 0.0
+  psm_tool_gripper2_joint: 0.0
+cspace:
+  joint_names:
+  - psm_yaw_joint
+  - psm_pitch_end_joint
+  - psm_main_insertion_joint
+  - psm_tool_roll_joint
+  - psm_tool_pitch_joint
+  - psm_tool_yaw_joint
+  acceleration_limits:
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  jerk_limits:
+  - 5000.0
+  - 5000.0
+  - 5000.0
+  - 5000.0
+  - 5000.0
+  - 5000.0
+world_collision:
+  geometry: auto_generated_collision_sphere_group
+self_collision:
+  geometry: auto_generated_collision_sphere_group
+  ignore:
+    psm_base_link:
+    - psm_remote_center_link
+    - psm_yaw_link
+    psm_yaw_link:
+    - psm_pitch_end_link
+    psm_pitch_end_link:
+    - psm_main_insertion_link
+    - psm_main_insertion_link_2
+    - psm_main_insertion_link_3
+    psm_main_insertion_link:
+    - psm_main_insertion_link_2
+    - psm_main_insertion_link_3
+    - psm_tool_roll_link
+    psm_tool_roll_link:
+    - psm_tool_pitch_link
+    psm_tool_pitch_link:
+    - psm_tool_yaw_link
+    psm_tool_yaw_link:
+    - psm_tool_gripper1_link
+    - psm_tool_gripper2_link
+    - psm_tool_tip_link
+    psm_remote_center_link:
+    - psm_yaw_link
+    psm_main_insertion_link_2:
+    - psm_main_insertion_link_3
+    - psm_tool_roll_link
+    psm_main_insertion_link_3:
+    - psm_tool_roll_link
+    psm_tool_gripper1_link:
+    - psm_tool_gripper2_link
+    - psm_tool_tip_link
+    psm_tool_gripper2_link:
+    - psm_tool_tip_link
+geometry:
+  auto_generated_collision_sphere_group:
+    spheres:
+      psm_pitch_end_link:
+      - center:
+        - -0.005000004412952871
+        - 0.09299999792586758
+        - 0.026000006570366017
+        radius: 0.0197
+      - center:
+        - 0.007999994891395981
+        - 0.09799999772470276
+        - 0.032000008245247256
+        radius: 0.0185
+      - center:
+        - -0.016000005784650332
+        - 0.10199999679816624
+        - 0.03800000615875255
+        radius: 0.0151
+      - center:
+        - -0.032000009191440505
+        - 0.16399999481239966
+        - 0.06000000927733773
+        radius: 0.0077
+      - center:
+        - 0.0019999886947459195
+        - 0.40899999753106975
+        - 0.033000031284921696
+        radius: 0.0054
+      - center:
+        - -0.008000008559021941
+        - 0.273999997411028
+        - 0.032000020028309976
+        radius: 0.0043
+      psm_main_insertion_link:
+      - center:
+        - -0.045000077101623334
+        - -0.010999959951236512
+        - -0.05500004413725001
+        radius: 0.0735
+      - center:
+        - -0.04300007547542389
+        - 0.02300003995805955
+        - -0.05100004417936661
+        radius: 0.0695
+      - center:
+        - 0.0009999242395781294
+        - 3.7962573701395995e-08
+        - -0.01500004510592958
+        radius: 0.0329
+      - center:
+        - 0.02999992429951739
+        - -0.00099996335263295
+        - -0.010000045716618847
+        radius: 0.0277
+      - center:
+        - -0.004000074105047731
+        - 0.030000038189333472
+        - -0.0010000450006384246
+        radius: 0.0192
+      - center:
+        - 0.030999923603060815
+        - -0.020999963397984857
+        - -4.573767703463773e-08
+        radius: 0.018
+      psm_main_insertion_link_2:
+      - center:
+        - 0.01600000487675714
+        - 7.795975496811215e-08
+        - -0.008999920068206824
+        radius: 0.0324
+      - center:
+        - 0.013000004944970809
+        - -0.001999921954613778
+        - 0.0070000799552871465
+        radius: 0.0296
+      - center:
+        - 0.013000004782963339
+        - 0.0030000778420119687
+        - -0.030999920071472623
+        radius: 0.0269
+      - center:
+        - 0.007000004757383268
+        - -0.013999922190099774
+        - -0.03699991995490928
+        radius: 0.0195
+      - center:
+        - 0.0030000049918676645
+        - 0.011000078104257677
+        - 0.018000079928345285
+        radius: 0.0186
+      - center:
+        - 0.00100000499186773
+        - -0.009999921895742326
+        - 0.018000080049263026
+        radius: 0.0177
+      psm_main_insertion_link_3:
+      - center:
+        - 0.0010000060662329294
+        - 7.94529500817935e-08
+        - 0.2700000799957435
+        radius: 0.0041
+      - center:
+        - 5.993755909854329e-09
+        - 7.936196686010361e-08
+        - 0.25300008000000684
+        radius: 0.0049
+      - center:
+        - 5.8999621167585115e-09
+        - 0.0010000792442238717
+        - 0.2310000799946549
+        radius: 0.0041
+      - center:
+        - 6.253820509321594e-09
+        - 7.968843605444971e-08
+        - 0.31400008000000684
+        radius: 0.0049
+      - center:
+        - 6.304980758397122e-09
+        - 7.97526595025178e-08
+        - 0.32600008000000685
+        radius: 0.0049
+      - center:
+        - 6.628995669208796e-09
+        - 8.0159408006949e-08
+        - 0.40200008000000687
+        radius: 0.0049
+      psm_tool_roll_link:
+      - center:
+        - 0.006999989955446869
+        - 4.6845941392533185e-08
+        - 5.163368413413123e-08
+        radius: 0.0029
+      - center:
+        - 0.005999989842915325
+        - 0.0010000468512933534
+        - 0.0020000515747423788
+        radius: 0.0029
+      - center:
+        - 0.005999990025092527
+        - 0.0020000468512933424
+        - -0.000999948425257619
+        radius: 0.0029
+      - center:
+        - 0.005999989944742962
+        - -0.001999953148706653
+        - 5.157474239037692e-08
+        radius: 0.0029
+      - center:
+        - 0.006999989832211416
+        - -0.0009999531540586001
+        - 0.0020000516336841335
+        radius: 0.0029
+      - center:
+        - 0.006999989907209028
+        - 0.0020000468459413956
+        - 0.001000051633684127
+        radius: 0.0029
+      psm_tool_pitch_link:
+      - center:
+        - 0.0009999532555215768
+        - 0.0010000313435137153
+        - 0.004000019979214499
+        radius: 0.0029
+      - center:
+        - -4.6782331575200875e-08
+        - -0.000999968728233276
+        - 0.00200002006988807
+        radius: 0.0029
+      - center:
+        - -0.001000046744478421
+        - 0.0010000313013668655
+        - 0.004000020059214504
+        radius: 0.0029
+      - center:
+        - -0.001000046702331569
+        - -0.0009999686986331333
+        - 0.00400002010988807
+        radius: 0.0029
+      - center:
+        - 0.0009999532155215742
+        - 0.0010000313181769316
+        - 0.0030000199792145003
+        radius: 0.0029
+      - center:
+        - 0.0009999532976684288
+        - -0.0009999686564862835
+        - 0.004000020029888065
+        radius: 0.0029
+tool_frames:
+- psm_tool_tip_link

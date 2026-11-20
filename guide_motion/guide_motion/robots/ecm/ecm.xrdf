@@ -1,0 +1,142 @@
+format: xrdf
+format_version: 2.0
+default_joint_positions:
+  ecm_yaw_joint: 0.0
+  ecm_pitch_end_joint: 0.0286
+  ecm_main_insertion_joint: 0.1161
+  ecm_tool_joint: 0.0
+cspace:
+  joint_names:
+  - ecm_yaw_joint
+  - ecm_pitch_end_joint
+  - ecm_main_insertion_joint
+  - ecm_tool_joint
+  acceleration_limits:
+  - 10.0
+  - 10.0
+  - 10.0
+  - 10.0
+  jerk_limits:
+  - 5000.0
+  - 5000.0
+  - 5000.0
+  - 5000.0
+world_collision:
+  geometry: auto_generated_collision_sphere_group
+self_collision:
+  geometry: auto_generated_collision_sphere_group
+  ignore:
+    ecm_base_link:
+    - ecm_remote_center_link
+    - ecm_yaw_link
+    ecm_yaw_link:
+    - ecm_pitch_end_link
+    ecm_pitch_end_link:
+    - ecm_main_insertion_link
+    ecm_main_insertion_link:
+    - ecm_tool_link
+    ecm_tool_link:
+    - ecm_end_link
+    - ecm_tip_link
+    ecm_remote_center_link:
+    - ecm_yaw_link
+    ecm_end_link:
+    - ecm_tip_link
+geometry:
+  auto_generated_collision_sphere_group:
+    spheres:
+      ecm_pitch_end_link:
+      - center:
+        - -0.152
+        - -0.0009999998942315943
+        - 0.03300000000320513
+        radius: 0.1491
+      - center:
+        - 0.0020000000000000087
+        - 0.5360000002756389
+        - 0.08599999828206453
+        radius: 0.0234
+      - center:
+        - 1.1732000604999672e-17
+        - 0.09000000024358785
+        - 0.07599999971154069
+        radius: 0.0176
+      - center:
+        - 0.0010000000000000152
+        - 0.15600000032051034
+        - 0.09999999950000386
+        radius: 0.0153
+      - center:
+        - 1.2544270373974585e-17
+        - 0.40000000032051036
+        - 0.09999999871795862
+        radius: 0.0153
+      - center:
+        - 0.0010000000000000156
+        - 0.10700000032051034
+        - 0.09999999965705393
+        radius: 0.0158
+      ecm_main_insertion_link:
+      - center:
+        - 0.0009999272738376573
+        - 0.0010000728767944236
+        - 0.0470000583764406
+        radius: 0.0108
+      - center:
+        - 0.0009999284665304924
+        - -0.015999927363205522
+        - 0.043000059396440665
+        radius: 0.0108
+      - center:
+        - 0.000999926194734616
+        - 0.016000073116794373
+        - 0.051000057476440534
+        radius: 0.0108
+      - center:
+        - -7.335090620645826e-08
+        - 0.019000072399999464
+        - 0.04000005723964568
+        radius: 0.0092
+      - center:
+        - 0.08299992659229864
+        - 0.0050000780139762375
+        - 0.055000062793621816
+        radius: 0.0066
+      - center:
+        - 0.07399992755781191
+        - -0.011999922497177809
+        - 0.05500006330246783
+        radius: 0.0066
+      ecm_tool_link:
+      - center:
+        - 0.5119999800032011
+        - 0.0010000466122190319
+        - 5.571186946214915e-08
+        radius: 0.0282
+      - center:
+        - 0.5729999799615346
+        - -0.011999953583292255
+        - 5.9176357988667243e-08
+        radius: 0.0258
+      - center:
+        - 0.38699998034076555
+        - 4.701285689554438e-08
+        - -0.005999951387492174
+        radius: 0.0228
+      - center:
+        - 0.4319999800599961
+        - 0.001000046868627274
+        - -0.000999948831721992
+        radius: 0.0193
+      - center:
+        - 0.5729999799912775
+        - 0.015000046416707748
+        - 0.001000059176357901
+        radius: 0.0252
+      - center:
+        - 0.4599999801199961
+        - 0.002000046778884385
+        - -0.0019999472414649836
+        radius: 0.0181
+tool_frames:
+- ecm_tool_link

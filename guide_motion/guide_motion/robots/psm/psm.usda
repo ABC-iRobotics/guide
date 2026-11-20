@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    defaultPrim = "psm"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "psm" (
+    prepend references = @../../../../guide_tasks/peg_transfer/assets/dvrk/psm/psm.usd@
+)
+{
+}
+

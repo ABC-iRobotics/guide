@@ -1,0 +1,119 @@
+<robot name="psm">
+  <link name="psm_base_link">
+    <inertial><origin xyz="0 -0.1701599956 -0.0856069997" rpy="0 0 0" /><mass value="2.01609993" /><inertia ixx="0.008064400405" ixy="0" ixz="0" iyy="0.008064400405" iyz="0" izz="0.008064400405" /></inertial></link>
+  <link name="psm_remote_center_link">
+    <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.01413716748" /><inertia ixx="1.272345003e-06" ixy="0" ixz="0" iyy="1.272345003e-06" iyz="0" izz="1.272345003e-06" /></inertial></link>
+  <link name="psm_yaw_link">
+    <inertial><origin xyz="-0.5279960021 -2.082893626e-08 -0.03876902026" rpy="0 0 0" /><mass value="1.470500112" /><inertia ixx="0.005882001016" ixy="-4.716350369e-19" ixz="4.716350347e-19" iyy="0.005882001016" iyz="4.716350301e-19" izz="0.005882001016" /></inertial></link>
+  <link name="psm_pitch_end_link">
+    <inertial><origin xyz="-9.891804206e-09 0.2798500027 0.0442293201" rpy="0 0 0" /><mass value="2.09100008" /><inertia ixx="0.04028646275" ixy="1.355424997e-05" ixz="8.45136547e-07" iyy="0.001701394784" iyz="-0.002226123489" izz="0.0402650718" /></inertial></link>
+  <link name="psm_main_insertion_link">
+    <inertial><origin xyz="-0.009861675285 -0.004056261581 -0.0001093848759" rpy="0 0 0" /><mass value="0.2249100059" /><inertia ixx="0.0002172768273" ixy="-5.939947035e-06" ixz="-2.943326599e-05" iyy="0.0003298686939" iyz="-1.935396576e-05" izz="0.0003368282936" /></inertial></link>
+  <link name="psm_main_insertion_link_2">
+    <inertial><origin xyz="4.915127325e-09 7.80079225e-08 8.000000684e-08" rpy="0 0 0" /><mass value="0.3332656026" /><inertia ixx="0.0003325953149" ixy="-8.491428824e-07" ixz="4.831198603e-06" iyy="0.0002591299708" iyz="-2.664682705e-07" izz="0.0001268677879" /></inertial></link>
+  <link name="psm_main_insertion_link_3">
+    <inertial><origin xyz="4.915127325e-09 7.80079225e-08 8.000000684e-08" rpy="0 0 0" /><mass value="0.0266997125" /><inertia ixx="0.001380253816" ixy="1.047740567e-09" ixz="-9.611951398e-08" iyy="0.001380254864" iyz="-2.686700739e-07" izz="3.204698979e-07" /></inertial></link>
+  <link name="psm_tool_roll_link">
+    <inertial><origin xyz="0.005823389827 4.68522385e-08 5.156433326e-08" rpy="0 0 0" /><mass value="0.0003322499979" /><inertia ixx="2.482069885e-09" ixy="-9.879254867e-12" ixz="-1.573034683e-11" iyy="4.812091614e-09" iyz="1.122599533e-11" izz="5.119248579e-09" /></inertial></link>
+  <link name="psm_tool_pitch_link">
+    <inertial><origin xyz="-4.674035299e-08 3.13117051e-08 0.003576320151" rpy="0 0 0" /><mass value="0.0002578400017" /><inertia ixx="3.122215151e-09" ixy="-1.170055833e-11" ixz="-3.507511609e-11" iyy="3.222788704e-09" iyz="4.672377788e-11" izz="1.326311839e-09" /></inertial></link>
+  <link name="psm_tool_yaw_link">
+    <inertial><origin xyz="-3.164342648e-08 2.004454971e-08 5.024469569e-08" rpy="0 0 0" /><mass value="0.1000000015" /><inertia ixx="1.712130962e-08" ixy="-1.388871094e-08" ixz="-2.012672399e-09" iyy="1.980059487e-07" iyz="-4.511013034e-10" izz="2.060826176e-07" /></inertial></link>
+  <link name="psm_tool_gripper1_link">
+    <inertial><origin xyz="0.0008847483543 0.001435020033 0.0001960939419" rpy="0 0 0" /><mass value="0.01999999955" /><inertia ixx="2.911172018e-07" ixy="4.145865181e-08" ixz="6.402118629e-09" iyy="3.225378816e-08" iyz="-3.186956014e-08" izz="2.881847938e-07" /></inertial></link>
+  <link name="psm_tool_gripper2_link">
+    <inertial><origin xyz="-0.0008848116595 0.001435020024 -0.0001959997986" rpy="0 0 0" /><mass value="0.01999999955" /><inertia ixx="2.905807716e-07" ixy="-4.157972506e-08" ixz="6.403133725e-09" iyy="3.232398075e-08" iyz="3.178675009e-08" izz="2.877685587e-07" /></inertial></link>
+  <link name="psm_tool_tip_link">
+    <inertial><origin xyz="-5.030788854e-08 -3.188904106e-08 -2.00445494e-08" rpy="0 0 0" /><mass value="0.1000000015" /><inertia ixx="0.0003999999899" ixy="3.236773001e-20" ixz="-1.492702969e-19" iyy="0.0003999999899" iyz="1.430582122e-20" izz="0.0003999999899" /></inertial></link>
+  <joint name="psm_remote_center_joint" type="fixed">
+    <parent link="psm_base_link" />
+    <child link="psm_remote_center_link" />
+  </joint>
+  <joint name="psm_yaw_joint" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 1.57079633" />
+    <parent link="psm_base_link" />
+    <child link="psm_yaw_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.58829995" upper="1.58829995" velocity="2.09999986" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_pitch_end_joint" type="revolute">
+    <origin xyz="0 0 0" rpy="1.57079637 -0.00000004 -1.57079629" />
+    <parent link="psm_yaw_link" />
+    <child link="psm_pitch_end_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-0.9251" upper="0.9251" velocity="2.09999986" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_main_insertion_joint" type="prismatic">
+    <origin xyz="0.00000007 0.43180009 0.00000003" rpy="-0.00000004 -0.00000002 1.57079629" />
+    <parent link="psm_pitch_end_link" />
+    <child link="psm_main_insertion_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0.0565" upper="0.23999999" velocity="0.9999998556" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "linear", "source": "physx"} -->
+  </joint>
+  <joint name="psm_main_insertion_joint_2" type="fixed">
+    <origin xyz="4.555455554e-09 -4e-08 -5e-08" rpy="0 -1.57079631 -0.00000004" />
+    <parent link="psm_main_insertion_link" />
+    <child link="psm_main_insertion_link_2" />
+  </joint>
+  <joint name="psm_main_insertion_joint_3" type="fixed">
+    <origin xyz="4.555455554e-09 -4e-08 -5e-08" rpy="0 -1.57079631 -0.00000004" />
+    <parent link="psm_main_insertion_link" />
+    <child link="psm_main_insertion_link_3" />
+  </joint>
+  <joint name="psm_tool_roll_joint" type="revolute">
+    <origin xyz="-0.4162000654 1e-08 -7e-08" rpy="0 0.00000008 -0.00000004" />
+    <parent link="psm_main_insertion_link" />
+    <child link="psm_tool_roll_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-4.53789973" upper="4.53789973" velocity="2.09999986" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_tool_pitch_joint" type="revolute">
+    <origin xyz="0.00000001 0 0.00000002" rpy="1.57079639 0 -1.57079633" />
+    <parent link="psm_tool_roll_link" />
+    <child link="psm_tool_pitch_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.39629989" upper="1.39629989" velocity="2.09999986" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_tool_yaw_joint" type="revolute">
+    <origin xyz="0 0 0.0091" rpy="1.57079628 -0.00000002 -1.57079631" />
+    <parent link="psm_tool_pitch_link" />
+    <child link="psm_tool_yaw_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-0.52359878" upper="0.52359878" velocity="2.09999986" effort="6000" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 6000.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_tool_gripper1_joint" type="revolute">
+    <origin xyz="-0 -0 0" rpy="0 0.00000005 0.00000002" />
+    <parent link="psm_tool_yaw_link" />
+    <child link="psm_tool_gripper1_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-0.52359878" upper="0" velocity="2.09999986" effort="1200" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 1200.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_tool_gripper2_joint" type="revolute">
+    <origin xyz="-0 -0 0" rpy="0 0.00000005 0.00000002" />
+    <parent link="psm_tool_yaw_link" />
+    <child link="psm_tool_gripper2_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.52359878" velocity="2.09999986" effort="1200" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 1200.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="psm_tool_tip_joint" type="fixed">
+    <origin xyz="0 0.0093 0" rpy="0 1.57079631 -1.57079631" />
+    <parent link="psm_tool_yaw_link" />
+    <child link="psm_tool_tip_link" />
+  </joint>
+</robot>

@@ -23,6 +23,7 @@ ROBOTS_DIR = Path(__file__).parent / "robots"
 FRANKA_DESCRIPTION = Path.home() / "ros2_ws" / "src" / "franka_description"
 HOME = [0.0, -0.785398, 0.0, -2.35619, 0.0, 1.5708, 0.785398]  # block_bin init.yaml
 TCP_Z = 0.1034  # franka_description franka_hand.xacro tcp_xyz
+DVRK = Path(__file__).parents[2] / "guide_tasks" / "peg_transfer" / "assets" / "dvrk"  # editable install: the source tree
 FRAME_MASS = (0.001, np.zeros(3), 1e-7 * np.eye(3))  # a frame the asset made a body: 1 g (PhysX needs > 0)
 # The only per-robot table. usd: assets-root-relative, an absolute path or a URL. home: block_bin init.yaml.
 # tcp: (frame, z offset along <robot>_hand to add it at | None: the asset has it). ignore: XRDF self-collision
@@ -63,6 +64,36 @@ ROBOTS = {
         # and torque control chattered).
         "mass_override": "fer",
     },
+    # dVRK (peg_transfer): i4h's serial chains, world-anchored, no graft links. home: davinci_sim scene_info.json.
+    # The editor's own ignore lines already hold the adjacent links, jaws <-> tool_yaw and jaw <-> jaw.
+    "psm": {
+        "usd": str(DVRK / "psm" / "psm.usd"),
+        "home": [0.0, 0.0, 0.17446, 0.0, 0.0, 0.0],
+        "tcp": ("psm_tool_tip_link", None),
+        "base_link": "psm_base_link",
+        # the insertion carriage's fixed links slide along the pitch end link (0.54 of random q in collision)
+        "ignore": {"psm_pitch_end_link": ["psm_main_insertion_link_2", "psm_main_insertion_link_3"]},
+        "gripper": {"joints": ["psm_tool_gripper1_joint", "psm_tool_gripper2_joint"], "scale": [-0.5, 0.5], "unit": "rad"},
+        "accel": [10.0] * 6,
+        "jerk": [5000.0] * 6,
+        "radius_offset": 0.001,
+        "gains": {"torque": {"kp": 100.0, "kd": 20.0}},
+        # base frame: the RCM, the tip at about z = -insertion at home
+        "barriers": {"workspace": [[-0.15, 0.15], [-0.15, 0.15], [-0.26, -0.03]], "singularity": 1e-6},
+    },
+    "ecm": {
+        "usd": str(DVRK / "ecm" / "ecm.usd"),
+        "home": [0.0, 0.02856, 0.11609, 0.0],
+        "tcp": ("ecm_tool_link", None),
+        "base_link": "ecm_base_link",
+        "gripper": None,
+        "accel": [10.0] * 4,
+        "jerk": [5000.0] * 4,
+        "radius_offset": 0.001,
+        "barriers": {"workspace": [[-0.3, 0.3], [-0.3, 0.3], [-0.3, 0.05]]},
+        # frames authored massless without colliders: PhysX made each a 1 kg body (2 kg on the tool link)
+        "mass_override": {"ecm_remote_center_link": FRAME_MASS, "ecm_end_link": FRAME_MASS, "ecm_tip_link": FRAME_MASS},
+    },
 }
 DESCRIPTION_KEYS = ("gripper", "wrist_camera", "gains", "barriers")  # ROBOTS entries copied into description.json
 _DRIVE = re.compile(r"\s*isaac:source_drive\s+(\{.*\})\s*$", re.S)
@@ -76,12 +107,14 @@ def _parse(text: str) -> ET.Element:
     return ET.fromstring(text, ET.XMLParser(target=ET.TreeBuilder(insert_comments=True)))
 
 
-def fix_urdf(text: str, robot: str) -> str:
+def fix_urdf(text: str, robot: str, authored: dict | None = None) -> str:
     """The USD exporter's URDF with the XRDF test's defects fixed.
 
     A: mimic multiplier -1 -> +1. B: prismatic velocity had the degree conversion -> undone.
     C: no effort -> the USD drive's max force (a mimic joint, or one without a drive, takes its leader's).
     E: a floating joint from a parentless world link -> dropped. F: a mimic joint takes its leader's velocity.
+    G: authored {prismatic joint: q} its asset's link poses sit at (_authored_offsets): the exporter put the joints
+    on that joint's child link where the authored pose has them, q along the axis off -> moved back.
     Joint limits stay the USD's. Visual and collision geometry are dropped: collision is
     the XRDF's spheres, and OSCBF's URDF parser would load every mesh.
     Input must be the raw exporter/editor output; running it on its own output corrupts the finger velocity.
@@ -113,6 +146,13 @@ def fix_urdf(text: str, robot: str) -> str:
             limit.set("velocity", _num(float(limit.get("velocity")) * 180.0 / math.pi))
         leader = mimic.get("joint") if mimic is not None else name
         limit.set("effort", _num(effort[name] if name in effort else effort[leader]))
+    for name, q in (authored or {}).items():  # G (the PSM: insertion authored at 0.0565 m, PhysX at its joint frames)
+        child = joints[name].find("child").get("link")
+        axis = np.array(joints[name].find("axis").get("xyz").split(), float)
+        for joint in joints.values():
+            if joint.find("parent").get("link") == child:
+                origin = joint.find("origin")
+                origin.set("xyz", " ".join(map(_num, np.array(origin.get("xyz").split(), float) - q * axis)))
     for joint in joints.values():  # F (the Panda): a mimic joint's own velocity is meaningless; its leader's
         mimic, limit = joint.find("mimic"), joint.find("limit")
         if mimic is not None and limit is not None:
@@ -140,29 +180,34 @@ def fix_xrdf(xrdf: dict, robot: str) -> dict:
     # link0's spheres reach below the base plane: self-collision only, as Isaac's Panda XRDF does
     world = x["world_collision"]["geometry"]
     base = spec["base_link"]
-    x["geometry"][f"{robot}_self_only"] = {"spheres": {base: x["geometry"][world]["spheres"].pop(base)}}
-    x["geometry"][f"{robot}_self"] = {"clone": [world, f"{robot}_self_only"]}
-    x["self_collision"]["geometry"] = f"{robot}_self"
+    if base in x["geometry"][world]["spheres"]:  # the dVRK bases have no mesh, hence no spheres
+        x["geometry"][f"{robot}_self_only"] = {"spheres": {base: x["geometry"][world]["spheres"].pop(base)}}
+        x["geometry"][f"{robot}_self"] = {"clone": [world, f"{robot}_self_only"]}
+        x["self_collision"]["geometry"] = f"{robot}_self"
     return x
 
 
-def link_poses(urdf_text: str, root: str | None = None) -> dict:
-    """Every frame's 4x4 pose at q = 0, relative to `root` (default: the URDF's root link)."""
+def link_poses(urdf_text: str, root: str | None = None, q: dict | None = None) -> dict:
+    """Every frame's 4x4 pose at q ({joint: value}, others 0), relative to `root` (default: the URDF's root link)."""
     import pinocchio as pin
 
     model = pin.buildModelFromXML(urdf_text)
     data = model.createData()
-    pin.framesForwardKinematics(model, data, pin.neutral(model))
+    config = pin.neutral(model)
+    for name, value in (q or {}).items():
+        config[model.joints[model.getJointId(name)].idx_q] = value
+    pin.framesForwardKinematics(model, data, config)
     origin = data.oMf[model.getFrameId(root)].inverse() if root else pin.SE3.Identity()
     return {frame.name: (origin * data.oMf[i]).homogeneous for i, frame in enumerate(model.frames)}
 
 
-def usd_to_urdf(usd_poses: dict, urdf_text: str) -> dict:
+def usd_to_urdf(usd_poses: dict, urdf_text: str, authored: dict | None = None) -> dict:
     """Per link, the fixed transform taking USD body-frame coordinates into the URDF link frame.
 
-    usd_poses: each link prim's pose at q = 0 relative to the root link prim (timeline stopped).
+    usd_poses: each link prim's authored pose relative to the root link prim (timeline stopped), at the
+    joint positions `authored` ({joint: q}, others 0).
     """
-    urdf = link_poses(urdf_text)
+    urdf = link_poses(urdf_text, q=authored)
     return {name: np.linalg.inv(urdf[name]) @ np.asarray(T, float) for name, T in usd_poses.items() if name in urdf}
 
 
@@ -248,15 +293,15 @@ def mass_override(robot: str, fd: Path = FRANKA_DESCRIPTION) -> dict:
     return out
 
 
-def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str):
-    """Kit-free half of the pipeline: (urdf text, xrdf dict, description dict).
+def build(raw_urdf: str, raw_xrdf: dict, usd_poses: dict, robot: str, authored: dict | None = None):
+    """Kit-free half of the pipeline: (urdf text, xrdf dict, description dict). authored: see fix_urdf (G).
 
     A missing <robot>_hand_tcp (the Panda USD has none) is added 0.1034 m along the USD's hand z
     (franka_description's hand frame): the exporter's Panda hand link is that frame turned 90 deg.
     """
     spec = ROBOTS[robot]
-    urdf = fix_urdf(raw_urdf, robot)
-    frames = usd_to_urdf(usd_poses, urdf)
+    urdf = fix_urdf(raw_urdf, robot, authored)
+    frames = usd_to_urdf(usd_poses, urdf, authored)
     (tcp, tcp_z), hand = spec["tcp"], f"{robot}_hand"
     if tcp_z is not None and _parse(urdf).find(f"link[@name='{tcp}']") is None:
         along_z = np.eye(4)
@@ -282,8 +327,38 @@ def principal_inertia(inertia):
     return diagonal, np.array([w, x, y, z])
 
 
-def _write_mass_override(path: str, source: str, inertials: dict) -> None:
-    """A wrapper USD that references `source` and overrides its links' mass properties (Kit's pxr)."""
+def _authored_offsets(stage, root: str) -> dict:
+    """{prismatic joint: q} where the authored link poses put it, when not 0 (Kit's pxr); a revolute one raises.
+
+    The offset of the joint's body1 frame from its body0 frame along its axis. i4h's PSM insertion is authored
+    at 0.0565 m (its lower limit), every other dVRK and Franka joint at 0.
+    """
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
+
+    cache, out = UsdGeom.XformCache(), {}
+    for prim in Usd.PrimRange(stage.GetPrimAtPath(root)):
+        if not (prim.IsA(UsdPhysics.PrismaticJoint) or prim.IsA(UsdPhysics.RevoluteJoint)):
+            continue
+        joint, frames = UsdPhysics.Joint(prim), []
+        for body, pos, rot in ((joint.GetBody0Rel(), joint.GetLocalPos0Attr(), joint.GetLocalRot0Attr()),
+                               (joint.GetBody1Rel(), joint.GetLocalPos1Attr(), joint.GetLocalRot1Attr())):
+            local = Gf.Matrix4d().SetRotate(Gf.Quatd(rot.Get())).SetTranslateOnly(Gf.Vec3d(pos.Get()))
+            frames.append(local * cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body.GetTargets()[0])))
+        relative = frames[1] * frames[0].GetInverse()  # body1's joint frame in body0's (Gf: row vectors)
+        if prim.IsA(UsdPhysics.RevoluteJoint):
+            angle = relative.ExtractRotation().GetAngle()
+            if abs(angle) > 1e-3:  # ponytail: no asset needs it yet; then rotate the child's joints as G moves them
+                raise ValueError(f"{prim.GetPath()}: authored {angle:.3f} deg off its frames; fix_urdf G handles prismatic joints only")
+            continue
+        q = relative.ExtractTranslation()["XYZ".index(prim.GetAttribute("physics:axis").Get())]
+        if abs(q) > 1e-6:
+            out[prim.GetName()] = float(q)
+    return out
+
+
+def _write_mass_override(path: str, source: str, inertials: dict, reference: str | None = None) -> None:
+    """A wrapper USD that references `source` (as `reference`, default: as given) and overrides its links' mass
+    properties (Kit's pxr)."""
     from pxr import Gf, Usd, UsdGeom, UsdPhysics
 
     stage = Usd.Stage.CreateNew(path)
@@ -292,7 +367,7 @@ def _write_mass_override(path: str, source: str, inertials: dict) -> None:
     UsdGeom.SetStageUpAxis(stage, UsdGeom.GetStageUpAxis(original))
     UsdGeom.SetStageMetersPerUnit(stage, UsdGeom.GetStageMetersPerUnit(original))
     root = stage.DefinePrim("/" + Path(path).stem, "Xform")
-    root.GetReferences().AddReference(source)
+    root.GetReferences().AddReference(reference or source)
     stage.SetDefaultPrim(root)
     links = {prim.GetName(): prim for prim in Usd.PrimRange(root) if prim.HasAPI(UsdPhysics.RigidBodyAPI)}
     for name, (mass, com, inertia) in inertials.items():
@@ -391,6 +466,10 @@ def main(argv=None) -> None:
 
     # Timeline stopped: authored link poses, and an export that does not bake the current pose (defect D).
     usd_poses = {name: np.asarray(xform_utils.get_relative_transform(prim, link0)) for name, prim in bodies.items()}
+    try:
+        authored = _authored_offsets(stage, base)
+    except ValueError as error:
+        fail("authored_offsets", error)
     raw = tmp / "raw"
     raw.mkdir()
     UsdToUrdfConverter(stage=stage, root_prim_path=base, mesh_dir_name="meshes", mesh_path_prefix="./").convert(str(raw / f"{robot}.urdf"))
@@ -401,14 +480,17 @@ def main(argv=None) -> None:
     editor = EditorState()
     editor.select_articulation(base)
     for link, meshes in editor.link_to_meshes.items():  # one mesh per link, as the UI's "Generate Spheres"
-        mesh = "/collisions" if "/collisions" in meshes else meshes[0]
         path = editor.link_path(link)
-        points, faces, counts = sphere_generation.compute_link_frame_mesh(path, path + mesh)
-        editor.collision_sphere_editor.generate_spheres(path, points, faces, counts, args.spheres, args.radius_offset, False)
+        # the collider first; Lula finds no spheres in some i4h meshes (not watertight): then the next mesh
+        for mesh in sorted(meshes, key=lambda m: not m.endswith("/collisions")):
+            points, faces, counts = sphere_generation.compute_link_frame_mesh(path, path + mesh)
+            editor.collision_sphere_editor.generate_spheres(path, points, faces, counts, args.spheres, args.radius_offset, False)
+            if editor.collision_sphere_editor.get_sphere_names_by_link(path):
+                break
     editor.active_joints[:] = [i < len(spec["home"]) for i in range(editor.num_dof)]  # the arm's DOFs come first
     editor.joint_positions = np.array((list(spec["home"]) + [0.0] * editor.num_dof)[: editor.num_dof], dtype=float)
     editor.export_xrdf(str(raw / f"{robot}.xrdf"), format_version=2.0)
-    urdf, xrdf, meta = build((raw / f"{robot}.urdf").read_text(), yaml.safe_load((raw / f"{robot}.xrdf").read_text()), usd_poses, robot)
+    urdf, xrdf, meta = build((raw / f"{robot}.urdf").read_text(), yaml.safe_load((raw / f"{robot}.xrdf").read_text()), usd_poses, robot, authored)
 
     # The simulator's mass properties go into the URDF (in its link frames).
     arm = Articulation(base)
@@ -494,18 +576,19 @@ def main(argv=None) -> None:
         for name, (physx, sheet) in meta["mass_check_kg"].items():
             sheet = "none" if sheet is None else f"{sheet:.3f} kg"
             print(f"[guide_motion.description] {name}: PhysX {physx:.3f} kg, franka_description {sheet}")
-    meta.update(source_usd=source, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
+    meta.update(source_usd=source, authored_offsets=authored, spheres_per_link=args.spheres, radius_offset=args.radius_offset, checks=checks)
     if override:
         meta["mass_override_kg"] = {n: {"asset": asset_kg.get(n), "override": float(v[0])} for n, v in override.items()}
     (out / "description.json").write_text(json.dumps(meta, indent=1))
-    if stage_path != source:
-        shutil.copy(stage_path, out / f"{robot}.usda")
     timeline.stop()
     app.update()
     destination = ROBOTS_DIR / robot
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(out, destination)
+    if override or "://" not in source:  # <robot>.usda, which mount() and the checks load: a source-tree file relatively
+        reference = source if "://" in source else os.path.relpath(source, destination)
+        _write_mass_override(str(destination / f"{robot}.usda"), source, override, reference)
     print(f"[guide_motion.description] {robot}: wrote {destination}: {checks}", flush=True)
     app.close()
     sys.exit(0)

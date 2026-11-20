@@ -10,15 +10,25 @@ from guide_motion.control import Controller
 from guide_motion.model import Model
 
 
-@pytest.mark.parametrize("robot", ["fr3", "panda"])
+@pytest.mark.parametrize("robot", ["fr3", "panda", "psm", "ecm"])
 def test_committed_descriptions_are_safe_at_home(robot):
     model = Model.load(robot)
     meta = json.loads((model.robot_dir / "description.json").read_text())
     assert meta["pipeline_version"] == description.PIPELINE_VERSION and meta["checks"]["home_self_collision"] == "free"
     assert meta["checks"]["random_self_collision"] <= 0.08 and max(meta["checks"]["mass_matrix_rel"], meta["checks"]["gravity_rel"]) <= 1e-3
-    assert model.tool_frame == f"{robot}_hand_tcp" and model.base_link == f"{robot}_link0"
+    spec = description.ROBOTS[robot]
+    assert model.tool_frame == spec["tcp"][0] and model.base_link == spec["base_link"]
+    np.testing.assert_allclose(model.home, spec["home"], atol=1e-4)  # the XRDF keeps 4 decimals
     assert Controller(model, "velocity").barrier_values(model.home).min() > 0
     assert np.all(model.max_effort > 0) and np.all(model.max_velocity > 0)
+    assert (model.robot_dir / f"{robot}.usda").is_file()  # mount() and isaac_oscbf_check load it
+
+
+def test_the_dvrk_layers_reference_the_task_assets_in_the_source_tree():
+    for robot in ("psm", "ecm"):
+        text = (description.ROBOTS_DIR / robot / f"{robot}.usda").read_text()
+        assert f"@../../../../guide_tasks/peg_transfer/assets/dvrk/{robot}/{robot}.usd@" in text
+        assert (description.ROBOTS_DIR / robot / f"../../../../guide_tasks/peg_transfer/assets/dvrk/{robot}/{robot}.usd").is_file()
 
 
 def test_the_panda_override_references_isaacs_asset():

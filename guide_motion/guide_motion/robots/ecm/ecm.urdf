@@ -1,0 +1,68 @@
+<robot name="ecm">
+  <link name="ecm_base_link">
+    <inertial><origin xyz="-0.004800000228 0 0.06700000167" rpy="0 0 0" /><mass value="2.636300087" /><inertia ixx="0.01054520067" ixy="0" ixz="0" iyy="0.01054520067" iyz="0" izz="0.01054520067" /></inertial></link>
+  <link name="ecm_remote_center_link">
+    <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001000000047" /><inertia ixx="1.000000012e-07" ixy="0" ixz="0" iyy="1.000000012e-07" iyz="0" izz="1.000000012e-07" /></inertial></link>
+  <link name="ecm_yaw_link">
+    <inertial><origin xyz="-0.4327000082 1.386848225e-09 -0.02899999917" rpy="0 0 0" /><mass value="6.416800022" /><inertia ixx="0.02566720173" ixy="0" ixz="1.424815921e-18" iyy="0.02566720173" iyz="1.424815912e-18" izz="0.02566720173" /></inertial></link>
+  <link name="ecm_pitch_end_link">
+    <inertial><origin xyz="1.091409355e-17 0.3138999942 0.0848999982" rpy="0 0 0" /><mass value="2.032099962" /><inertia ixx="0.04968509451" ixy="-5.691499982e-05" ixz="-2.77934012e-05" iyy="0.002623896084" iyz="-0.004702342529" izz="0.04776869345" /></inertial></link>
+  <link name="ecm_main_insertion_link">
+    <inertial><origin xyz="0.03869992648 7.534196216e-08 0.05240006097" rpy="0 0 0" /><mass value="0.231099993" /><inertia ixx="7.551025463e-05" ixy="-2.486839411e-07" ixz="-2.364292715e-05" iyy="0.0002545311873" iyz="8.352819578e-07" izz="0.0002881372902" /></inertial></link>
+  <link name="ecm_tool_link">
+    <inertial><origin xyz="0.4809999862 4.671157721e-08 5.395122813e-08" rpy="0 0 0" /><mass value="1.907400012" /><inertia ixx="0.001124421252" ixy="0.0001183451402" ixz="-3.294549676e-06" iyy="0.04248733818" iyz="3.878948536e-07" izz="0.04264272749" /></inertial></link>
+  <link name="ecm_end_link">
+    <inertial><origin xyz="2.000000012e-08 4.825323183e-08 -2.663288637e-08" rpy="0 0 0" /><mass value="0.001000000047" /><inertia ixx="1.000000012e-07" ixy="-2.047859679e-25" ixz="-5.551115347e-24" iyy="1.000000012e-07" iyz="5.5511147e-24" izz="1.000000012e-07" /></inertial></link>
+  <link name="ecm_tip_link">
+    <inertial><origin xyz="2.000000312e-08 2.549699174e-08 4.831733098e-08" rpy="0 0 0" /><mass value="0.001000000047" /><inertia ixx="1.000000012e-07" ixy="5.551112739e-24" ixz="-2.047852335e-25" iyy="1.000000012e-07" iyz="-8.527450989e-24" izz="1.000000012e-07" /></inertial></link>
+  <joint name="ecm_remote_center_joint" type="fixed">
+    <parent link="ecm_base_link" />
+    <child link="ecm_remote_center_link" />
+  </joint>
+  <joint name="ecm_yaw_joint" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 1.57079633" />
+    <parent link="ecm_base_link" />
+    <child link="ecm_yaw_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.57079633" upper="1.57079633" velocity="2.09999986" effort="100" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 100.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="ecm_pitch_end_joint" type="revolute">
+    <origin xyz="0 0 0" rpy="1.57079633 0 -1.57079633" />
+    <parent link="ecm_yaw_link" />
+    <child link="ecm_pitch_end_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-0.78399994" upper="1.15799997" velocity="2.09999986" effort="100" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 100.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="ecm_main_insertion_joint" type="prismatic">
+    <origin xyz="0.00000007 0.38220007 0" rpy="0.00000006 0.00000006 1.57079627" />
+    <parent link="ecm_pitch_end_link" />
+    <child link="ecm_main_insertion_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.25400001" velocity="10.00000028" effort="50" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 50.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "linear", "source": "physx"} -->
+  </joint>
+  <joint name="ecm_tool_joint" type="revolute">
+    <origin xyz="-0.38290005 0 0.00000001" rpy="-0.00000006 0 0.00000006" />
+    <parent link="ecm_main_insertion_link" />
+    <child link="ecm_tool_link" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.57079633" upper="1.57079633" velocity="2.09999986" effort="100" />
+    <dynamics friction="0" />
+    <!-- isaac:source_drive {"armature": 0.0, "drive": {"damping": 100000.0, "max_force": 100.0, "stiffness": 10000000.0, "target_position": 0.0}, "instance": "angular", "source": "physx"} -->
+  </joint>
+  <joint name="ecm_end_joint" type="fixed">
+    <origin xyz="-0 0 0" rpy="3.14159265 0.00000012 3.14159265" />
+    <parent link="ecm_tool_link" />
+    <child link="ecm_end_link" />
+  </joint>
+  <joint name="ecm_tip_joint" type="fixed">
+    <origin xyz="-0.02 0 -0" rpy="1.57079639 0.00000012 3.14159259" />
+    <parent link="ecm_tool_link" />
+    <child link="ecm_tip_link" />
+  </joint>
+</robot>
