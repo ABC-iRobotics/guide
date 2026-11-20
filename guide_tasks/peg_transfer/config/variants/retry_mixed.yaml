@@ -1,0 +1,7 @@
+# Retry, mixed: 1 or 2 planned misses per episode (60 / 40 %) at distinct stages, each recovered.
+# Stages as light_fail.yaml.
+failures: {counts: [1, 2], weights: [0.6, 0.4]}
+stages:
+  grasp: {grasp: {axes: y, r: [0.018, 0.022]}}
+  handover: {receive: {axes: y, r: [0.018, 0.022]}}
+  place: {place: {axes: xy, r: [0.0045, 0.0055]}}

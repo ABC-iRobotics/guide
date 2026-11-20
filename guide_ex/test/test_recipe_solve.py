@@ -129,3 +129,27 @@ def test_context_for_pull_turn_push_put_in_and_put_on_a_region():
 def test_a_plain_on_task_keeps_its_keys_and_has_no_joint_or_zone():
     ctx = context("/Sim_0/Scene_2", "R", ENTRY, "", REPLY)
     assert (ctx["pick"], ctx["place"], ctx["subtask"], ctx["joint_body"]) == ("Pick up the bowl.", "Place it on the plate.", "", None)
+
+
+def test_make_robots_builds_every_init_robot_and_still_one_fr3():
+    import pytest
+
+    pytest.importorskip("irob_lerobot_ros.config")
+    from irob_lerobot_ros.config import ActionType
+
+    from guide_ex.recipe.solve import make_robots
+
+    three = {"robots": {"psm1": {"profile": "psm", "in_scene": True, "path": "/PSM1/psm"},
+                        "psm2": {"profile": "psm", "in_scene": True, "path": "/PSM2/psm"},
+                        "ecm": {"profile": "ecm", "in_scene": True, "path": "/ECM/ecm"}}}
+    robots = make_robots(three, "/Sim_0/Scene_1")
+    assert {k: (r.config.id, r.config.namespace, r.config.frame_id) for k, r in robots.items()} == {
+        "psm1": ("psm1", "/Sim_0/Scene_1/psm1", "psm1/psm_base_link"),
+        "psm2": ("psm2", "/Sim_0/Scene_1/psm2", "psm2/psm_base_link"),
+        "ecm": ("ecm", "/Sim_0/Scene_1/ecm", "ecm/ecm_base_link")}
+    assert robots["psm1"].config.arm_action_type == ActionType.CARTESIAN_POSE
+    assert robots["ecm"].config.arm_action_type == ActionType.JOINT_POSITION  # joints only
+    (fr3,) = make_robots({"robots": {"franka": {"profile": "fr3", "path": "/robot"}}}, "/Sim_0/Scene_0").values()
+    assert (type(fr3.config).__name__, fr3.config.namespace, fr3.config.frame_id) == (
+        "FR3RobotConfig", "/Sim_0/Scene_0/franka", "fr3_link0")
+    assert fr3.config.arm_action_type == ActionType.CARTESIAN_POSE and fr3.config.controller == "oscbf"

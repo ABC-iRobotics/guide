@@ -1,0 +1,20 @@
+# Straight up off the peg, slowly: the block's bottom a block height over the peg top (targets.LIFT =
+# peg 18 mm + block 14.4 mm, along the tool's z, which is up while tool down).
+node_type: CompositeNode
+name: LiftOff
+level: SUBTASK
+dynamic_map: {robot: robot, giver: giver, sim_namespace: sim_namespace, scene_id: scene_id, grasp_pose: grasp_pose}
+children:
+  - ref: SetPrompt
+    alias: AnnounceLift
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {subtask: "${prompts.lift}"}
+  - ref: TransformPose
+    alias: LiftPose
+    dynamic_map: {l_pose: grasp_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.lift}"]}}
+    output_map: {pose: lifted}
+  - ref: MoveToCartesianPose
+    alias: Lift
+    dynamic_map: {robot: giver, target_pose: lifted}
+    static_args: {speed: 0.05, cartesian: true}

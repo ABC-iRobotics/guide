@@ -1,0 +1,30 @@
+# peg_transfer's episode (solve_task's docstring has the tree). Roles: `giver` and `receiver` are the
+# PSMs the plan drew (${hand.*}: psm1 or psm2), `ecm` holds the camera. The library's recording steps
+# call their services through `robot`, here the giver (every robot has the clients).
+node_type: CompositeNode
+name: PegTransfer
+level: PROCEDURE
+dynamic_map:
+  robot: "${hand.giver}"
+  giver: "${hand.giver}"
+  receiver: "${hand.receiver}"
+  ecm: ecm
+  sim_namespace: sim_namespace
+  scene_namespace: scene_namespace
+  scene_id: scene_id
+  dataset_path: dataset_path
+children:
+  # Before the first frame, so the whole episode carries a task and a subtask.
+  - ref: SetPrompt
+    alias: AnnounceFirst
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {task: "${plan.tasks[0]}", subtask: "${prompts.pick}"}
+  # The camera's pose jitter: a joint target drawn per episode (solve_task.ecm_hold).
+  - ref: MoveToJointConfiguration
+    alias: HoldCamera
+    dynamic_map: {robot: ecm}
+    static_args: {target_configuration: "${camera.hold}", speed: 0.2}
+  - ref: StartEpisode
+  - ref: Transfer
+  - ref: CheckSuccess
+  - ref: StopEpisode

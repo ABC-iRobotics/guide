@@ -1,7 +1,9 @@
 """Run a recipe-built task on its registered scene: per attempt, Randomize (a free draw, or one
 arrangement), settle, then load and run the task's config/recipes/Episode.yaml with the context and
 values the GUIDE-EX library reads (Plan A contract addition 7, ruling 20). Task-agnostic: compiled tasks
-ship no solver. FR3 only: irob_lerobot_ros has no Panda config (Plan C ruling R18).
+ship no solver. Every init.yaml robot is built (make_robots); the library recipes drive the first
+as `robot`, each is also in the context under its key. No Panda: irob_lerobot_ros has no Panda
+config (Plan C ruling R18).
 
     python -m guide_ex.recipe.solve --task <task dir> [--namespace /Sim_0/Scene_0] [--episodes 1]
         [--attempts 3] [--dataset ~/dataset/<task>] [--arrangement demo_0 | --arrangements demo_0,demo_1,...]
@@ -107,6 +109,32 @@ def draw(robot, request, timeout_sec: float = 600.0) -> tuple[str, str]:
     return reply.message, "" if reply.success else f"Randomize failed: {reply.message}"
 
 
+def make_robots(init: dict, namespace: str, **config) -> dict:
+    """One unconnected ROS2Robot per init.yaml `robots` entry: the irob_lerobot_ros config class registered
+    for its profile (fr3, psm, ecm), id = the key, namespace <namespace>/<key>, the entry's controller.
+    A joints-only arm (the ECM) keeps joint actions, the others take Cartesian poses. `config`: more
+    fields for every config (e.g. motion_noise)."""
+    from irob_lerobot_ros.config import ActionType
+    from irob_lerobot_ros.ros2robot import ROS2Robot
+    from lerobot.robots import RobotConfig
+
+    from guide_core.scene.robot_profile import resolve
+
+    robots = {}
+    for name, raw in init["robots"].items():
+        entry = resolve(raw)
+        cfg = RobotConfig.get_choice_class(entry.get("profile", "fr3"))(
+            id=name, namespace=f"{namespace}/{name}", controller=entry.get("controller", "oscbf"),
+            gripper_action_type=ActionType.JOINT_POSITION, **config)
+        if not cfg.joints_only:
+            cfg.arm_action_type = ActionType.CARTESIAN_POSE
+        cfg.cameras = {}  # ROS2Robot reads config.cameras; the recorder takes its images inside GUIDE (init.yaml cameras)
+        # ponytail: the PSM/ECM configs lack FR3's directly_publish, which ROS2Robot reads; move it to ROS2RobotConfig
+        cfg.directly_publish = getattr(cfg, "directly_publish", False)
+        robots[name] = ROS2Robot(config=cfg)
+    return robots
+
+
 def run_episodes(arrangements, attempts: int, try_once, log=print) -> tuple[int, int, int]:
     """One episode per arrangement, ``attempts`` tries each, then ``attempts`` tries from a free draw ("").
     try_once(arrangement) -> bool. Returns (episodes done, tries made, fallbacks used)."""
@@ -138,9 +166,6 @@ def main(argv=None) -> int:
     ap.add_argument("--arrangements", default="", help="comma list of arrangement ids, one episode each (overrides --episodes)")
     args = ap.parse_args(argv)
 
-    from irob_lerobot_ros.config import ActionType, FR3RobotConfig
-    from irob_lerobot_ros.ros2robot import ROS2Robot
-
     from guide_core.scene.robot_profile import resolve
     from guide_ex.core.states import DemoStatus
     from guide_ex.recipe import load
@@ -148,21 +173,17 @@ def main(argv=None) -> int:
 
     task = args.task.expanduser().resolve()
     init = yaml.safe_load((task / "config/init.yaml").read_text())
-    ((name, raw),) = init["robots"].items()
-    entry = resolve(raw)
-    if entry.get("profile") != "fr3":
-        raise SystemExit(f"{task}: robot profile {entry.get('profile')!r}: this runner drives the FR3 only (FR3RobotConfig)")
-    config = FR3RobotConfig(namespace=f"{args.namespace}/{name}", controller=entry.get("controller", "oscbf"),
-                            gripper_action_type=ActionType.JOINT_POSITION)
-    config.arm_action_type = ActionType.CARTESIAN_POSE
-    config.cameras = {}  # ROS2Robot reads config.cameras; the recorder takes its images inside GUIDE (init.yaml cameras, publish_camera_topics: false)
-    robot = ROS2Robot(config=config)
-    robot.connect()
+    robots = make_robots(init, args.namespace)
+    entry = resolve(next(iter(init["robots"].values())))
+    robot = next(iter(robots.values()))
+    for r in robots.values():
+        r.connect()
     time.sleep(5)  # block_bin's wait for the connections
     sim = "/" + args.namespace.strip("/").split("/")[0]
-    for attr, (service, kind) in SERVICES.items():
-        setattr(robot, attr, robot.node.create_client(getattr(srv, kind), f"{sim}/{service}",
-                                                      callback_group=robot._reentrant_callback_group))
+    for r in robots.values():  # one client per service per node (rmw_cyclonedds reply routing)
+        for attr, (service, kind) in SERVICES.items():
+            setattr(r, attr, r.node.create_client(getattr(srv, kind), f"{sim}/{service}",
+                                                  callback_group=r._reentrant_callback_group))
     recipes = task / "config" / "recipes"
     values = recipe_values(entry, init)
     dataset = dataset_path(task, args.dataset)
@@ -179,7 +200,7 @@ def main(argv=None) -> int:
             log(f"[solve] attempt {count} ({arrangement or 'free'}): FAILURE {why}")
             return False
         robot.sleep(SETTLE_S)
-        ctx = context(args.namespace, robot, entry, dataset, reply)
+        ctx = {**robots, **context(args.namespace, robot, entry, dataset, reply)}
         saved = episodes_saved(dataset)
         try:
             result = load(recipes / "Episode.yaml", values=values, search_paths=[recipes]).execute(ctx)
@@ -206,7 +227,8 @@ def main(argv=None) -> int:
         except Exception as e:
             robot.node.get_logger().error(f"Finalize failed: {e}")
         finally:
-            robot.disconnect()
+            for r in robots.values():
+                r.disconnect()
     print(f"[solve] {done}/{len(wanted)} episodes in {attempts} attempts, {fallbacks} fallbacks", flush=True)
     return 0 if done == len(wanted) else 1
 

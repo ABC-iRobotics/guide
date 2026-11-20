@@ -1,0 +1,6 @@
+# Close a PSM's jaws (0 rad): on a block wall they stop on it and hold it.
+ref: SetGripperState
+alias: CloseJaw
+dynamic_map: {robot: robot}
+static_args:
+  gripper_goal_pos: {"${jaw.joint}": "${jaw.closed}"}

@@ -1,0 +1,63 @@
+# The giver turns its wrist level where it is (jaws horizontal, pointing at the receiver) and brings
+# the block to the handover marker (/PegTransfer/handover, jittered by randomize.yaml); the receiver
+# opens, comes 10 mm short, then takes the same wall from the block's other face and closes (Receive,
+# which fails NotReceived unless its jaw holds the block). The giver lets go, backs off 20 mm and goes home.
+# retry_mixed / light_fail (MissPose miss.receive): the receiver closes 18-22 mm along the wall, on
+# air; Rereceive opens it, backs it off and Receive runs again.
+node_type: CompositeNode
+name: HandOver
+level: SUBTASK
+dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, giver_scene: giver_scene, receiver_scene: receiver_scene, lifted: lifted}
+children:
+  - ref: SetPrompt
+    alias: AnnounceHandover
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {subtask: "${prompts.handover}"}
+  - ref: GetPrimPose
+    alias: LocateHandover
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: /PegTransfer/handover}
+    output_map: {pose: marker}
+  - ref: HandoverPoses
+    dynamic_map: {marker: marker, giver_scene: giver_scene, receiver_scene: receiver_scene, at: lifted}
+    static_args: {roll_gain: "${handover.roll_gain}"}
+  - {ref: MoveToCartesianPose, alias: TurnLevel, dynamic_map: {robot: giver, target_pose: turn}, static_args: {speed: 0.1, cartesian: true}}
+  - {ref: MoveToCartesianPose, alias: Give, dynamic_map: {robot: giver, target_pose: give}, static_args: {speed: 0.2, cartesian: true, perturb: true}}
+  - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}}
+  - {ref: MoveToCartesianPose, alias: ApproachReceive, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}}
+  - node_type: CompositeNode
+    name: Receive
+    level: SEQUENCE
+    dynamic_map: {receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, receive: receive}
+    children:
+      - ref: MissPose
+        alias: MissReceive
+        dynamic_map: {pose: receive}
+        static_args: {key: "${plan.colour}", miss: "${oc.select:miss.receive,null}", seed: "${oc.select:miss.seed,0}"}
+        output_map: {pose: receive_target}
+      - {ref: MoveToCartesianPose, alias: MoveToReceive, dynamic_map: {robot: receiver, target_pose: receive_target}, static_args: {speed: 0.05, cartesian: true}}
+      - {ref: CloseJaw, alias: ReceiverCloses, dynamic_map: {robot: receiver}}
+      - {ref: WaitForSeconds, alias: ReceiveSettle, static_args: {seconds: 1.0}}
+      - ref: IsPrimClashing
+        alias: CheckReceived
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim1_path: "${jaw_prim.receiver}", prim2_path: "${plan.block}"}
+        output_map: {has_collided: received}
+    mode: condition
+    condition_expr: received
+    false_branch: {ref: NodeException, alias: NotReceived}
+  - {ref: OpenJaw, alias: GiverLetsGo, dynamic_map: {robot: giver}}
+  - {ref: WaitForSeconds, alias: LetGoSettle, static_args: {seconds: 0.5}}
+  - {ref: MoveToCartesianPose, alias: GiverBacksOff, dynamic_map: {robot: giver, target_pose: give_back}, static_args: {speed: 0.1, cartesian: true}}
+  - {ref: MoveToJointConfiguration, alias: GiverHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home}", speed: 0.2}}
+fallbacks:
+  Receive:
+    node_type: RecoveryNode
+    name: Rereceive
+    level: SEQUENCE
+    dynamic_map: {receiver: receiver, receive_pre: receive_pre}
+    resume_target: Receive
+    max_retries: 2
+    children:
+      - {ref: OpenJaw, alias: ReopenToReceive, dynamic_map: {robot: receiver}}
+      - {ref: MoveToCartesianPose, alias: BackToReceivePre, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true}}

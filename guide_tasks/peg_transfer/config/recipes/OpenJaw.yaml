@@ -1,0 +1,6 @@
+# Open a PSM's jaws to 1 rad (solve_task.OPEN_RAD through description.json's gripper scale).
+ref: SetGripperState
+alias: OpenJaw
+dynamic_map: {robot: robot}
+static_args:
+  gripper_goal_pos: {"${jaw.joint}": "${jaw.open}"}

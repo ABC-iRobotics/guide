@@ -1,0 +1,9 @@
+# Light fail: exactly one planned miss per episode, at one stage drawn at random, then its recovery.
+# A stage moves MissPose targets, {target: {axes, r}}: the offset's span in the target's own frame and
+# its length [lo, hi] m (guide_ex MissPose, planned: once, keyed on the block). Tip frames: x the jaws'
+# closing axis (across the wall), y along the wall, z up the shaft (tool down: up).
+failures: {counts: [1], weights: [1.0]}
+stages:
+  grasp: {grasp: {axes: y, r: [0.018, 0.022]}}      # closes past the wall's end, on air: Regrasp
+  handover: {receive: {axes: y, r: [0.018, 0.022]}} # the receiver closes on air: Rereceive
+  place: {place: {axes: xy, r: [0.0045, 0.0055]}}   # hole off the peg (r 1.5 mm, hole 4.2 mm): on its top, Replace

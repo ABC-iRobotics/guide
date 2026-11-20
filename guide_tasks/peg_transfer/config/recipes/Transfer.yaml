@@ -1,0 +1,34 @@
+# The one TASK: the block from the giver's peg to the receiver's. Each arm measures the scene frame
+# (/PegTransfer, identity in the scene: its z is up) in its own base, where its poses are.
+# A grasp that closed on air reopens over the block and picks it again (Regrasp).
+node_type: CompositeNode
+name: Transfer
+level: TASK
+dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id}
+children:
+  - ref: GetPrimPose
+    alias: GiverScene
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: /PegTransfer}
+    output_map: {pose: giver_scene}
+  - ref: GetPrimPose
+    alias: ReceiverScene
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: /PegTransfer}
+    output_map: {pose: receiver_scene}
+  - ref: PickBlock
+  - ref: LiftOff
+  - ref: HandOver
+  - ref: PlaceOnPeg
+  - ref: ReturnToStart
+fallbacks:
+  PickBlock:
+    node_type: RecoveryNode
+    name: Regrasp
+    level: SUBTASK
+    dynamic_map: {giver: giver, over_grasp: over_grasp}
+    resume_target: PickBlock
+    max_retries: 2
+    children:
+      - {ref: OpenJaw, alias: OpenForRegrasp, dynamic_map: {robot: giver}}
+      - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true}}
