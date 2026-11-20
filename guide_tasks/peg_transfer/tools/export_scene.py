@@ -47,6 +47,17 @@ def _check_anchored(stage, info):
         assert (Gf.Vec3d(joint.GetLocalPos0Attr().Get()) - want).GetLength() < 1e-5, f'{arm} not at arm_world'
 
 
+def orient_board(stage):
+    """Board as translate + orient: Replicator's modify.pose rotation silently skips a rotateZ op."""
+    board = UsdGeom.Xformable(stage.GetPrimAtPath(BOARD))
+    m = board.GetLocalTransformation()
+    board.ClearXformOpOrder()
+    for op in ('xformOp:translate', 'xformOp:rotateZ'):
+        board.GetPrim().RemoveProperty(op)
+    board.AddTranslateOp().Set(m.ExtractTranslation())
+    board.AddOrientOp().Set(Gf.Quatf(m.ExtractRotationQuat()))
+
+
 def export(src=SRC, out=OUT):
     stage = Usd.Stage.Open(str(src / 'davinci_scene.usda'))
     _check_anchored(stage, json.loads((src / 'scene_info.json').read_text()))
@@ -99,6 +110,7 @@ def export(src=SRC, out=OUT):
                 if attr.GetName().startswith('state:') and attr.GetName().endswith(':physics:velocity'):
                     attr.Set(0.0)
 
+    orient_board(stage)
     centre = UsdGeom.Xformable(stage.GetPrimAtPath(BOARD)).ComputeLocalToWorldTransform(0).ExtractTranslation()
     UsdGeom.Xform.Define(stage, '/World/PegTransfer/handover').AddTranslateOp().Set(
         centre + Gf.Vec3d(0, 0, HANDOVER_HEIGHT))
