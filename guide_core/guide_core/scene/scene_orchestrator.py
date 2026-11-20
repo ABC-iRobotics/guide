@@ -1102,7 +1102,7 @@ class SceneOrchestrator(ABC):
                     # the robot that has the joint; with several, the config must say which
                     owners = [n for n, rv in self.robots_views.items() if find_dof_index(rv.dof_names, j_name) is not None]
                     if len(owners) > 1:
-                        raise ValueError(f"{ds_key}: joint {j_name} is in {owners}; name the robot")
+                        raise ValueError(f"{ds_key}: joint {j_name} is in {sorted(owners)}; name the robot")
                     target_robot = owners[0] if owners else target_robot
 
                 if target_robot in self.robots_views:
