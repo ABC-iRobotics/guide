@@ -88,7 +88,7 @@ def _attach_oscbf(self, scene_id: int, articulation_root: str, namespace: str, r
         rate=settings.get("rate"),
         barriers=settings.get("barriers"),
         # nullspace posture: the configuration every episode starts from
-        q_rest=list(robot.get("default_joint_states", []))[:7] or None,
+        q_rest=list(robot.get("default_joint_states", [])) or None,  # OscbfHost keeps the arm's
         logger=self._logger,
         obstacles=[{**o, "path": f"/Scene_{scene_id}{o['path']}"} for o in obstacles],  # scene-relative, as tracked_objects
         obstacle_update_hz=update_hz,

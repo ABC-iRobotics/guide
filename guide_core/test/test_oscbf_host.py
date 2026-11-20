@@ -10,7 +10,7 @@ import pytest
 
 from guide_motion import description
 from guide_motion.model import Model
-from guide_motion.targets import POSE, Target
+from guide_motion.targets import JOINTS, POSE, Target
 
 ROBOT = "fr3"
 STUBS = ("isaacsim", "isaacsim.core", "isaacsim.core.experimental", "isaacsim.core.experimental.prims",
@@ -916,3 +916,33 @@ def test_an_attached_body_gets_spheres_covering_its_colliders(host_module, monke
     assert inside.any(axis=1).all()
     assert model.sphere_radii[n + 1] < 0.025  # the box cut into 5 near-cubes: no sphere the size of the whole camera
     assert any("RSD455: 5 collision spheres" in m for _, m in log.lines)
+
+
+def test_two_jaw_gripper_scales_each_joint(host_module, monkeypatch):
+    """T4: joint_i = clip(scale_i * width, limits_i), one write for every jaw (the PSM's two)."""
+    host, arm = make_host(host_module, monkeypatch)
+    host.model.gripper_joints = [host.model.gripper_joint, host.model.gripper_joint.replace("1", "2")]
+    host.model.gripper_scale = np.array([-0.5, 0.5])
+    written = []
+    arm.get_dof_limits = lambda: (Arr(np.r_[host.model.lower, -0.03, -0.03]), Arr(np.r_[host.model.upper, 0.03, 0.03]))
+    arm.set_dof_position_targets = lambda x, dof_indices: written.append((np.asarray(x[0]).tolist(), list(dof_indices)))
+    host.holder.put(Target(position=np.array([0.4, 0.0, 0.4]), gripper_width=0.08))
+    run(host, 5)
+    assert written == [([pytest.approx(-0.03), pytest.approx(0.03)], [7, 8])]
+
+
+def test_q_rest_is_sliced_to_the_arm(host_module, monkeypatch):
+    home = Model.load(ROBOT).home
+    host, _ = make_host(host_module, monkeypatch, q_rest=[*home, 0.04, 0.04])  # every default_joint_state
+    np.testing.assert_allclose(host._controller.q_rest, home)
+
+
+def test_four_dof_stale_hold_is_joints(host_module, monkeypatch):
+    """A robot below 6 DOF has no pose to hold (guide_motion refuses POSE): the stale hold is q."""
+    host, arm = make_host(host_module, monkeypatch)
+    host._attach(DT)
+    host.model.arm_joints = host.model.arm_joints[:4]  # only the hold reads the DOF count after attach
+    run(host, 3)
+    held = host._controller.targets
+    assert held[0].mode == JOINTS and all(t is held[0] for t in held)
+    np.testing.assert_allclose(held[0].joints, arm.q[:7])

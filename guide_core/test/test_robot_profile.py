@@ -68,8 +68,9 @@ def test_focal_length_gives_the_field_of_view():
 
 
 def robot_usd(tmp_path, robot):
-    """A stand-in for guide_motion's robots/<p>/<p>.usda: link0 and the hand, and an authored
-    translate the mount must override."""
+    """A stand-in for guide_motion's robots/<p>/<p>.usda: link0 and the hand (with its TCP for the FR3,
+    as Isaac's FR3 asset has), and an authored translate the mount must override."""
+    tcp = f'def Xform "{robot}_hand_tcp"\n        {{\n        }}' if robot == "fr3" else ""
     path = tmp_path / f"{robot}.usda"
     path.write_text(f'''#usda 1.0
 (
@@ -87,6 +88,7 @@ def Xform "{robot}"
 
     def Xform "{robot}_hand"
     {{
+        {tcp}
     }}
 }}
 ''')
@@ -110,9 +112,8 @@ def test_mount_references_the_robot_at_its_mount_with_its_wrist_camera(tmp_path,
     orient = camera.GetPrim().GetAttribute("xformOp:orient").Get()  # what a camera transition moves
     assert np.allclose([orient.GetReal(), *orient.GetImaginary()], rp.WRIST_CAMERA["orientation_wxyz"])
     tcp = stage.GetPrimAtPath(f"{path}/{robot}_hand/{robot}_hand_tcp")
-    assert tcp.IsValid() == (robot == "panda")  # Isaac's FR3 asset has its own fr3_hand_tcp
-    if robot == "panda":
-        assert tcp.GetAttribute("xformOp:translate").Get() == Gf.Vec3d(0, 0, TCP_Z)
+    assert tcp.IsValid()  # Isaac's FR3 asset has its own fr3_hand_tcp: mount() adds only the Panda's
+    assert tcp.GetAttribute("xformOp:translate").Get() == (Gf.Vec3d(0, 0, TCP_Z) if robot == "panda" else None)
 
 
 def test_mount_refuses_a_path_the_scene_usd_already_has(tmp_path):
@@ -120,6 +121,30 @@ def test_mount_refuses_a_path_the_scene_usd_already_has(tmp_path):
     UsdGeom.Xform.Define(stage, "/Scene_0/fr3")
     with pytest.raises(ValueError, match="already exists"):
         rp.mount(stage, "/Scene_0", rp.resolve({"profile": "fr3"}), usd=robot_usd(tmp_path, "fr3"))
+
+
+def test_an_in_scene_robot_gets_the_defaults_and_is_not_mounted(tmp_path):
+    entry = rp.resolve({"profile": "fr3", "in_scene": True, "path": "/World/fr3"})
+    assert entry["joint_names"] == rp.profile("fr3")["joint_names"] and entry["oscbf"] == {"robot": "fr3"}
+    stage = Usd.Stage.CreateInMemory()
+    UsdGeom.Xform.Define(stage, "/Scene_0/World/fr3")
+    assert rp.mount(stage, "/Scene_0", entry) == "/Scene_0/World/fr3"
+    robot = stage.GetPrimAtPath("/Scene_0/World/fr3")
+    assert not robot.HasAuthoredReferences() and not robot.GetAttribute("xformOp:translate:mount").IsValid()
+    with pytest.raises(ValueError, match="not in the scene USD"):
+        rp.mount(Usd.Stage.CreateInMemory(), "/Scene_0", entry)
+
+
+def test_in_scene_with_a_mount_raises():
+    with pytest.raises(ValueError, match="in_scene"):
+        rp.resolve({"profile": "fr3", "in_scene": True, "mount": {"position": [0, 0, 0]}})
+
+
+@pytest.mark.skipif(not (Path(__file__).resolve().parents[2] / "guide_motion/guide_motion/robots/psm").is_dir(),
+                    reason="guide_motion robots/psm not committed yet (plan T2)")
+def test_the_psm_profile_has_six_joints_and_two_jaws():
+    psm = rp.profile("psm")
+    assert len(psm["joint_names"]) == 6 and len(psm["gripper_joints"]) == 2
 
 
 def registered(tmp_path, robots):

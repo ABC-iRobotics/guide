@@ -218,7 +218,7 @@ def test_an_oscbf_robot_gets_a_host_and_no_joint_command_subscriber(command_modu
     assert controls[0]["subscribe"] is False
     (args, kwargs), = made
     assert args == ("/Scene_0/fr3",) and (kwargs["robot"], kwargs["mode"], kwargs["rate"]) == ("fr3", "velocity", 60)
-    assert kwargs["q_rest"] == list(range(7))
+    assert kwargs["q_rest"] == list(range(9))  # every default_joint_state: OscbfHost keeps the arm's
     assert runtime._motion_hosts[0][0].topic == "/Sim_0/Scene_0/franka/motion_target"
     # init.yaml's obstacles: the scene's config and the robot's oscbf section, paths under this scene's root
     assert parsed == [(config, robots[0]["oscbf"])]

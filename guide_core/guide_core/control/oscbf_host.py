@@ -7,6 +7,7 @@ over ROS per substep; states return over the existing per-frame /joint_states.
 """
 
 import itertools
+import json
 
 import numpy as np
 import warp as wp
@@ -244,7 +245,11 @@ class OscbfHost:
         self.diagnostics = {"stale": True, "infeasible": 0, "refused": None}
         self.model = Model.load(robot)
         layer = description.ROBOTS_DIR / robot / f"{robot}.usda"
-        if "mass_override" not in description.ROBOTS.get(robot, {}):
+        meta = self.model.robot_dir / "description.json"
+        meta = json.loads(meta.read_text()) if meta.is_file() else {}
+        if q_rest is not None:  # GUIDE passes every default_joint_state: the arm's come first
+            q_rest = list(q_rest)[:len(self.model.arm_joints)]
+        if not ("mass_override" in description.ROBOTS.get(robot, {}) or meta.get("mass_override")):
             pass  # no override recipe: the description was built on the asset's own masses
         elif not layer.is_file():
             self._refuse(f"mass overrides: {layer} does not exist")
@@ -390,6 +395,8 @@ class OscbfHost:
         self.diagnostics["stale"] = stale
         if not stale:
             self._hold = None
+        elif self._hold is None and len(self.model.arm_joints) < 6:  # no pose to hold: guide_motion refuses POSE
+            self._hold = Target(mode=JOINTS, joints=np.asarray(q, float).copy())
         elif self._hold is None:
             position, rotation = self.model.ee_pose(q)
             self._hold = Target(position=position, rotation=rotation)
@@ -417,19 +424,20 @@ class OscbfHost:
         self._u = u
         self._write(u)
         width = (self._hold or target).gripper_width
-        if np.isfinite(width) and width != self._width:
-            self._width = width  # one finger travels half the opening; clamped to its joint range
-            finger = float(np.clip(width / 2.0, *self._finger_range))
-            self._arm.set_dof_position_targets(np.array([[finger]]), dof_indices=[self._finger])
+        if self._fingers and np.isfinite(width) and width != self._width:  # an ECM has no gripper
+            self._width = width  # joint_i = scale_i * width (a Franka finger: half the opening); clamped to its range
+            fingers = np.clip(self._finger_scale * width, *self._finger_range)
+            self._arm.set_dof_position_targets(fingers[None], dof_indices=self._fingers)
 
     def _attach(self, dt) -> bool:
         """First substep after play: mass properties from PhysX, the dynamics check, control modes."""
         arm = self._arm
         dofs = list(arm.dof_names)
         self._arm_dofs = [dofs.index(j) for j in self.model.arm_joints]
-        self._finger = dofs.index(self.model.gripper_joint)
+        self._fingers = [dofs.index(j) for j in getattr(self.model, "gripper_joints", [self.model.gripper_joint])]
+        self._finger_scale = np.asarray(getattr(self.model, "gripper_scale", [0.5] * len(self._fingers)), float)
         lower, upper = arm.get_dof_limits()
-        self._finger_range = (float(lower.numpy()[0][self._finger]), float(upper.numpy()[0][self._finger]))
+        self._finger_range = (lower.numpy()[0][self._fingers].astype(float), upper.numpy()[0][self._fingers].astype(float))
         self.every = max(1, round(1.0 / (dt * self.rate)))
         view = getattr(arm, "_physics_articulation_view", None)  # private: 0.2 ms cheaper per call
         self._view = view if view is not None and hasattr(view, "set_dof_actuation_forces") else None
