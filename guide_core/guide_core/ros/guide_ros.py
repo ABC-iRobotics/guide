@@ -266,7 +266,8 @@ class GUIDEROS2Interface(Node):
             if host.reset_time is not None and msg.stamp.sec * 10**9 + msg.stamp.nanosec <= round(host.reset_time * 1e9):
                 self._logger.warning(f"{host.topic}: target stamped before the last Reset: dropped", throttle_duration_sec=5.0)
                 return
-            if msg.frame_id and msg.frame_id != host.model.base_link:
+            own = host.topic.rsplit('/', 2)[-2]  # <namespace>/<robot>/motion_target
+            if msg.frame_id and msg.frame_id not in (host.model.base_link, f"{own}/{host.model.base_link}"):
                 self._logger.warning(
                     f"{host.topic}: target in '{msg.frame_id}', expected '{host.model.base_link}'; dropped",
                     throttle_duration_sec=5.0,
@@ -484,10 +485,16 @@ def pose_frame(scenes, path: str, frame_id: str) -> str:
     scene = match.group(1)
     if frame_id == scene:
         return f"/{scene}"
-    robots = [r for r in scenes[int(match.group(2))]._config.get("robots", {}).values() if r.get("base_name") == frame_id]
-    if len(robots) != 1:  # two robots sharing a base_name: the request would need the robot's name too
-        raise ValueError(f"{scene} has {'no robot' if not robots else 'more than one robot'} with base_name '{frame_id}'")
-    return f"/{scene}{robots[0]['path']}/{frame_id}"
+    robots = scenes[int(match.group(2))]._config.get("robots", {})
+    name, _, base = frame_id.rpartition("/")  # "<robot>/<base_name>" or a bare base_name
+    if name:
+        found = [r for k, r in robots.items() if k == name and r.get("base_name") == base]
+    else:
+        found = [r for r in robots.values() if r.get("base_name") == base]
+    if len(found) != 1:
+        hint = "; use " + " or ".join(f"'{k}/{base}'" for k, r in robots.items() if r.get("base_name") == base) if found else ""
+        raise ValueError(f"{scene} has {'no robot' if not found else 'more than one robot'} with base_name '{frame_id}'{hint}")
+    return f"/{scene}{found[0]['path']}/{base}"
 
 
 def zone_map(objects, zones) -> dict | None:

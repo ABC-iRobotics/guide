@@ -490,7 +490,7 @@ def test_a_pose_request_says_what_it_cannot_answer_in(isaac_import):
         return ros._pose_request_callback(me, PoseSrv.Request(path=path, frame_id="fr3_link0"), None)
 
     reply = ask("/Scene_0/blocks/red_block")
-    assert not reply.success and reply.message == "Scene_0 has more than one robot with base_name 'fr3_link0'"
+    assert not reply.success and reply.message.startswith("Scene_0 has more than one robot with base_name 'fr3_link0'")
     scenes[0] = SimpleNamespace(_config={"robots": {"franka": {"path": "/fr3", "base_name": "fr3_link0"}}})
     assert ask("/Scene_0/blocks/red_block").message == "Scene_0 has no prim /Scene_0/fr3/fr3_link0"
     assert ask("/World/light").message == "PoseRequest path must be under /Scene_<i>/, got '/World/light'"
