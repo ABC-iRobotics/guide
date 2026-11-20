@@ -73,9 +73,9 @@ light:
         get.prims: { path_pattern: '/Lights/Key$' }
       with.key_warmth:
         modify.attribute: { name: 'inputs:enableColorTemperature', attribute_type: bool, value: true }
-      key_temperature:
+      key_tint:          # not key_temperature: the parser swaps a string naming a group for the group
         get.prims: { path_pattern: '/Lights/Key$' }
-      with.key_temperature:
+      with.key_tint:
         modify.attribute:
           name: 'inputs:colorTemperature'
           attribute_type: float
