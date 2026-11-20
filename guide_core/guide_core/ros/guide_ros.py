@@ -273,11 +273,13 @@ class GUIDEROS2Interface(Node):
                     throttle_duration_sec=5.0,
                 )
                 return
-            # Controller.step reads an unknown mode as POSE, and raises every substep on a wrong-length q
-            if msg.mode not in (POSE, TWIST, JOINTS) or (msg.mode == JOINTS and len(msg.joints) != len(host.model.arm_joints)):
+            # Controller.step reads an unknown mode as POSE, raises every substep on a wrong-length q, and raises
+            # on a pose or twist for an arm under 6 DOF (the ECM): the host would then refuse the robot for good
+            n = len(host.model.arm_joints)
+            if msg.mode not in (POSE, TWIST, JOINTS) or (msg.mode == JOINTS and len(msg.joints) != n) or (msg.mode != JOINTS and n < 6):
                 self._logger.warning(
                     f"{host.topic}: mode {msg.mode} with {len(msg.joints)} joints is not a target for "
-                    f"{len(host.model.arm_joints)} arm joints; dropped",
+                    f"{n} arm joints; dropped",
                     throttle_duration_sec=5.0,
                 )
                 return
