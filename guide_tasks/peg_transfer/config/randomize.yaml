@@ -1,0 +1,97 @@
+# peg_transfer randomization in Replicator YAML (guide_core/.../replicator_guide.py,
+# docs/design/replicator-front-end.md). Paths are scene-relative: GUIDE prefixes /Scene_<id>.
+# Positions are local to each prim's parent; /PegTransfer and /PegTransfer/Blocks are identity,
+# so these are scene-frame numbers (davinci_sim: board top z 0.80, centre (0, 0.72)).
+#
+# The blocks are NOT placed here: Scene.randomize puts all six on the giver's pegs (drawn in
+# randomize_preprocess, recorded) once the board has moved, reading the pegs' new world poses.
+# Their velocities are zeroed here, so nothing a previous episode set in motion carries over.
+# The ECM's pose jitter is a GUIDE-EX target in the recipes (T11): an OSCBF arm holds its
+# target, so a joint-state write here would be pulled straight back.
+
+place:
+  randomizer.register:
+    place:
+      board:
+        get.prims: { path_pattern: '/PegTransfer/Board$' }
+      with.board:
+        modify.pose:
+          write_to_usd: true                     # PhysX picks up USD writes, not Fabric
+          position:
+            distribution.uniform:                # authored (0, 0.72, 0.789) +- 1 cm in xy
+              lower: [-0.01, 0.71, 0.789]
+              upper: [ 0.01, 0.73, 0.789]
+              name: board_position
+          rotation:
+            distribution.uniform:                # Euler XYZ, degrees: authored 90 +- 5 about z
+              lower: [0, 0, 85]
+              upper: [0, 0, 95]
+              name: board_rotation
+      handover:
+        get.prims: { path_pattern: '/PegTransfer/handover$' }
+      with.handover:
+        modify.pose:
+          write_to_usd: true
+          position:
+            distribution.uniform:                # 4..6 cm above the board top, around its centre
+              lower: [-0.015, 0.71, 0.84]
+              upper: [ 0.015, 0.73, 0.86]
+              name: handover_position
+          rotation:
+            distribution.uniform:                # the wrist roll at the handover, about x
+              lower: [-30, 0, 0]
+              upper: [ 30, 0, 0]
+              name: handover_rotation
+      still:
+        get.prims: { path_pattern: '/PegTransfer/Blocks/[^/]+$' }
+      with.still:
+        modify.attribute: { name: 'physics:velocity', attribute_type: vector3f, value: [0, 0, 0] }
+      spinless:
+        get.prims: { path_pattern: '/PegTransfer/Blocks/[^/]+$' }
+      with.spinless:
+        modify.attribute: { name: 'physics:angularVelocity', attribute_type: vector3f, value: [0, 0, 0] }
+
+# Lighting: intensity +-30 % around davinci_sim's (dome 800, key 2500) and the key's colour temperature.
+light:
+  randomizer.register:
+    light:
+      dome:
+        get.prims: { path_pattern: '/Lights/Dome$' }
+      with.dome:
+        modify.attribute:
+          name: 'inputs:intensity'
+          attribute_type: float
+          value: { distribution.uniform: { lower: 560.0, upper: 1040.0, name: dome_intensity } }
+      key:
+        get.prims: { path_pattern: '/Lights/Key$' }
+      with.key:
+        modify.attribute:
+          name: 'inputs:intensity'
+          attribute_type: float
+          value: { distribution.uniform: { lower: 1750.0, upper: 3250.0, name: key_intensity } }
+      key_warmth:
+        get.prims: { path_pattern: '/Lights/Key$' }
+      with.key_warmth:
+        modify.attribute: { name: 'inputs:enableColorTemperature', attribute_type: bool, value: true }
+      key_temperature:
+        get.prims: { path_pattern: '/Lights/Key$' }
+      with.key_temperature:
+        modify.attribute:
+          name: 'inputs:colorTemperature'
+          attribute_type: float
+          value: { distribution.uniform: { lower: 4500.0, upper: 7500.0, name: key_temperature } }
+
+# Two triggers on the one event keep each chain short (Replicator's registration time grows
+# with the `with` blocks under one trigger; see cube_stack's reset.yaml).
+episode:
+  trigger.on_custom_event:
+    event_name: guide_randomize                  # fired once per Randomize call
+episode_light:
+  trigger.on_custom_event:
+    event_name: guide_randomize
+with_episode:
+  with.episode:
+    randomizer.place: null
+with_episode_light:
+  with.episode_light:
+    randomizer.light: null

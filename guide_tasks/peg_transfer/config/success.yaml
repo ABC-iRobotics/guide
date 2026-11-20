@@ -1,0 +1,12 @@
+# Success = this episode's block seated on its target peg, let go. Scene.is_success_preprocess
+# turns these templates into: the world poses of the block and of the target peg, then one
+# is_prim_clashing per PSM jaw link against the block; is_success_postprocess checks the block is
+# on the peg's axis (2.5 mm), down on the board (not on the peg top) and touching no jaw.
+instructions:
+  - cmd: 'get_world_poses'
+    kwargs:
+      prim_path: '/PegTransfer/Blocks/*'
+  - cmd: 'is_prim_clashing'
+    kwargs:
+      prim_path: '/PegTransfer/Blocks/*'
+      scope: '/PSM*/psm/psm_tool_gripper*_link'

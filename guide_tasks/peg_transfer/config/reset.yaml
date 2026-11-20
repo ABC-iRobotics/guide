@@ -1,0 +1,46 @@
+# peg_transfer reset in Replicator YAML. Runs only on the /Sim_*/Reset service: the scene as
+# davinci_sim authored it -- the board and the handover marker at their poses, the six blocks on
+# PSM1's pegs 0-5, and the jaws at davinci_sim's home (+-12 deg, slightly open). Positions are
+# local to the parent (/PegTransfer and /PegTransfer/Blocks are identity: scene frame). A block on
+# board peg (px, py) sits at (-py, 0.72 + px, 0.80 + 0.0072): the board is turned 90 deg about z.
+#
+# The arm joints are not set here: their OSCBF hosts home them on Reset (_cmd_reset_scene; a drive
+# target does not move an OSCBF arm). The jaws stay on their position drives (degrees).
+
+home_objects:
+  randomizer.register:
+    home_objects:
+      board:    { get.prims: { path_pattern: '/PegTransfer/Board$' } }
+      handover: { get.prims: { path_pattern: '/PegTransfer/handover$' } }
+      red:      { get.prims: { path_pattern: '/PegTransfer/Blocks/red$' } }
+      green:    { get.prims: { path_pattern: '/PegTransfer/Blocks/green$' } }
+      blue:     { get.prims: { path_pattern: '/PegTransfer/Blocks/blue$' } }
+      yellow:   { get.prims: { path_pattern: '/PegTransfer/Blocks/yellow$' } }
+      orange:   { get.prims: { path_pattern: '/PegTransfer/Blocks/orange$' } }
+      purple:   { get.prims: { path_pattern: '/PegTransfer/Blocks/purple$' } }
+      with.board:    { modify.pose: { position: [0.0, 0.72, 0.789], rotation: [0, 0, 90], write_to_usd: true } }
+      with.handover: { modify.pose: { position: [0.0, 0.72, 0.839], rotation: [0, 0, 0], write_to_usd: true } }
+      with.red:      { modify.pose: { position: [-0.043, 0.69, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+      with.green:    { modify.pose: { position: [-0.043, 0.71, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+      with.blue:     { modify.pose: { position: [-0.043, 0.73, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+      with.yellow:   { modify.pose: { position: [-0.013, 0.69, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+      with.orange:   { modify.pose: { position: [-0.013, 0.71, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+      with.purple:   { modify.pose: { position: [-0.013, 0.73, 0.8072], rotation: [0, 0, 0], write_to_usd: true } }
+
+home_jaws:
+  randomizer.register:
+    home_jaws:
+      g1: { get.prims: { path_pattern: '/PSM[12]/psm/.*/psm_tool_gripper1_joint$' } }
+      g2: { get.prims: { path_pattern: '/PSM[12]/psm/.*/psm_tool_gripper2_joint$' } }
+      with.g1: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: -12.0 } }  # degrees
+      with.g2: { modify.attribute: { name: 'drive:angular:physics:targetPosition', attribute_type: float, value: 12.0 } }
+
+# Two triggers on one event, so each downstream chain stays short (see cube_stack's reset.yaml).
+on_reset_objects:
+  trigger.on_custom_event: { event_name: guide_reset }
+on_reset_jaws:
+  trigger.on_custom_event: { event_name: guide_reset }
+with_reset_objects:
+  with.on_reset_objects: { randomizer.home_objects: null }
+with_reset_jaws:
+  with.on_reset_jaws: { randomizer.home_jaws: null }

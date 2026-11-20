@@ -1,0 +1,156 @@
+# Bimanual peg transfer on the dVRK: PSM1 and PSM2 hand a block across the SurRoL peg board,
+# seen by the ECM's stereo endoscope. The scene is the flattened, self-contained export of
+# davinci_sim (assets/peg_transfer.usd, tools/export_scene.py).
+#
+# Paths are scene-relative: the USD's defaultPrim /World is referenced at /Scene_<id>, so the
+# file's /World/PSM1/psm is /PSM1/psm here (and /Scene_<id>/PSM1/psm on the stage).
+usd_path: 'package://peg_transfer/assets/peg_transfer.usd'
+
+# Image topics off for dataset generation: the recorder captures images GUIDE-side (see
+# cube_stack's init.yaml). `ros2 launch guide_core bringup.launch.py camera_topics:=true` at inference.
+publish_camera_topics: false
+camera_encoding: rgb_h264
+
+# The arms are in the scene USD, each anchored to the world at its setup-joint pose (4
+# articulations with the cart). The profile (guide_motion robots/<profile>) gives joint
+# names, jaws, tool and base frames and home; controller: oscbf with oscbf.robot = profile.
+robots:
+  psm1:
+    profile: psm
+    in_scene: true
+    path: '/PSM1/psm'
+    oscbf: {mode: torque}   # gains/barriers come from robots/psm
+  psm2:
+    profile: psm
+    in_scene: true
+    path: '/PSM2/psm'
+    oscbf: {mode: torque}
+  ecm:
+    profile: ecm
+    in_scene: true
+    path: '/ECM/ecm'
+    oscbf: {mode: torque}
+
+# The ECM's stereo pair (nominal da Vinci Classic SD, davinci_sim/scene/scene_info.json camera).
+cameras:
+  left:
+    path: '/ECM/ecm/ecm_tool_link/stereo_left'
+    width: 720
+    height: 480
+    topic: '/cam_left'
+    rgb: true
+  right:
+    path: '/ECM/ecm/ecm_tool_link/stereo_right'
+    width: 720
+    height: 480
+    topic: '/cam_right'
+    rgb: true
+
+dataset:
+  tracked_objects:
+    red_block: '/PegTransfer/Blocks/red'
+    green_block: '/PegTransfer/Blocks/green'
+    blue_block: '/PegTransfer/Blocks/blue'
+    yellow_block: '/PegTransfer/Blocks/yellow'
+    orange_block: '/PegTransfer/Blocks/orange'
+    purple_block: '/PegTransfer/Blocks/purple'
+    psm1: '/PSM1'
+    psm2: '/PSM2'
+  fps: 20
+  images:
+    - left: left
+    - right: right
+  # Each PSM records its own tool pose, psm1.x .. psm1.rz, in its own base frame.
+  cartesian_robots: [psm1, psm2]
+  # Every joint key names its robot: psm1 and psm2 share joint names. Grouped per robot in
+  # the recorder's order: joint .pos (jaw last), .vel, then the pose; the PSMs, then the ECM.
+  # psm*.jaw is psm_tool_gripper2_joint, the half opening angle (rad); main_insertion is
+  # prismatic (m, m/s). Twist, wrench and .eff are left out: those extras record one robot.
+  observations:
+    - psm1.yaw.pos: psm1.psm_yaw_joint.pos
+    - psm1.pitch_end.pos: psm1.psm_pitch_end_joint.pos
+    - psm1.main_insertion.pos: psm1.psm_main_insertion_joint.pos
+    - psm1.tool_roll.pos: psm1.psm_tool_roll_joint.pos
+    - psm1.tool_pitch.pos: psm1.psm_tool_pitch_joint.pos
+    - psm1.tool_yaw.pos: psm1.psm_tool_yaw_joint.pos
+    - psm1.jaw.pos: psm1.psm_tool_gripper2_joint.pos
+    - psm1.yaw.vel: psm1.psm_yaw_joint.vel
+    - psm1.pitch_end.vel: psm1.psm_pitch_end_joint.vel
+    - psm1.main_insertion.vel: psm1.psm_main_insertion_joint.vel
+    - psm1.tool_roll.vel: psm1.psm_tool_roll_joint.vel
+    - psm1.tool_pitch.vel: psm1.psm_tool_pitch_joint.vel
+    - psm1.tool_yaw.vel: psm1.psm_tool_yaw_joint.vel
+    - psm1.x: x
+    - psm1.y: y
+    - psm1.z: z
+    - psm1.rx: rx
+    - psm1.ry: ry
+    - psm1.rz: rz
+    - psm2.yaw.pos: psm2.psm_yaw_joint.pos
+    - psm2.pitch_end.pos: psm2.psm_pitch_end_joint.pos
+    - psm2.main_insertion.pos: psm2.psm_main_insertion_joint.pos
+    - psm2.tool_roll.pos: psm2.psm_tool_roll_joint.pos
+    - psm2.tool_pitch.pos: psm2.psm_tool_pitch_joint.pos
+    - psm2.tool_yaw.pos: psm2.psm_tool_yaw_joint.pos
+    - psm2.jaw.pos: psm2.psm_tool_gripper2_joint.pos
+    - psm2.yaw.vel: psm2.psm_yaw_joint.vel
+    - psm2.pitch_end.vel: psm2.psm_pitch_end_joint.vel
+    - psm2.main_insertion.vel: psm2.psm_main_insertion_joint.vel
+    - psm2.tool_roll.vel: psm2.psm_tool_roll_joint.vel
+    - psm2.tool_pitch.vel: psm2.psm_tool_pitch_joint.vel
+    - psm2.tool_yaw.vel: psm2.psm_tool_yaw_joint.vel
+    - psm2.x: x
+    - psm2.y: y
+    - psm2.z: z
+    - psm2.rx: rx
+    - psm2.ry: ry
+    - psm2.rz: rz
+    - ecm.yaw.pos: ecm.ecm_yaw_joint.pos
+    - ecm.pitch_end.pos: ecm.ecm_pitch_end_joint.pos
+    - ecm.main_insertion.pos: ecm.ecm_main_insertion_joint.pos
+    - ecm.tool.pos: ecm.ecm_tool_joint.pos
+  # The controller inputs as given: the absolute joint target the OSCBF host tracks, the jaw
+  # drive target, and the per-frame tool pose delta (DART) of each PSM; the ECM's joint targets.
+  action:
+    - psm1.yaw.pos: psm1.psm_yaw_joint.pos
+    - psm1.pitch_end.pos: psm1.psm_pitch_end_joint.pos
+    - psm1.main_insertion.pos: psm1.psm_main_insertion_joint.pos
+    - psm1.tool_roll.pos: psm1.psm_tool_roll_joint.pos
+    - psm1.tool_pitch.pos: psm1.psm_tool_pitch_joint.pos
+    - psm1.tool_yaw.pos: psm1.psm_tool_yaw_joint.pos
+    - psm1.jaw.pos: psm1.psm_tool_gripper2_joint.pos
+    - psm1.x: x
+    - psm1.y: y
+    - psm1.z: z
+    - psm1.rx: rx
+    - psm1.ry: ry
+    - psm1.rz: rz
+    - psm2.yaw.pos: psm2.psm_yaw_joint.pos
+    - psm2.pitch_end.pos: psm2.psm_pitch_end_joint.pos
+    - psm2.main_insertion.pos: psm2.psm_main_insertion_joint.pos
+    - psm2.tool_roll.pos: psm2.psm_tool_roll_joint.pos
+    - psm2.tool_pitch.pos: psm2.psm_tool_pitch_joint.pos
+    - psm2.tool_yaw.pos: psm2.psm_tool_yaw_joint.pos
+    - psm2.jaw.pos: psm2.psm_tool_gripper2_joint.pos
+    - psm2.x: x
+    - psm2.y: y
+    - psm2.z: z
+    - psm2.rx: rx
+    - psm2.ry: ry
+    - psm2.rz: rz
+    - ecm.yaw.pos: ecm.ecm_yaw_joint.pos
+    - ecm.pitch_end.pos: ecm.ecm_pitch_end_joint.pos
+    - ecm.main_insertion.pos: ecm.ecm_main_insertion_joint.pos
+    - ecm.tool.pos: ecm.ecm_tool_joint.pos
+
+# Scene extent around origin, metres: davinci_sim's 6 x 6 m floor (centred at y 0.5) and the
+# arms' height. Scenes are tiled along y by this box when several are registered.
+limits:
+  - [-3.0, 3.0]
+  - [-2.5, 3.5]
+  - [-0.1, 2.5]
+
+origin:
+  - 0.0
+  - 0.0
+  - 0.0
