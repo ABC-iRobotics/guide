@@ -19,7 +19,7 @@ from scipy.spatial.transform import Rotation
 
 from guide_motion import description
 from guide_motion.control import Controller, enable_compilation_cache
-from guide_motion.model import Model
+from guide_motion.model import GRAVITY, Model
 from guide_motion.planner import DT as TARGET_DT
 from guide_motion.planner import plan
 from guide_motion.targets import JOINTS, POSE, Target, TargetHolder
@@ -270,6 +270,10 @@ class OscbfHost:
         self._base = next((p for p in Usd.PrimRange(stage.GetPrimAtPath(articulation_root)) if p.GetName() == self.model.base_link), None)
         if self._obstacles and self._base is None:
             raise ValueError(f"obstacles: no {self.model.base_link} under {articulation_root} to place them from")
+        if self._base is not None:  # a base mounted tilted (the dVRK arms) sees world -z gravity elsewhere in its frame
+            world_to_base = self.model.usd_to_urdf.get(self.model.base_link, np.eye(4))[:3, :3] @ _rigid(
+                UsdGeom.XformCache().GetLocalToWorldTransform(self._base), self._base.GetPath())[:3, :3].T
+            self.model.set_gravity(world_to_base @ GRAVITY)
         self._obstacle_dt = 1.0 / obstacle_update_hz if obstacle_update_hz > 0 else 0.0
         self._box_owners = [str(prim.GetPath()) for prim, _, half, _ in self._obstacles for _ in half]  # one barrier row each
         self._settings = (mode, gains, barriers, q_rest, len(self._box_owners))
