@@ -2,9 +2,11 @@
 # block from over its peg to the handover marker (/PegTransfer/handover, jittered by randomize.yaml), its
 # jaws pointing at the receiver and holding the block out sideways (one joint move); the receiver, waiting
 # level near there (ReceiverToExchange), comes in along its own jaws onto the block's other end face,
-# pointing back at the giver, opening on the way, and takes it (Receive, which fails NotReceived unless the
-# block sits in its jaws: targets.IsHeld). The giver lets go and backs out along its own jaws past the
-# block (targets.RETREAT); GiverReturns takes it home.
+# pointing back at the giver, opened wide before it sets off, and takes it (Receive, which fails NotReceived
+# unless the block sits in its jaws: targets.IsHeld). The giver lets go; the receiver's place is planned
+# (Finish's targets.PlacePoses, from the block now in its jaws alone); the giver backs out along its own jaws
+# past the block (targets.RETREAT), a free end GiverReturns' move home blends out of (planned before it,
+# the place leaves that move nothing to wait for).
 # retry_mixed / light_fail (MissPose miss.receive): the receiver closes 18-22 mm along the wall, on
 # air; Rereceive opens it, backs out along its jaws, comes back in front of the wall and Receive runs again.
 node_type: CompositeNode
@@ -43,9 +45,11 @@ children:
     static_args: {prim_path: "${tip_prim.giver}"}
     output_map: {pose: giving_tip}
   - {ref: ReceivePoses, dynamic_map: {block: given_block, giver_tip: giving_tip, scene: receiver_scene}}
-  # a free end: MoveToReceive blends in, its first millimetres correcting a perturbed episode's miss (aim)
-  - {ref: MoveToCartesianPose, alias: ApproachReceive, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false, aim: true}}
+  # open before the approach: the jaws' settle between the two moves would outlast their blend
   - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
+  # a free end MoveToReceive blends into. No aim: its horizontal miss (12 mm) runs along the level jaws, and
+  # receive_pre leaves 11 mm to the block's end face
+  - {ref: MoveToCartesianPose, alias: ApproachReceive, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false}}
   - node_type: CompositeNode
     name: Receive
     level: SEQUENCE
@@ -84,7 +88,24 @@ children:
           - {ref: WaitForSeconds, alias: MoveToReceiveStalled, static_args: {seconds: 0.1}}
   - {ref: OpenJaw, alias: GiverLetsGo, dynamic_map: {robot: giver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
   - {ref: WaitForSeconds, alias: LetGoSettle, static_args: {seconds: 0.5}}
-  - {ref: MoveToCartesianPose, alias: GiverBacksOff, dynamic_map: {robot: giver, target_pose: give_back}, static_args: {speed: 0.1, cartesian: true}}
+  - ref: GetPrimPose
+    alias: LocatePeg
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.target_peg}"}
+    output_map: {pose: peg_pose}
+  - ref: GetPrimPose
+    alias: LocatePlacingTip
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${tip_prim.receiver}"}
+    output_map: {pose: placing_tip}
+  - ref: GetPrimPose
+    alias: LocateCarried
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.block}"}
+    output_map: {pose: carried}
+  - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried, robot: receiver}}
+  # straight out of the jaws' reach (unperturbed: they straddle the wall for the first mm), a free end
+  - {ref: MoveToCartesianPose, alias: GiverBacksOff, dynamic_map: {robot: giver, target_pose: give_back}, static_args: {speed: 0.1, cartesian: true, precise_end: false}}
 fallbacks:
   Receive:
     node_type: RecoveryNode
@@ -104,9 +125,10 @@ fallbacks:
         dynamic_map: {l_pose: receive_target}
         static_args: {r_pose: {position: [0.0, 0.0, "${offsets.approach}"]}}  # back along its jaws
         output_map: {pose: receive_back}
-      # out of the miss along its jaws, blending into the move back in front of the wall
+      # out of the miss along its jaws, blending into the move back in front of the wall, and that (perturbed,
+      # no aim: ApproachReceive's) into MoveToReceive
       - {ref: MoveToCartesianPose, alias: BackOutOfMiss, dynamic_map: {robot: receiver, target_pose: receive_back}, static_args: {speed: 0.05, cartesian: true, precise_end: false}}
-      - {ref: MoveToCartesianPose, alias: BackToReceivePre, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true}}
+      - {ref: MoveToCartesianPose, alias: BackToReceivePre, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false}}
       - ref: SetPrompt
         alias: BackToHandover
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}

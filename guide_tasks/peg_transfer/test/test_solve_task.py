@@ -65,6 +65,7 @@ class World:
         self.yaw = R.from_euler("z", plan["yaw"][plan["layout"].index(plan["colour"])], degrees=True)  # turns with a holder
         self.tips = {k: BASES[k] * HOME for k in ("psm1", "psm2")}
         self.holders, self.prompts, self.calls, self.saved = {}, [], [], None  # arm: the block in its tip (Pose)
+        self.flags = {}  # a Cartesian move's (perturb, precise_end, aim), by name
         self.q = {k: np.array(r["default_joint_states"][:6]) for k, r in st.init_yaml()["robots"].items() if k != "ecm"}
         WORLD["w"] = self
 
@@ -105,6 +106,7 @@ def world(monkeypatch):
     def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, jitter=None, aim=False):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
+        w.flags[self.name] = (perturb, precise_end, aim)
         assert 0.05 <= speed <= 0.2, (self.name, speed)
         w.move_tip(arm(robot), BASES[arm(robot)] * target_pose)
         try:  # the joints there, on the branch the arm is on
@@ -183,7 +185,7 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
                  "GiverLetsGo", "GiverBacksOff", "GiverHome"):
         assert by[name] == giver, name
     for name in ("ToExchange", "ReceiverOpens", "ApproachReceive", "MoveToReceive", "ReceiverCloses", "LocatePeg",
-                 "TurnDownOverPeg", "LowerOntoPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
+                 "TurnDownOverPeg", "DownOverPeg", "LowerOntoPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
         assert by[name] == receiver, name
     assert by["HoldCamera"] == "ecm"
     # each arm's moves in the user's flow, every point a target, an approach to one or a clearance
@@ -191,12 +193,29 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
              and n not in ("GiverScene", "ReceiverScene") and "Starts" not in n]
     assert [n for n, a in moves if a == giver] == ["OpenForPick", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift",
                                                    "TurnLevel", "GiverLetsGo", "GiverBacksOff", "GiverHome"]
-    assert [n for n, a in moves if a == receiver] == ["ToExchange", "ApproachReceive", "ReceiverOpens", "MoveToReceive",
-                                                      "ReceiverCloses", "TurnDownOverPeg", "LowerOntoPeg", "Lower", "Release", "Retreat",
-                                                      "ReceiverHome"]
+    assert [n for n, a in moves if a == receiver] == ["ToExchange", "ReceiverOpens", "ApproachReceive", "MoveToReceive",
+                                                      "ReceiverCloses", "TurnDownOverPeg", "DownOverPeg", "LowerOntoPeg", "Lower",
+                                                      "Release", "Retreat", "ReceiverHome"]
     names = [n for n, _ in w.calls]
     assert names.index("ApproachReceive") > names.index("TurnLevel") and names.index("GiverBacksOff") > names.index("ReceiverCloses")
     assert names.index("GiverLetsGo") < names.index("GiverBacksOff") < names.index("GiverHome")
+
+
+def test_free_space_moves_are_perturbed_and_blend_into_the_next_pose_move(world):
+    plan = make_plan(0, "psm1")
+    w, _ = run(world, plan)
+
+    free = {n for n, (_, precise, _) in w.flags.items() if not precise}
+    assert free == {"MoveOverBlock", "ApproachReceive", "GiverBacksOff", "DownOverPeg", "Retreat"}
+    assert {n for n, (perturb, _, _) in w.flags.items() if perturb} == {
+        "MoveOverBlock", "ToExchange", "ApproachReceive", "DownOverPeg", "GiverHome", "ReceiverHome"}
+    assert {n for n, (_, _, aim) in w.flags.items() if aim} == {"MoveOverBlock", "DownOverPeg"}  # hovers over a descent
+    for arm in ("psm1", "psm2"):  # a free end hands over to the arm's next Cartesian move, not a joint move or a jaw
+        names = [n for n, a in w.calls if a == arm and (n in w.flags or n.startswith(("Turn", "Open", "Close", "Receiver", "Giver")))]
+        assert all(names[names.index(n) + 1] in w.flags for n in free if n in names), names
+    home = st.recipe_values(st.init_yaml(), plan)["psm"]["home_pose"]["giver"]
+    p, _ = PSM.ee_pose(np.array(st.init_yaml()["robots"]["psm1"]["default_joint_states"][:6]))
+    assert np.allclose(home["position"], p)
 
 
 def test_the_prompts_at_three_levels(world):

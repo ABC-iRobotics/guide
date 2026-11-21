@@ -1,5 +1,6 @@
-# The giver, out of the way, back to its home joints (init.yaml: tool down over its pegs). Its own arm
-# only: Finish's branch beside PlaceOnPeg.
+# The giver, out of the way, back home (init.yaml: tool down over its pegs): a pose move to the home joints'
+# tip pose, perturbed, blending out of HandOver's GiverBacksOff. Its own arm only: Finish's branch beside
+# PlaceOnPeg.
 node_type: CompositeNode
 name: GiverReturns
 level: SEQUENCE
@@ -9,4 +10,4 @@ children:
     alias: AnnounceGiverReturn
     dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_id: scene_id}
     static_args: {subtask: "${prompts.return}"}
-  - {ref: MoveToJointConfiguration, alias: GiverHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home.giver}", speed: 0.2}}
+  - {ref: MoveToCartesianPose, alias: GiverHome, dynamic_map: {robot: giver}, static_args: {target_pose: "${psm.home_pose.giver}", speed: 0.2, cartesian: true, perturb: true}}

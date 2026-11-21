@@ -52,24 +52,9 @@ children:
   - node_type: CompositeNode
     name: Finish
     level: SUBTASK
-    dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene}
+    # the place (over, peg_pose) is planned in HandOver, before the giver backs off
+    dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene, peg_pose: peg_pose, over: over}
     children:
-      - ref: GetPrimPose
-        alias: LocatePeg
-        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
-        static_args: {prim_path: "${plan.target_peg}"}
-        output_map: {pose: peg_pose}
-      - ref: GetPrimPose
-        alias: LocatePlacingTip
-        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
-        static_args: {prim_path: "${tip_prim.receiver}"}
-        output_map: {pose: placing_tip}
-      - ref: GetPrimPose
-        alias: LocateCarried
-        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
-        static_args: {prim_path: "${plan.block}"}
-        output_map: {pose: carried}
-      - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried, robot: receiver}}
       - node_type: ParallelExecuter
         name: FinishBoth
         prefix: "${sides}"
@@ -99,7 +84,7 @@ fallbacks:
         output_map: {pose: missed_up}
       # clear of the block, the rise blends into the move back over it, and that into the descent
       - {ref: MoveToCartesianPose, alias: UpFromMiss, dynamic_map: {robot: giver, target_pose: missed_up}, static_args: {speed: 0.05, cartesian: true, precise_end: false}}
-      - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true, precise_end: false}}
+      - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false, aim: true}}
       - {ref: MoveToCartesianPose, alias: DownToGrasp, dynamic_map: {robot: giver, target_pose: grasp_pose}, static_args: {speed: 0.05, cartesian: true}}
       - {ref: WaitForSeconds, alias: RegraspSettle, static_args: {seconds: 0.1}}
     # stalled on contact a millimetre short (1.0 mm, 3 times in a row in Isaac: no fallback aborted the

@@ -1,4 +1,5 @@
-# The receiver back to its home joints (the giver went home after the handover: GiverReturns).
+# The receiver back home (the giver went home after the handover: GiverReturns): a pose move to the home
+# joints' tip pose, perturbed, blending out of PlaceOnPeg's Retreat.
 node_type: CompositeNode
 name: ReturnToStart
 level: SUBTASK
@@ -8,4 +9,4 @@ children:
     alias: AnnounceReturn
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
     static_args: {subtask: "${prompts.return}"}
-  - {ref: MoveToJointConfiguration, alias: ReceiverHome, dynamic_map: {robot: receiver}, static_args: {target_configuration: "${psm.home.receiver}", speed: 0.2}}
+  - {ref: MoveToCartesianPose, alias: ReceiverHome, dynamic_map: {robot: receiver}, static_args: {target_pose: "${psm.home_pose.receiver}", speed: 0.2, cartesian: true, perturb: true}}

@@ -1,8 +1,10 @@
 # The receiver carries the block from the handover over the target peg, turning it tool down on the way
-# (one joint move to Finish's targets.PlacePoses `over`, the turn about up that turns its wrist least; the
-# block's bottom 1 cm over the peg top), lowers it 1.5 mm onto the peg (targets.TOUCH), and OnPeg fails
+# (one joint move to targets.APPROACH over Finish's targets.PlacePoses `over`, the turn about up that turns
+# its wrist least), comes down to `over` (the block's bottom 1 cm over the peg top; perturbed, a free end
+# missing it (aim), LowerOntoPeg's first millimetres correcting it), lowers it 1.5 mm onto the peg (targets.TOUCH), and OnPeg fails
 # (NotSeated) unless the block went onto the peg, not its top; then it lowers it to 1 mm over the board,
-# lets go wide and backs 3 cm up, its jaws clear of the peg top. Its own arm only: Finish's branch beside
+# lets go wide and backs 3 cm up, its jaws clear of the peg top (unperturbed: the inner jaw starts 2.6 mm
+# from the peg), a free end ReturnToStart's move home blends out of. Its own arm only: Finish's branch beside
 # GiverReturns.
 # light_fail / retry_mixed (MissPose miss.place): the block comes down 4.5-5.5 mm off the peg's axis
 # and lands on the peg top; Replace lifts it back over the peg, re-aims from where it now sits in the jaws
@@ -21,9 +23,15 @@ children:
     dynamic_map: {pose: over}
     static_args: {key: "${plan.colour}", miss: "${oc.select:miss.place,null}", seed: "${oc.select:miss.seed,0}"}
     output_map: {pose: over_target}
+  - ref: TransformPose
+    alias: HighOverPeg
+    dynamic_map: {l_pose: over_target}
+    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.approach}"]}}  # up the tool (tool down: up)
+    output_map: {pose: high_over}
   # a joint move: the planner's IK following the straight turn from level to tool down ran the wrist into its limits
-  - {ref: JointsFor, alias: OverPegJoints, dynamic_map: {pose: over_target, robot: receiver}, output_map: {joints: over_joints}}
+  - {ref: JointsFor, alias: OverPegJoints, dynamic_map: {pose: high_over, robot: receiver}, output_map: {joints: over_joints}}
   - {ref: MoveToJointConfiguration, alias: TurnDownOverPeg, dynamic_map: {robot: receiver, target_configuration: over_joints}, static_args: {speed: 0.1}}
+  - {ref: MoveToCartesianPose, alias: DownOverPeg, dynamic_map: {robot: receiver, target_pose: over_target}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false, aim: true}}
   - ref: TransformPose
     alias: TouchPose
     dynamic_map: {l_pose: over_target}
@@ -49,7 +57,7 @@ children:
     dynamic_map: {l_pose: seat_target}
     static_args: {r_pose: {position: [0.0, 0.0, 0.03]}}
     output_map: {pose: retreat}
-  - {ref: MoveToCartesianPose, alias: Retreat, dynamic_map: {robot: receiver, target_pose: retreat}, static_args: {speed: 0.1, cartesian: true}}
+  - {ref: MoveToCartesianPose, alias: Retreat, dynamic_map: {robot: receiver, target_pose: retreat}, static_args: {speed: 0.1, cartesian: true, precise_end: false}}
 fallbacks:
   LowerOntoPeg:  # stalled on the peg top: OnPeg judges where it stopped
     node_type: RecoveryNode

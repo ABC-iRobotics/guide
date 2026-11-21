@@ -13,7 +13,7 @@ arm by role, the giver or the receiver (${hand.*}, psm1 or psm2), the ECM holdin
            PickBlock (SUBTASK "Pick up the block.", condition: holding)  fallback Regrasp
            LiftOff (SUBTASK "Lift it off the peg.")
            HandOver (SUBTASK "Hand it over.")  Receive (condition: received), fallback Rereceive
-           Finish (SUBTASK, ParallelExecuter "Right: Place it on the peg. Left: Return to start.")
+           Finish (SUBTASK, ParallelExecuter "Right: Place it on the peg. Left: Return to start.", planned in HandOver)
              GiverReturns  ||  PlaceOnPeg (OnPeg fails NotSeated: Replace)
            ReturnToStart (SUBTASK "Return to start.": the receiver home)
 
@@ -36,6 +36,7 @@ from pathlib import Path
 
 import numpy as np
 import yaml
+from scipy.spatial.transform import Rotation as R
 
 from guide_ex.core.states import DemoStatus
 from guide_ex.recipe import load, recipes_dir
@@ -60,15 +61,35 @@ WIDE_RAD = 0.4
 SQUEEZE_RAD = 0.1
 # +- per ECM joint about its home (init.yaml): yaw, pitch (rad), insertion (m; home 0.005, its limit 0), tool roll
 ECM_JITTER = (0.02, 0.02, 0.004, 0.0)
-# cube_stack's motion noise (guide_motion NoiseParams, FR3 scale) x 0.1 in every length: the PSM works at
-# millimetres (block 15 mm, peg r 1.5 mm, moves 2-5 cm). The aim miss fades over the first 6 mm of the next
-# move (aim_late off): a descent of 15 mm onto a 0.7 mm wall is aligned before the jaws reach it.
-NOISE = {"sigma": 0.0012, "decay": 0.003, "ell": 0.015, "spacing": 0.005, "blend": 0.004, "aim": 0.003,
-         "aim_ramp": 0.006}
+# cube_stack's motion noise (guide_motion NoiseParams, FR3 scale) x 0.4 in every length (x 0.1, sigma 1.2 mm
+# and blend 4 mm, was some 3 px in the ECM image: no visible noise or blending). The aim miss fades within the
+# next move (aim_late off): Noise as the robot runs it leaves a precise descent after an aimed hover 0.30 mm
+# off its line (p99) 4.5 mm before the grasp, inside the jaws' 0.42 mm each side of the wall. p_perturb 0.8:
+# most moves asked to be perturbed are.
+NOISE = {"sigma": 0.0048, "decay": 0.012, "ell": 0.06, "spacing": 0.02, "blend": 0.015, "aim": 0.012,
+         "aim_ramp": 0.04, "p_perturb": 0.8}
 SETTLE_S = 2.0  # sim s after Randomize: the blocks drop onto their pegs
 MAX_ATTEMPTS = 8  # attempts at one episode before the run stops
 SEED_BLOCK = 1000  # episode i draws its layouts from scene seeds seed_base + i * SEED_BLOCK, ... + 1, ...
 _generating = threading.Lock()
+MOVES = []  # the attempt's arm goals in order, for its provenance (tools/path_stats.py): log_moves
+
+
+def log_moves(name, robot):
+    """Wrap robot.send_action: each arm goal goes to MOVES (robot, a pose goal's position or a joint goal's
+    joints, the move's flags); a jaw-only action does not."""
+    send = robot.send_action
+
+    def logged(action, *args, **kwargs):
+        if isinstance(action, dict):
+            joints = {k: float(v) for k, v in action.items() if k.removesuffix(".pos") in robot.config.arm_joint_names}
+            goal = {"joints": joints} if len(joints) == len(robot.config.arm_joint_names) else None
+        else:
+            goal = {"position": [action.position.x, action.position.y, action.position.z]}
+        if goal:
+            MOVES.append({"robot": name, **goal, **{k: kwargs[k] for k in ("speed", "perturb", "precise_end", "aim") if k in kwargs}})
+        return send(action, *args, **kwargs)
+    robot.send_action = logged
 
 
 def init_yaml() -> dict:
@@ -99,6 +120,15 @@ def ecm_hold(entry, rng) -> dict:
     return {f"{j}.pos": float(v) for j, v in zip(entry["joint_names"], q)}
 
 
+def home_pose(q) -> dict:
+    """The tip pose (base frame, a static_args pose) at the PSM joints q (robots/psm order, jaws after): the
+    returns home are pose moves, so they blend out of the move before and take the motion noise."""
+    from peg_transfer.targets import _model
+
+    p, rot = _model().ee_pose(np.asarray(q[:6], float))
+    return {"position": [float(v) for v in p], "orientation": {"quat": [float(v) for v in R.from_matrix(rot).as_quat()]}}
+
+
 def recipe_values(init, plan, miss=None, hold=None) -> dict:
     """What config/recipes/ interpolate: the roles (hand), the plan, the subtask prompts, each role's tool
     tip prim, the PSM home and jaw (description.json's gripper scale), the ECM hold and the misses."""
@@ -118,7 +148,8 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
         "prompts": {**SUBTASKS, "first": " ".join(f"{sides[r]}: {first[r]}" for r in sides)},
         "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
         "psm": {"home": {role: {f"{j}.pos": q for j, q in zip(robots[r]["joint_names"], robots[r]["default_joint_states"])}
-                         for role, r in roles.items()}},  # each arm's own (init.yaml)
+                         for role, r in roles.items()},  # each arm's own (init.yaml)
+                "home_pose": {role: home_pose(robots[r]["default_joint_states"]) for role, r in roles.items()}},
         "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "wide": gripper["scale"][0] * WIDE_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
         "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP, "touch": -TOUCH},  # m along the tool's z
@@ -223,6 +254,7 @@ def generate(n, scene_id, robots, sim_namespace, init, path, recipes, seed_base=
                 key = {"episode": done, "attempt": attempt, "seed": seed, "draw": draws, "scene_id": scene_id,
                        "clean": not perturb_all and done % 2 == 0}
                 log.info(f"--- Episode {done + 1}/{n} | attempt {attempt + 1} | seed {seed} ---")
+                MOVES.clear()
                 try:
                     saved, info = solve_task(scene_id, robots, sim_namespace, init, path, draws, seed,
                                              key["clean"], cycle(recipes, done))
@@ -235,7 +267,7 @@ def generate(n, scene_id, robots, sim_namespace, init, path, recipes, seed_base=
                     saved, info = False, {"error": repr(e)}
                 discard()
                 with record.open("a") as f:
-                    f.write(json.dumps({**key, **info, "saved": saved}) + "\n")
+                    f.write(json.dumps({**key, **info, "saved": saved, "moves": MOVES}) + "\n")
                 if saved:
                     break
             else:
@@ -260,7 +292,7 @@ def main():
     parser.add_argument("--namespace", type=str, default="/Sim_0/Scene_0")
     parser.add_argument("--controller", choices=["oscbf"], default="oscbf")
     parser.add_argument("--motion-noise", nargs="?", const="{}", default=None, metavar="JSON",
-                        help=f"perturbed demonstrations: {NOISE} (cube_stack's lengths x 0.1), or a JSON object of overrides")
+                        help=f"perturbed demonstrations: {NOISE} (cube_stack's lengths x 0.4), or a JSON object of overrides")
     parser.add_argument("--seed-base", type=int, default=0, help="first scene seed; give parallel solvers disjoint bases")
     parser.add_argument("--perturb-all", action="store_true", help="every episode perturbed, not every other one")
     parser.add_argument("--recipe", default="flawless", metavar="NAME[,NAME...]",
@@ -277,8 +309,9 @@ def main():
     init = init_yaml()
     noise = None if args.motion_noise is None else NoiseParams(**{**NOISE, **json.loads(args.motion_noise)})
     robots = make_robots(init, namespace, motion_noise=noise)
-    for r in robots.values():
+    for name, r in robots.items():
         r.connect()
+        log_moves(name, r)
     time.sleep(5)  # let the connections come up
     # every client on every robot, one per service per node (rmw_cyclonedds reply routing)
     for r in robots.values():
