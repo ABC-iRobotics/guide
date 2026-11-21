@@ -126,6 +126,12 @@ def test_place_poses_seat_the_block_as_held_1_mm_over_the_board_and_come_down_th
         assert np.allclose(rot(seat) @ rot(in_tip)[:, 2], UP) and np.allclose(rot(turn), rot(seat))
         assert np.allclose(seat.position.to_numpy() + rot(seat) @ in_tip.position.to_numpy(),
                            peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
+    # a replace (keep): the block tilted 20 deg on the peg top, the jaws keep their turn, the block's centre over the peg
+    tilted = Pose(block.position, Rotation(R.from_rotvec(rot(tip)[:, 1] * np.radians(20)) * block.orientation.rot))
+    _, over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, tilted, Pose(), keep=True)
+    assert np.allclose(rot(over), rot(tip)) and np.allclose(rot(seat), rot(tip))
+    assert np.allclose(seat.position.to_numpy() + rot(tip) @ (tip.inv() * tilted).position.to_numpy(),
+                       peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
 
 
 @pytest.mark.parametrize("stage,axis", [("grasp", 1), ("handover", 1), ("place", None)])

@@ -260,7 +260,7 @@ def back_off(tip: Pose, distance: float) -> Pose:
     return tip * Pose.from_numpy(np.array([0.0, 0.0, distance]), R.identity())
 
 
-def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose | None = None):
+def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose | None = None, keep: bool = False):
     """(turn, over, seat), tool down, from the block as it sits in the jaws at `tip` (it may have slid
     along the wall, or turned in them): the jaws turned down where they are, 1 cm up (the least turn of
     the block's axis to up, so a block drooping in the jaws comes down straight onto the peg, then a
@@ -268,14 +268,16 @@ def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose | None = None)
     then the block's centre over the peg's axis, its bottom 1 cm over the peg top, and down at the seat
     (SEAT_GAP over the board). The block's turn about its axis does not matter to the peg: given the
     arm's `base`, the jaws turn half a turn more about up (FLIP) where that eases the wrist, and the
-    turn, at the handover, far from the peg, keeps the least turn about up the wrist reaches there."""
+    turn, at the handover, far from the peg, keeps the least turn about up the wrist reaches there. `keep`
+    (a replace, tool down over the peg already): the jaws keep their turn, only the block's centre moves
+    (re-turning to a block tilted on the peg top asked the wrist for 60 deg it could not reach there)."""
     up, p = _unit(up), peg.position.to_numpy()
     t, axis = tip.orientation.to_numpy(), block.orientation.to_numpy()[:, 2]
     axis = axis if axis @ t[:, 2] >= 0 else -axis  # the block's axis on the shaft's side
     m = R.align_vectors([up], [axis])[0].as_matrix() @ t
     x = _unit(m[:, 0] - (m[:, 0] @ up) * up)
     want = toward_free(bend_free_x(p, -up), x, up)
-    rot = _about(up, np.arctan2(np.cross(x, want) @ up, x @ want)) @ m
+    rot = t if keep else _about(up, np.arctan2(np.cross(x, want) @ up, x @ want)) @ m
     held = (tip.inv() * block).position.to_numpy()  # the block's centre in the tip frame
     seat = p + up * (SEAT_GAP + BLOCK_HALF_H - PEG_H / 2)
     turn = tip.position.to_numpy() + 0.01 * up
@@ -290,7 +292,7 @@ def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose | None = None)
     def poses(rot):
         at = lambda centre: Pose.from_numpy(centre - rot @ held, R.from_matrix(rot))
         return Pose.from_numpy(turn, R.from_matrix(turned(rot))), at(seat + up * DROP), at(seat)
-    if base is None:
+    if base is None or keep:
         return poses(rot)
     load = lambda ps: max(wrist_load(base, q.position.to_numpy(), q.orientation.to_numpy()) for q in ps)
     return min((poses(rot), poses(rot @ FLIP)), key=load)
@@ -367,17 +369,17 @@ class ReceivePoses(BaseNode):
 class PlacePoses(BaseNode):
     """The receiver's place over `peg` (place_poses) of the block it holds at `tip`: `turn_down` (turned
     where it is) and `turn_down_joints` (joints_for it, nearest the arm's `home` joints: the turn from
-    level to tool down is a joint move, like the giver's to level), `over` and `seat`."""
+    level to tool down is a joint move, like the giver's to level), `over` and `seat`; `keep`: place_poses'."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("PlacePoses", alias, dynamic_map, static_args, output_map)
 
-    def run(self, peg: Pose, scene: Pose, tip: Pose, block: Pose, home: dict) -> ExecutionResult:
-        turn, over, seat = place_poses(peg, up_of(scene), tip, block, Pose())  # all in its base frame
+    def run(self, peg: Pose, scene: Pose, tip: Pose, block: Pose, home: dict, keep: bool = False) -> ExecutionResult:
+        turn, over, seat = place_poses(peg, up_of(scene), tip, block, Pose(), keep)  # all in its base frame
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={
-            "turn_down": turn, "turn_down_joints": joints_for(turn, home), "over": over, "seat": seat})
+            "turn_down": turn, "turn_down_joints": None if keep else joints_for(turn, home), "over": over, "seat": seat})
 
 
 @node()

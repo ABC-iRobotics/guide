@@ -99,7 +99,7 @@ fallbacks:
         dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
         static_args: {prim_path: "${plan.block}"}
         output_map: {pose: carried}
-      - {ref: PlacePoses, alias: ReplacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}, static_args: {home: "${psm.home.receiver}"}}
+      - {ref: PlacePoses, alias: ReplacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}, static_args: {home: "${psm.home.receiver}", keep: true}}
       - ref: SetPrompt
         alias: BackToPlace
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
