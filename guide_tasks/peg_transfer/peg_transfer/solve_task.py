@@ -45,6 +45,10 @@ SUBTASKS = {"pick": "Pick up the block.", "lift": "Lift it off the peg.", "hando
 # Jaw opening (rad between the jaws, 2x each jaw's angle; 0 closes). The grasp straddles the 0.7 mm wall
 # with 0.082 rad per jaw (0.77 mm at the tips); wider jaws land on the peg (T10: tip 6.5-7 mm high).
 OPEN_RAD = 0.164
+# Wide, where no peg is near a jaw's outside (the handover) or the peg leaves the inner jaw 2.6 mm (the release):
+# 0.2 rad per jaw (1.9 mm at the tips). At OPEN_RAD the receiver's tips, +-0.4 mm about the wall, landed on its
+# end and closed on air (NotReceived x3); opening there, the jaws stay on the wall.
+WIDE_RAD = 0.4
 # Closing aims past shut, like the dVRK's negative jaw angles: on a wall the drive (0.5 N m/rad) then
 # squeezes with 0.05 rad of error, not the 0.003 left at 0, and the block no longer droops out of level
 SQUEEZE_RAD = 0.1
@@ -102,7 +106,7 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
         "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
         "psm": {"home": {role: {f"{j}.pos": q for j, q in zip(robots[r]["joint_names"], robots[r]["default_joint_states"])}
                          for role, r in roles.items()}},  # each arm's own (init.yaml)
-        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
+        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "wide": gripper["scale"][0] * WIDE_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
         "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP},  # m along the tool's z
         "miss": miss or {},

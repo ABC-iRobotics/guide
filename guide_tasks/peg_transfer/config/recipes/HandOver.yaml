@@ -52,7 +52,7 @@ children:
     output_map: {pose: giving_tip}
   - {ref: ReceivePoses, dynamic_map: {block: given_block, giver_tip: giving_tip, scene: receiver_scene}}
   - {ref: MoveToCartesianPose, alias: ApproachReceive, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}}
-  - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}}
+  - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
   - node_type: CompositeNode
     name: Receive
     level: SEQUENCE
@@ -91,7 +91,7 @@ children:
         max_retries: 1
         children:
           - {ref: WaitForSeconds, alias: MoveToReceiveStalled, static_args: {seconds: 0.1}}
-  - {ref: OpenJaw, alias: GiverLetsGo, dynamic_map: {robot: giver}}
+  - {ref: OpenJaw, alias: GiverLetsGo, dynamic_map: {robot: giver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
   - {ref: WaitForSeconds, alias: LetGoSettle, static_args: {seconds: 0.5}}
   - {ref: MoveToCartesianPose, alias: GiverBacksOff, dynamic_map: {robot: giver, target_pose: give_back}, static_args: {speed: 0.1, cartesian: true}}
   - {ref: MoveToCartesianPose, alias: GiverRises, dynamic_map: {robot: giver, target_pose: give_rise}, static_args: {speed: 0.1, cartesian: true}}
@@ -109,7 +109,7 @@ fallbacks:
         alias: AnnounceRereceive
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
         static_args: {subtask: "${prompts.rereceive}"}
-      - {ref: OpenJaw, alias: ReopenToReceive, dynamic_map: {robot: receiver}}
+      - {ref: OpenJaw, alias: ReopenToReceive, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
       - ref: TransformPose
         alias: BackOutPose
         dynamic_map: {l_pose: receive_target}

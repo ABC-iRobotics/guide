@@ -109,7 +109,7 @@ def world(monkeypatch):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
         ((joint, q),) = gripper_goal_pos.items()
-        assert joint == "psm_tool_gripper1_joint" and q in (-0.5 * st.OPEN_RAD, 0.5 * st.SQUEEZE_RAD)  # description.json's scale
+        assert joint == "psm_tool_gripper1_joint" and q in (-0.5 * st.OPEN_RAD, -0.5 * st.WIDE_RAD, 0.5 * st.SQUEEZE_RAD)  # description.json's scale
         tip = w.tips[arm(robot)]
         if q > 0 and tg.holds(tip, Pose(Point(w.block))):
             w.holders[arm(robot)] = tip.inv() * w.world(w.plan["block"])

@@ -66,7 +66,7 @@ children:
         max_retries: 1
         children:
           - {ref: WaitForSeconds, alias: LowerStalled, static_args: {seconds: 0.1}}
-  - {ref: OpenJaw, alias: Release, dynamic_map: {robot: receiver}}
+  - {ref: OpenJaw, alias: Release, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
   - {ref: WaitForSeconds, alias: ReleaseSettle, static_args: {seconds: 0.5}}
   - ref: TransformPose
     alias: RetreatPose
