@@ -190,6 +190,15 @@ def generate(n, scene_id, robots, sim_namespace, init, path, recipes, seed_base=
     log = robot.node.get_logger()
     record = Path(f"{path.rstrip('/')}.provenance.jsonl")
     draws = errors = 0
+
+    def discard():  # an attempt that broke off leaves its episode open: drop it (a no-op when none is)
+        try:
+            robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False),
+                              timeout_sec=300.0)
+        except Exception as e:
+            log.error(f"Cleanup stop_recording failed: {e}")
+
+    discard()  # so does a solver killed mid-episode: its frames would open this run's first episode
     try:
         for done in range(n):
             for attempt in range(MAX_ATTEMPTS):
@@ -208,11 +217,7 @@ def generate(n, scene_id, robots, sim_namespace, init, path, recipes, seed_base=
                     if errors >= 5:
                         raise
                     saved, info = False, {"error": repr(e)}
-                try:  # an attempt that broke off leaves its episode open: drop it (a no-op when none is)
-                    robot.callService(robot.stop_recording, srv.StopRecording.Request(id=scene_id, save_episode=False),
-                                      timeout_sec=300.0)
-                except Exception as e:
-                    log.error(f"Cleanup stop_recording failed: {e}")
+                discard()
                 with record.open("a") as f:
                     f.write(json.dumps({**key, **info, "saved": saved}) + "\n")
                 if saved:
