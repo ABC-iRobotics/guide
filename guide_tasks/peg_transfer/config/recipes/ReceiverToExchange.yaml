@@ -1,0 +1,13 @@
+# The receiver, while the giver goes for the block, moves roughly to where it will take it, turning level on
+# the way: `standby` (targets.ExchangePose, planned in Reach). Its own arm only: Reach's branch beside
+# GiverApproach.
+node_type: CompositeNode
+name: ReceiverToExchange
+level: SEQUENCE
+dynamic_map: {receiver: receiver, standby: standby, sim_namespace: sim_namespace, scene_id: scene_id}
+children:
+  - ref: SetPrompt
+    alias: AnnounceExchange
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {subtask: "${prompts.exchange}"}
+  - {ref: MoveToCartesianPose, alias: ToExchange, dynamic_map: {robot: receiver, target_pose: standby}, static_args: {speed: 0.2, cartesian: true, perturb: true}}

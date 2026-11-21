@@ -35,6 +35,16 @@ BASES = {  # davinci_sim's RCMs, each base tilted toward the board (measured; ha
 }
 HOME = Pose(Point([0.0, 0.0, -0.177]))  # the tip at the home joints, base frame
 MARKER = Pose(Point([0.005, 0.72, 0.85]), Rotation(R.from_euler("x", 20, degrees=True)))
+WORLD = {}  # the running World, for the arms' joint_state
+
+
+class Arm(SimpleNamespace):
+    def send_action(self, *args, **kwargs):  # a robot to ParallelExecuter's claims (the moves are faked)
+        raise AssertionError("faked")
+
+    @property
+    def joint_state(self):  # the fake world's joints of this arm (robots/psm order)
+        return SimpleNamespace(name=PSM.arm_joints, position=list(WORLD["w"].q[self.id]))
 
 
 def make_plan(seed, giver):
@@ -55,6 +65,8 @@ class World:
         self.yaw = R.from_euler("z", plan["yaw"][plan["layout"].index(plan["colour"])], degrees=True)  # turns with a holder
         self.tips = {k: BASES[k] * HOME for k in ("psm1", "psm2")}
         self.holders, self.prompts, self.calls, self.saved = {}, [], [], None  # arm: the block in its tip (Pose)
+        self.q = {k: np.array(r["default_joint_states"][:6]) for k, r in st.init_yaml()["robots"].items() if k != "ecm"}
+        WORLD["w"] = self
 
     def world(self, prim):
         if prim == self.plan["block"]:
@@ -95,13 +107,19 @@ def world(monkeypatch):
         w.calls.append((self.name, arm(robot)))
         assert 0.05 <= speed <= 0.2, (self.name, speed)
         w.move_tip(arm(robot), BASES[arm(robot)] * target_pose)
+        try:  # the joints there, on the branch the arm is on
+            w.q[arm(robot)] = np.array(list(tg.joints_for(target_pose, dict(zip(
+                [f"{j}.pos" for j in PSM.arm_joints], w.q[arm(robot)]))).values()))
+        except ValueError:
+            pass  # out of the fake's reach (its home tip is not the model's)
         return PERFECT
 
     def joints(self, robot, target_configuration, speed=1.0):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
         if arm(robot) != "ecm":  # the tip where robots/psm's forward kinematics put it
-            p, rot_ = PSM.ee_pose(np.array([target_configuration[f"{j}.pos"] for j in PSM.arm_joints]))
+            w.q[arm(robot)] = np.array([target_configuration[f"{j}.pos"] for j in PSM.arm_joints])
+            p, rot_ = PSM.ee_pose(w.q[arm(robot)])
             w.move_tip(arm(robot), BASES[arm(robot)] * Pose.from_numpy(p, R.from_matrix(rot_)))
         return PERFECT
 
@@ -118,8 +136,11 @@ def world(monkeypatch):
         return PERFECT
 
     def prompt(self, robot, sim_namespace, scene_id, task="", subtask="", timeout_sec=30.0):
-        holder["w"].prompts += [(level, p) for level, p in (("task", task), ("subtask", subtask)) if p]
-        return PERFECT
+        def send(task, subtask):  # through the executer's join, as the real SetPrompt
+            holder["w"].prompts += [(level, p) for level, p in (("task", task), ("subtask", subtask)) if p]
+            return PERFECT
+
+        return recording.prompt(task, subtask, send)
 
     def stop(self, robot, sim_namespace, scene_id, save_episode=True, timeout_sec=60.0):
         holder["w"].saved = save_episode
@@ -138,7 +159,7 @@ def world(monkeypatch):
     return holder
 
 
-ROBOTS = {k: SimpleNamespace(id=k) for k in ("psm1", "psm2", "ecm")}
+ROBOTS = {k: Arm(id=k) for k in ("psm1", "psm2", "ecm")}
 
 
 def run(holder, plan, miss=None, recoveries=True):
@@ -158,18 +179,24 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
     assert result.status == DemoStatus.PERFECT and result.outputs["task_success"] and w.saved
     receiver = plan["receiver"]
     by = dict(w.calls)  # the last arm each node ran on
-    for name in ("LocateBlock", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift", "TurnLevel", "Give",
-                 "GiverLetsGo", "GiverBacksOff", "GiverRises", "GiverHome"):
+    for name in ("LocateBlock", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift", "TurnLevel",
+                 "GiverLetsGo", "GiverBacksOff", "GiverHome"):
         assert by[name] == giver, name
-    for name in ("ReceiverOpens", "ApproachReceive", "MoveToReceive", "ReceiverCloses", "LocatePeg", "TurnDown",
-                 "AlignOverPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
+    for name in ("ToExchange", "ReceiverOpens", "ApproachReceive", "MoveToReceive", "ReceiverCloses", "LocatePeg",
+                 "TurnDownOverPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
         assert by[name] == receiver, name
     assert by["HoldCamera"] == "ecm"
-    # arms move one at a time: the receiver's first move comes after the giver's last before it lets go
+    # each arm's moves in the user's flow, every point a target, an approach to one or a clearance
+    moves = [(n, a) for n, a in w.calls if a != "ecm" and n not in ("GetPrimPose",) and not n.startswith("Locate")
+             and n not in ("GiverScene", "ReceiverScene") and "Starts" not in n]
+    assert [n for n, a in moves if a == giver] == ["OpenForPick", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift",
+                                                   "TurnLevel", "GiverLetsGo", "GiverBacksOff", "GiverHome"]
+    assert [n for n, a in moves if a == receiver] == ["ToExchange", "ApproachReceive", "ReceiverOpens", "MoveToReceive",
+                                                      "ReceiverCloses", "TurnDownOverPeg", "Lower", "Release", "Retreat",
+                                                      "ReceiverHome"]
     names = [n for n, _ in w.calls]
-    assert names.index("ApproachReceive") > names.index("Give") and names.index("GiverBacksOff") > names.index("ReceiverCloses")
-    # collision-free retreat: the giver backs out along its jaws, then rises, then goes home
-    assert names.index("GiverBacksOff") < names.index("GiverRises") < names.index("GiverHome")
+    assert names.index("ApproachReceive") > names.index("TurnLevel") and names.index("GiverBacksOff") > names.index("ReceiverCloses")
+    assert names.index("GiverLetsGo") < names.index("GiverBacksOff") < names.index("GiverHome")
 
 
 def test_the_prompts_at_three_levels(world):
@@ -179,7 +206,14 @@ def test_the_prompts_at_three_levels(world):
     assert plan["task"] == "Transfer the block to the other side."  # the procedure, recorded by the scene
     assert [p for level, p in w.prompts if level == "task"] == plan["tasks"]
     subtasks = [p for level, p in w.prompts if level == "subtask"]
-    assert list(dict.fromkeys(subtasks)) == list(st.SUBTASKS.values())[:5]  # no miss, no recovery's
+    s = st.SUBTASKS
+    # the parallel blocks' prompts joined, each part prefixed with its arm's image side (PSM1 right, giver here)
+    reach, finish = f"Right: {s['reach']} Left: {s['exchange']}", f"Right: {s['return']} Left: {s['place']}"
+    assert subtasks[0] == reach == st.recipe_values(st.init_yaml(), plan)["prompts"]["first"]
+    full = [p for p in dict.fromkeys(subtasks) if ": " not in p or p in (reach, finish)]  # a block's first part alone aside
+    assert full == [reach, s["pick"], s["lift"], s["handover"], finish, s["return"]]  # no miss, no recovery's
+    assert all(": " not in p or p in (reach, finish) or p in (f"Right: {s['reach']}", f"Left: {s['exchange']}",
+                                                             f"Right: {s['return']}", f"Left: {s['place']}") for p in subtasks)
 
 
 @pytest.mark.parametrize("stage,recovery,retry", [("grasp", "UpFromMiss", "regrasp"),
@@ -197,8 +231,8 @@ def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(wor
     assert names.count(recovery) == 1
     # the subtask timeline shows the retry, then the subtask it retries again
     subtasks = [p for level, p in w.prompts if level == "subtask"]
-    i = subtasks.index(st.SUBTASKS[retry])
-    assert subtasks[i + 1] == st.SUBTASKS[{"grasp": "pick", "handover": "handover", "place": "place"}[stage]]
+    i = next(k for k, p in enumerate(subtasks) if st.SUBTASKS[retry] in p)  # in a parallel block: joined
+    assert st.SUBTASKS[{"grasp": "pick", "handover": "handover", "place": "place"}[stage]] in subtasks[i + 1]
 
     w, result = run(world, plan, miss={**miss, "seed": 5}, recoveries=False)
     assert result.status == DemoStatus.FAILURE and recovery not in [n for n, _ in w.calls]
@@ -218,7 +252,8 @@ def test_a_descent_stalled_on_contact_closes_where_it_stopped(world, monkeypatch
     monkeypatch.setattr(MoveToCartesianPose, "run", stalls_once)
     w, result = run(world, make_plan(0, "psm1"))
 
-    names = [n for n, _ in w.calls]
+    arm = "psm1" if descent == "MoveToGrasp" else "psm2"  # the giver's, the receiver's (parallel blocks interleave)
+    names = [n for n, a in w.calls if a == arm]
     assert result.outputs["task_success"] and names[names.index(descent) + 1] == then
 
 
@@ -243,7 +278,7 @@ def test_without_recoveries_strips_every_fallback_but_the_contact_closes():
     while stack:
         node = stack.pop()
         kept |= {r.name for r in (getattr(node, "fallbacks", None) or {}).values()}
-        stack += [c for c in [*getattr(node, "children", []), getattr(node, "true_branch", None),
+        stack += [c for c in [*getattr(node, "children", []), *getattr(node, "branches", []), getattr(node, "true_branch", None),
                               getattr(node, "false_branch", None)] if c is not None]
     assert kept == {"MoveToGraspContact", "MoveToReceiveContact", "LowerContact"}
 
@@ -268,7 +303,7 @@ def test_solve_task_randomizes_draws_the_variant_and_saves(world, recipe):
     plan = make_plan(7, "psm1")
     world["w"] = World(plan)
     logger = SimpleNamespace(info=lambda m: None, error=lambda m: None)
-    robots = {k: SimpleNamespace(id=k, randomize="randomize", node=SimpleNamespace(get_logger=lambda: logger),
+    robots = {k: Arm(id=k, randomize="randomize", node=SimpleNamespace(get_logger=lambda: logger),
                                  callService=lambda client, request, **kw: SimpleNamespace(success=True, message=json.dumps(plan)),
                                  motion_episode=lambda *key, clean=False: None, sleep=lambda s: None)
               for k in ("psm1", "psm2", "ecm")}

@@ -9,6 +9,8 @@ dynamic_map:
   giver: "${hand.giver}"
   receiver: "${hand.receiver}"
   ecm: ecm
+  psm1: psm1  # by name too: the parallel blocks' prompt prefix (sides)
+  psm2: psm2
   sim_namespace: sim_namespace
   scene_namespace: scene_namespace
   scene_id: scene_id
@@ -18,7 +20,7 @@ children:
   - ref: SetPrompt
     alias: AnnounceFirst
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
-    static_args: {task: "${plan.tasks[0]}", subtask: "${prompts.pick}"}
+    static_args: {task: "${plan.tasks[0]}", subtask: "${prompts.first}"}
   # The camera's pose jitter: a joint target drawn per episode (solve_task.ecm_hold).
   - ref: MoveToJointConfiguration
     alias: HoldCamera

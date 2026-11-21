@@ -1,0 +1,43 @@
+# The giver opens and comes tool down over the block (targets.GraspPose, planned in Transfer), its wrist
+# turning for the grasp on the way, and descends slowly onto it: the hover is a free end the descent
+# blends into, a perturbed episode missing it (aim), the descent's first millimetres correcting it.
+# light_fail / retry_mixed (MissPose miss.grasp): the grasp lies 18-22 mm along the wall, off its end:
+# PickBlock closes on air and Transfer's Regrasp picks again, at the block this time.
+# Its own arm only: Reach's branch beside ReceiverToExchange.
+node_type: CompositeNode
+name: GiverApproach
+level: SEQUENCE
+dynamic_map: {giver: giver, grasp_pose: grasp_pose, sim_namespace: sim_namespace, scene_id: scene_id}
+children:
+  - ref: SetPrompt
+    alias: AnnounceReach
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {subtask: "${prompts.reach}"}
+  - {ref: OpenJaw, alias: OpenForPick, dynamic_map: {robot: giver}}
+  - ref: TransformPose
+    alias: OverGrasp
+    dynamic_map: {l_pose: grasp_pose}
+    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.approach}"]}}  # up the tool (tool down: up)
+    output_map: {pose: over_grasp}
+  - ref: MoveToCartesianPose
+    alias: MoveOverBlock
+    dynamic_map: {robot: giver, target_pose: over_grasp}
+    static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}
+  - ref: MissPose
+    alias: MissGrasp
+    dynamic_map: {pose: grasp_pose}
+    static_args: {key: "${plan.colour}", miss: "${oc.select:miss.grasp,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: grasp_target}
+  - {ref: MoveToCartesianPose, alias: MoveToGrasp, dynamic_map: {robot: giver, target_pose: grasp_target}, static_args: {speed: 0.05, cartesian: true}}
+  - {ref: WaitForSeconds, alias: DescentSettle, static_args: {seconds: 0.1}}
+# a descent that stalls on contact a millimetre or two short (a jaw on the wall or the peg) closes
+# where it stopped: PickBlock's CheckHolding judges the grip
+fallbacks:
+  MoveToGrasp:
+    node_type: RecoveryNode
+    name: MoveToGraspContact
+    level: SEQUENCE
+    resume_target: DescentSettle
+    max_retries: 1
+    children:
+      - {ref: WaitForSeconds, alias: MoveToGraspStalled, static_args: {seconds: 0.1}}

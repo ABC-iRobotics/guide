@@ -75,9 +75,10 @@ def test_handover_is_level_jaw_to_jaw_within_the_joint_limits(giver, receiver):
         held = tg.grasp_pose(block, UP)
         give, receive = tg.handover_poses(block, held, Pose(Point(corner)), BASE[giver], BASE[receiver], UP)
         g, r = rot(give), rot(receive)
-        # both level, the jaws pointing at each other along one line, each gripped wall on top
+        # both level, the jaws pointing at each other along one line, each gripped wall in the upper half (on
+        # top where the joint margins allow: at the marker's far corner only 60-70 deg off up is left)
         for tip in (give, receive):
-            assert (tip.position.to_numpy() - corner) @ UP > 0.5 * tg.WALL_R
+            assert (tip.position.to_numpy() - corner) @ UP > 0
         assert abs(g[:, 2] @ UP) < 1e-9 and abs(r[:, 2] @ UP) < 1e-9 and np.allclose(g[:, 2], -r[:, 2])
         # the receiver's jaws point back at the giver: from the receiver's tip, the giver's lies along -z
         assert (give.position.to_numpy() - receive.position.to_numpy()) @ r[:, 2] < -tg.WALL_R
@@ -87,14 +88,14 @@ def test_handover_is_level_jaw_to_jaw_within_the_joint_limits(giver, receiver):
         assert np.allclose(receive.position.to_numpy() - r @ tg.GRIP, corner)
         # measured where the giver holds it out, the receiver's grip is the planned one
         assert np.allclose(tg.receive_pose(moved, -g[:, 2], BASE[receiver], UP).position.to_numpy(), receive.position.to_numpy())
-        for tip, arm in ((give, giver), (receive, receiver), (tg.back_off(give, tg.GIVE_PRE), giver), (tg.back_off(give, tg.RETREAT), giver)):
+        for tip, arm in ((give, giver), (receive, receiver), (tg.back_off(give, tg.RETREAT), giver)):
             assert tg.wrist_load(BASE[arm], tip.position.to_numpy(), rot(tip)) <= 1.0
         # from that grip the receiver turns tool down where it is and places on its pegs (RCM at the origin)
         at_rcm = lambda pose: Pose(Point(pose.position.to_numpy() - RCM[receiver]), pose.orientation)
         base = Pose(Point([0.0, 0.0, 0.0]), BASE[receiver].orientation)
         for x, y in itertools.product((0.007, 0.05), (0.685, 0.735)):  # peg_transfer.usd: the pegs, board jitter
             peg = at_rcm(Pose(Point([x * np.sign(RCM[receiver][0]), y, 0.80 + PEG_H / 2])))
-            for tip in tg.place_poses(peg, UP, at_rcm(receive), at_rcm(moved), base):
+            for tip in tg.place_poses(peg, UP, at_rcm(receive), at_rcm(moved), base):  # over, seat
                 assert np.isfinite(tg.wrist_load(base, tip.position.to_numpy(), rot(tip))), (x, y)
 
 
@@ -105,33 +106,49 @@ def test_back_off_moves_up_the_tip_z():
 
 def test_place_poses_seat_the_block_as_held_1_mm_over_the_board_and_come_down_the_drop():
     peg = np.array([0.043, 0.75, 0.80 + PEG_H / 2]) - RCM["psm2"]  # RCM at the origin
+    base = Pose(Point([0.0, 0.0, 0.0]), BASE["psm2"].orientation)
     block = Pose(Point([0.0, 0.72, 0.85] - RCM["psm2"]), Rotation(R.from_euler("z", 25, degrees=True)))
     tip = tg.grasp_pose(block, UP) * Pose(Point([0.0, 0.004, 0.001]))  # slid 4 mm along the wall, 1 mm down
-    turn, over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, block)
+    over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, block, base)
     m, held = rot(seat), (tip.inv() * block).position.to_numpy()
     assert np.allclose(seat.position.to_numpy() + m @ held, peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
     assert np.allclose(over.position.to_numpy() - seat.position.to_numpy(), UP * tg.DROP)
-    assert np.allclose(m[:, 2], UP) and np.allclose(rot(over), m) and np.allclose(rot(turn), m)
-    assert np.allclose(turn.position.to_numpy(), tip.position.to_numpy() + 0.01 * UP)  # turned 1 cm over where it is
-    assert tg.axis_deviation(m[:, 0], tg.bend_free_x(peg, -UP)) <= tg.MAX_DEVIATION + 1e-9
-    assert m[:, 0] @ rot(tip)[:, 0] > 0  # the short way round: the jaws not swapped
+    assert np.allclose(m[:, 2], UP) and np.allclose(rot(over), m)
+    for pose in (over, seat):  # reachable, every joint MARGIN inside its limits
+        assert np.isfinite(tg.wrist_load(base, pose.position.to_numpy(), rot(pose)))
     assert tg.DROP - PEG_H == pytest.approx(0.010)  # over the peg: the block's bottom 1 cm over its top
     # from the level handover grip, the block drooping 10 deg in the jaws: its axis turned up onto the peg
     on_side = Rotation(R.from_euler("y", 90, degrees=True))  # the block's axis along x
     level = tg.tip_for(block.position.to_numpy(), tg.frame(rot(Pose(Point([0, 0, 0]), on_side)) @ [0.5, 0.866, 0], [1, 0, 0]))
     for droop in (0, 10):
         drooped = Pose(block.position, Rotation(R.from_rotvec(rot(level)[:, 0] * np.radians(droop)) * on_side.rot))
-        turn, over, seat = tg.place_poses(Pose(Point(peg)), UP, level, drooped)
+        over, seat = tg.place_poses(Pose(Point(peg)), UP, level, drooped, base)
         in_tip = level.inv() * drooped
-        assert np.allclose(rot(seat) @ rot(in_tip)[:, 2], UP) and np.allclose(rot(turn), rot(seat))
+        assert np.allclose(rot(seat) @ rot(in_tip)[:, 2], UP) and np.allclose(rot(over), rot(seat))
         assert np.allclose(seat.position.to_numpy() + rot(seat) @ in_tip.position.to_numpy(),
                            peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
+    # the turn about up turns the wrist least from the arm's joints now: nearer joints, a nearer turn
+    near = tg.wrist_ik(base, over.position.to_numpy(), tg._about(UP, np.pi / 3) @ rot(over))
+    if near:
+        q = min(near, key=lambda f: f[0])[1]
+        again, _ = tg.place_poses(Pose(Point(peg)), UP, level, drooped, base, near=q)
+        q_again = min(tg.wrist_ik(base, again.position.to_numpy(), rot(again)), key=lambda f: np.abs(f[1] - q)[3:].sum())[1]
+        assert np.abs(q_again - q)[3:].sum() <= np.abs(min(tg.wrist_ik(base, over.position.to_numpy(), rot(over)),
+                                                          key=lambda f: np.abs(f[1] - q)[3:].sum())[1] - q)[3:].sum() + 1e-9
     # a replace (keep): the block tilted 20 deg on the peg top, the jaws keep their turn, the block's centre over the peg
     tilted = Pose(block.position, Rotation(R.from_rotvec(rot(tip)[:, 1] * np.radians(20)) * block.orientation.rot))
-    _, over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, tilted, Pose(), keep=True)
+    over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, tilted, base, keep=True)
     assert np.allclose(rot(over), rot(tip)) and np.allclose(rot(seat), rot(tip))
     assert np.allclose(seat.position.to_numpy() + rot(tip) @ (tip.inv() * tilted).position.to_numpy(),
                        peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
+
+
+def test_ik_keeps_every_joint_a_margin_inside_its_limits():
+    m = tg._model()
+    for found in (tg.wrist_ik(BASE["psm2"], BLOCK.position.to_numpy() * [-1, 1, 1] + [0, 0, 0.03], np.diag([1.0, -1.0, -1.0]) @ rot(BLOCK)),
+                  tg.wrist_ik(Pose(), [0.0, 0.0, -0.15], np.eye(3))):
+        for _, q in found:
+            assert np.all(q >= m.lower + tg.MARGIN - 1e-9) and np.all(q <= m.upper - tg.MARGIN + 1e-9)
 
 
 @pytest.mark.parametrize("stage,axis", [("grasp", 1), ("handover", 1), ("place", None)])
@@ -156,7 +173,7 @@ def test_miss_offsets_lie_in_the_tip_frame_within_their_range(stage, axis):
 
 def test_the_prompts_at_three_levels():
     assert PROCEDURE == "Transfer the block to the other side."
-    assert list(st.SUBTASKS.values()) == ["Pick up the block.", "Lift it off the peg.", "Hand it over.",
+    assert list(st.SUBTASKS.values()) == ["Reach for the block.", "Move to the exchange point.", "Pick up the block.", "Lift it off the peg.", "Hand it over.",
                                           "Place it on the peg.", "Return to start.", "Open and grasp it again.",
                                           "Open and take it again.", "Lift it and place it again."]
     for seed in range(20):

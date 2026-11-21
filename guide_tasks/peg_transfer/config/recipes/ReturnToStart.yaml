@@ -1,12 +1,11 @@
-# Both PSMs back to their home joints, one at a time (the giver is already there).
+# The receiver back to its home joints (the giver went home after the handover: GiverReturns).
 node_type: CompositeNode
 name: ReturnToStart
 level: SUBTASK
-dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_id: scene_id}
+dynamic_map: {robot: robot, receiver: receiver, sim_namespace: sim_namespace, scene_id: scene_id}
 children:
   - ref: SetPrompt
     alias: AnnounceReturn
     dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
     static_args: {subtask: "${prompts.return}"}
   - {ref: MoveToJointConfiguration, alias: ReceiverHome, dynamic_map: {robot: receiver}, static_args: {target_configuration: "${psm.home.receiver}", speed: 0.2}}
-  - {ref: MoveToJointConfiguration, alias: GiverHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home.giver}", speed: 0.2}}

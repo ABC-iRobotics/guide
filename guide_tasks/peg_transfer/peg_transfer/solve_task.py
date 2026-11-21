@@ -7,12 +7,17 @@ arm by role, the giver or the receiver (${hand.*}, psm1 or psm2), the ECM holdin
     PegTransfer (PROCEDURE "Transfer the block to the other side.")
       AnnounceFirst (task + subtask), HoldCamera (ECM, jittered joints), StartEpisode
       -> Transfer (TASK "Move the red block from the left to the right side.")
-           LocateScene (each arm's /PegTransfer pose)
+           LocateScene (each arm's /PegTransfer pose, the handover marker, the block, the grasp)
+           Reach (SUBTASK, ParallelExecuter "Right: Reach for the block. Left: Move to the exchange point.")
+             GiverApproach (over the block, wrist turning, down to the grasp)  ||  ReceiverToExchange
            PickBlock (SUBTASK "Pick up the block.", condition: holding)  fallback Regrasp
            LiftOff (SUBTASK "Lift it off the peg.")
            HandOver (SUBTASK "Hand it over.")  Receive (condition: received), fallback Rereceive
-           PlaceOnPeg (SUBTASK "Place it on the peg.")  Seat (condition: seated), fallback Replace
-           ReturnToStart (SUBTASK "Return to start.")
+           Finish (SUBTASK, ParallelExecuter "Right: Place it on the peg. Left: Return to start.")
+             GiverReturns  ||  PlaceOnPeg (IsSeated fails NotSeated: Replace)
+           ReturnToStart (SUBTASK "Return to start.": the receiver home)
+
+A parallel block's branch prompts join with the image side of its arm (sides: PSM1 is image right).
       CheckSuccess, StopEpisode (saved only on success)
 
 Every pose target comes from peg_transfer.targets (the tilted PSM bases leave the library's base-z-up
@@ -35,9 +40,10 @@ import yaml
 from guide_ex.core.states import DemoStatus
 from guide_ex.recipe import load, recipes_dir
 from guide_ex.recipe.solve import SERVICES, make_robots
+from peg_transfer.scene import IMAGE_SIDE
 from peg_transfer.targets import APPROACH, DROP, LIFT  # importing registers its nodes (GraspPose, ...)
 
-SUBTASKS = {"pick": "Pick up the block.", "lift": "Lift it off the peg.", "handover": "Hand it over.",
+SUBTASKS = {"reach": "Reach for the block.", "exchange": "Move to the exchange point.", "pick": "Pick up the block.", "lift": "Lift it off the peg.", "handover": "Hand it over.",
             "place": "Place it on the peg.", "return": "Return to start.",
             # a recovery announces itself: the subtask timeline shows the miss and its retry
             "regrasp": "Open and grasp it again.", "rereceive": "Open and take it again.",
@@ -54,8 +60,11 @@ WIDE_RAD = 0.4
 SQUEEZE_RAD = 0.1
 # +- per ECM joint about its home (init.yaml): yaw, pitch (rad), insertion (m; home 0.005, its limit 0), tool roll
 ECM_JITTER = (0.02, 0.02, 0.004, 0.0)
-# 0.1x cube_stack's motion noise (guide_motion NoiseParams): the PSM works at millimetres
-NOISE = {"sigma": 0.0012, "aim": 0.003, "blend": 0.004, "aim_late": True}
+# cube_stack's motion noise (guide_motion NoiseParams, FR3 scale) x 0.1 in every length: the PSM works at
+# millimetres (block 15 mm, peg r 1.5 mm, moves 2-5 cm). The aim miss fades over the first 6 mm of the next
+# move (aim_late off): a descent of 15 mm onto a 0.7 mm wall is aligned before the jaws reach it.
+NOISE = {"sigma": 0.0012, "decay": 0.003, "ell": 0.015, "spacing": 0.005, "blend": 0.004, "aim": 0.003,
+         "aim_ramp": 0.006}
 SETTLE_S = 2.0  # sim s after Randomize: the blocks drop onto their pegs
 MAX_ATTEMPTS = 8  # attempts at one episode before the run stops
 SEED_BLOCK = 1000  # episode i draws its layouts from scene seeds seed_base + i * SEED_BLOCK, ... + 1, ...
@@ -99,10 +108,14 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
     robots = {k: resolve(v) for k, v in init["robots"].items()}
     gripper = json.loads((ROBOTS_DIR / "psm" / "description.json").read_text())["gripper"]
     roles = {"giver": plan["giver"], "receiver": plan["receiver"]}
+    sides = {r: side.capitalize() for r, side in IMAGE_SIDE.items()}  # ParallelExecuter's prefix, in prompt order
+    first = {plan["giver"]: SUBTASKS["reach"], plan["receiver"]: SUBTASKS["exchange"]}
     return {
         "hand": roles,
         "plan": plan,
-        "prompts": SUBTASKS,
+        "sides": sides,
+        # the first parallel block's joined subtask, announced before the first frame
+        "prompts": {**SUBTASKS, "first": " ".join(f"{sides[r]}: {first[r]}" for r in sides)},
         "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
         "psm": {"home": {role: {f"{j}.pos": q for j, q in zip(robots[r]["joint_names"], robots[r]["default_joint_states"])}
                          for role, r in roles.items()}},  # each arm's own (init.yaml)
@@ -124,7 +137,8 @@ def without_recoveries(node):
     millimetre short closes where it stopped: no retry in the data): a failing step then ends the episode."""
     if getattr(node, "fallbacks", None):
         node.fallbacks = {k: r for k, r in node.fallbacks.items() if r.name.endswith("Contact")}
-    for child in [*getattr(node, "children", []), getattr(node, "true_branch", None), getattr(node, "false_branch", None)]:
+    for child in [*getattr(node, "children", []), *getattr(node, "branches", []), getattr(node, "true_branch", None),
+                  getattr(node, "false_branch", None)]:
         if child is not None:
             without_recoveries(child)
     return node
@@ -246,7 +260,7 @@ def main():
     parser.add_argument("--namespace", type=str, default="/Sim_0/Scene_0")
     parser.add_argument("--controller", choices=["oscbf"], default="oscbf")
     parser.add_argument("--motion-noise", nargs="?", const="{}", default=None, metavar="JSON",
-                        help=f"perturbed demonstrations: {NOISE} (0.1x cube_stack's), or a JSON object of overrides")
+                        help=f"perturbed demonstrations: {NOISE} (cube_stack's lengths x 0.1), or a JSON object of overrides")
     parser.add_argument("--seed-base", type=int, default=0, help="first scene seed; give parallel solvers disjoint bases")
     parser.add_argument("--perturb-all", action="store_true", help="every episode perturbed, not every other one")
     parser.add_argument("--recipe", default="flawless", metavar="NAME[,NAME...]",

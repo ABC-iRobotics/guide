@@ -45,7 +45,10 @@ DROP = PEG_H + 0.010  # m from over the peg (the block's bottom 1 cm over its to
 MAX_DEVIATION = np.radians(15.0)
 FLIP = np.diag([-1.0, -1.0, 1.0])  # half a turn about the tip's z (the shaft)
 RETREAT = 0.025  # m the giver backs out along its jaws after letting go: past the block's far wall, + 5 mm
-GIVE_PRE = 0.02  # m short of the handover, back along the level jaws: where the turn to level ends
+STANDBY = 0.03  # m the receiver waits back along its jaws from its planned grip while the giver brings the block
+# Joint goals and IK solutions keep this far inside robots/psm's limits (rad; insertion m): a goal 0.012 rad
+# inside tool_yaw's stalled short of it, and a wrist at its limit leaves the planner's IK nothing to correct with
+MARGIN = np.array([0.05, 0.05, 0.002, 0.05, 0.05, 0.05])
 HANDOVER_YAWS = np.radians([0.0, 15.0, -15.0, 30.0, -30.0])  # the jaws' turns off the line to the receiver tried
 # wrist-load share per rad of a level grip's closing axis off up, the axis being the gripped wall's
 # outward normal: with that wall on top the block hangs from the jaws; under it, it balanced on them and
@@ -141,16 +144,20 @@ def toward_free(free, wanted, up, limit=MAX_DEVIATION) -> np.ndarray:
 _MODEL = []
 
 
+def _model():
+    if not _MODEL:
+        from guide_motion.model import Model
+        _MODEL.append(Model.load("psm"))
+    return _MODEL[0]
+
+
 def wrist_ik(base: Pose, position, rot) -> list:
-    """The joints (robots/psm, every joint within its limits) of the PSM whose base frame sits at `base`
+    """The joints (robots/psm, every joint MARGIN inside its limits) of the PSM whose base frame sits at `base`
     (scene frame) that put its tip at `position` turned `rot` (scene frame) to 0.1 mm and 0.5 deg: one
     per IK seed that got there, as (wrist load, q) -- the load the larger of |tool_pitch| and |tool_yaw|
     as shares of their limits."""
     from scipy.optimize import least_squares
-    if not _MODEL:
-        from guide_motion.model import Model
-        _MODEL.append(Model.load("psm"))
-    m = _MODEL[0]
+    m = _model()
     goal = base.inv() * Pose.from_numpy(np.asarray(position, float), R.from_matrix(rot))
     p, g = goal.position.to_numpy(), goal.orientation.to_numpy()
 
@@ -160,7 +167,7 @@ def wrist_ik(base: Pose, position, rot) -> list:
     found = []
     for roll in (-2.5, 0.0, 2.5):  # ponytail: 6 seeds of a local solver; a branch they all miss reads as unreachable
         for pitch in (-0.8, 0.8):
-            s = least_squares(res, np.array([0.0, 0.0, 0.15, roll, pitch, 0.0]), bounds=(m.lower, m.upper))
+            s = least_squares(res, np.array([0.0, 0.0, 0.15, roll, pitch, 0.0]), bounds=(m.lower + MARGIN, m.upper - MARGIN))
             if np.linalg.norm(s.fun[:3]) < 1e-4 and np.linalg.norm(s.fun[3:]) < 0.02 * np.radians(0.5):
                 found.append((max(abs(s.x[4]) / m.upper[4], abs(s.x[5]) / m.upper[5]), s.x))
     return found
@@ -172,15 +179,16 @@ def wrist_load(base: Pose, position, rot) -> float:
     return min((load for load, _ in wrist_ik(base, position, rot)), default=np.inf)
 
 
-def joints_for(tip: Pose, home: dict) -> dict:
+def joints_for(tip: Pose, near: dict) -> dict:
     """An arm-joint goal ("<joint>.pos", robots/psm's arm joints) putting the tip at `tip` (base frame):
-    of wrist_ik's solutions, the one nearest the arm's `home` joints -- the roll branch it keeps."""
+    of wrist_ik's solutions, the one nearest the joints `near` (the arm's now: the roll branch it is on, so
+    the joint move turns the least; nearest home, a branch half a turn off swung the block in a wide arc)."""
     found = wrist_ik(Pose(), tip.position.to_numpy(), tip.orientation.to_numpy())
     if not found:
         raise ValueError("no joints reach the turn within the PSM's limits")
-    names = [f"{j}.pos" for j in _MODEL[0].arm_joints]
-    q_home = np.array([home[n] for n in names])
-    q = min((q for _, q in found), key=lambda q: np.abs(q - q_home).sum())
+    names = [f"{j}.pos" for j in _model().arm_joints]
+    q_near = np.array([near[n] for n in names])
+    q = min((q for _, q in found), key=lambda q: np.abs(q - q_near).sum())
     return {n: float(v) for n, v in zip(names, q)}
 
 
@@ -210,8 +218,8 @@ def handover_poses(block: Pose, held: Pose, marker: Pose, giver_base: Pose, rece
             receiver[k] = wrist_load(receiver_base, c + frame(n, h) @ GRIP, frame(n, h))
         for phi in np.radians(np.arange(0.0, 360.0, 30.0)):
             rot = frame(np.cos(phi) * up + np.sin(phi) * side, -h)  # z back up the jaws: they point along h
-            # reached at the handover and backed off along the jaws (HandoverPoses' give_pre, give_back)
-            load = max(wrist_load(giver_base, c - rot @ o + d * rot[:, 2], rot) for d in (0.0, GIVE_PRE, RETREAT))
+            # reached at the handover and backed off along the jaws (HandoverPoses' give_back)
+            load = max(wrist_load(giver_base, c - rot @ o + d * rot[:, 2], rot) for d in (0.0, RETREAT))
             if not np.isfinite(load):
                 continue
             b = rot @ rb  # the block, turned with the jaws
@@ -260,42 +268,41 @@ def back_off(tip: Pose, distance: float) -> Pose:
     return tip * Pose.from_numpy(np.array([0.0, 0.0, distance]), R.identity())
 
 
-def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose | None = None, keep: bool = False):
-    """(turn, over, seat), tool down, from the block as it sits in the jaws at `tip` (it may have slid
-    along the wall, or turned in them): the jaws turned down where they are, 1 cm up (the least turn of
-    the block's axis to up, so a block drooping in the jaws comes down straight onto the peg, then a
-    turn about up bringing the closing axis within MAX_DEVIATION of the bend-free one at the peg),
-    then the block's centre over the peg's axis, its bottom 1 cm over the peg top, and down at the seat
-    (SEAT_GAP over the board). The block's turn about its axis does not matter to the peg: given the
-    arm's `base`, the jaws turn half a turn more about up (FLIP) where that eases the wrist, and the
-    turn, at the handover, far from the peg, keeps the least turn about up the wrist reaches there. `keep`
-    (a replace, tool down over the peg already): the jaws keep their turn, only the block's centre moves
-    (re-turning to a block tilted on the peg top asked the wrist for 60 deg it could not reach there)."""
+def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose, near=None, keep: bool = False):
+    """(over, seat), tool down, from the block as it sits in the jaws at `tip` (it may have slid along the
+    wall, or turned in them), the arm's base at `base`: the least turn of the block's axis to up (a block
+    drooping in the jaws comes down straight onto the peg), its centre over the peg's axis, its bottom 1 cm
+    over the peg top, then down at the seat (SEAT_GAP over the board). The ring turns freely about the
+    round peg: of the turns about up the wrist reaches at both, the one turning the wrist least from the
+    arm's joints `near` (robots/psm order; one joint move carries the block from the handover over the
+    peg, turning it down: the least wrist turn sweeps it least; the turn nearest home swung it 16 mm wide),
+    the wrist's load (wrist_load) adding. `keep` (a replace, tool down over the peg already): the jaws keep
+    their turn, only the block's centre moves (re-turning to a block tilted on the peg top asked the wrist
+    for 60 deg it could not reach there)."""
     up, p = _unit(up), peg.position.to_numpy()
     t, axis = tip.orientation.to_numpy(), block.orientation.to_numpy()[:, 2]
     axis = axis if axis @ t[:, 2] >= 0 else -axis  # the block's axis on the shaft's side
     m = R.align_vectors([up], [axis])[0].as_matrix() @ t
-    x = _unit(m[:, 0] - (m[:, 0] @ up) * up)
-    want = toward_free(bend_free_x(p, -up), x, up)
-    rot = t if keep else _about(up, np.arctan2(np.cross(x, want) @ up, x @ want)) @ m
     held = (tip.inv() * block).position.to_numpy()  # the block's centre in the tip frame
     seat = p + up * (SEAT_GAP + BLOCK_HALF_H - PEG_H / 2)
-    turn = tip.position.to_numpy() + 0.01 * up
-
-    def turned(rot):  # the turn's own: the least turn about up from `rot` that the wrist reaches there
-        for k in sorted(range(-12, 13), key=abs):
-            r = _about(up, k * np.pi / 12) @ rot
-            if base is None or np.isfinite(wrist_load(base, turn, r)):
-                return r
-        return rot
 
     def poses(rot):
-        at = lambda centre: Pose.from_numpy(centre - rot @ held, R.from_matrix(rot))
-        return Pose.from_numpy(turn, R.from_matrix(turned(rot))), at(seat + up * DROP), at(seat)
-    if base is None or keep:
-        return poses(rot)
-    load = lambda ps: max(wrist_load(base, q.position.to_numpy(), q.orientation.to_numpy()) for q in ps)
-    return min((poses(rot), poses(rot @ FLIP)), key=load)
+        at = lambda c: Pose.from_numpy(c - rot @ held, R.from_matrix(rot))
+        return at(seat + up * DROP), at(seat)
+    if keep:
+        return poses(t)
+
+    def cost(rot):
+        over, low = poses(rot)
+        if not np.isfinite(wrist_load(base, low.position.to_numpy(), rot)):
+            return np.inf
+        turn = (lambda q: 0.0) if near is None else (lambda q: 0.25 * np.abs(q - near)[3:].sum())
+        return min((load + turn(q) for load, q in wrist_ik(base, over.position.to_numpy(), rot)), default=np.inf)
+    rots = [_about(up, k * np.pi / 12) @ m for k in range(-12, 12)]
+    costs = [cost(r) for r in rots]
+    if not np.isfinite(min(costs)):
+        raise ValueError("no tool-down turn reaches the peg within the PSM's limits")
+    return poses(rots[int(np.argmin(costs))])
 
 
 def _in_scene(scene: Pose, pose: Pose) -> Pose:
@@ -304,6 +311,12 @@ def _in_scene(scene: Pose, pose: Pose) -> Pose:
 
 def _in_base(scene: Pose, pose: Pose) -> Pose:
     return scene * pose
+
+
+def arm_joints(robot) -> dict:
+    """The robot's joints now, "<joint>.pos" (its joint_state topic)."""
+    js = robot.joint_state
+    return {f"{n}.pos": float(q) for n, q in zip(js.name, js.position)}
 
 
 @node()
@@ -320,30 +333,46 @@ class GraspPose(BaseNode):
 
 
 @node()
+class ExchangePose(BaseNode):
+    """Where the receiver waits for the block, before the pick (no arm sees the other's moves): `standby`,
+    STANDBY back along its jaws from the grip handover_poses plans for the block gripped at `grasp` (the
+    giver's planned grasp) and brought to the marker, level and facing the giver (receiver's base frame).
+    `block`, `grasp`, `marker` as the giver measures them."""
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("ExchangePose", alias, dynamic_map, static_args, output_map)
+
+    def run(self, block: Pose, grasp: Pose, marker: Pose, giver_scene: Pose, receiver_scene: Pose) -> ExecutionResult:
+        _, receive = handover_poses(_in_scene(giver_scene, block), _in_scene(giver_scene, grasp),
+                                    _in_scene(giver_scene, marker), giver_scene.inv(), receiver_scene.inv(),
+                                    [0.0, 0.0, 1.0])  # scene z is up
+        receive = _in_base(receiver_scene, receive)
+        # nearer, where the wrist cannot reach that far back
+        standby = next((back_off(receive, d) for d in (STANDBY, 0.025, 0.02) if np.isfinite(wrist_load(
+            Pose(), back_off(receive, d).position.to_numpy(), receive.orientation.to_numpy()))), back_off(receive, APPROACH))
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"standby": standby})
+
+
+@node()
 class HandoverPoses(BaseNode):
     """The handover (handover_poses), from the marker, the held block and the giver's tip as the giver
-    measures them and the scene as each arm does, and the giver's `home` joints. The giver's frame:
-    `give_pre` (2 cm short of `give`, back along its level jaws) and `give_pre_joints` (joints_for it:
-    the turn from tool down to level is a joint move, the planner's IK following the straight turn ran
-    the wrist into its limits), `give`,
-    `give_back` (RETREAT back out along its jaws) and `give_rise` (2 cm over that). The receiver's grip
-    comes from ReceivePoses, once the block is there."""
+    measures them and the scene as each arm does. The giver's frame: `give` and `give_back` (RETREAT back
+    out along its jaws). The receiver's grip comes from ReceivePoses, once the block is there."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("HandoverPoses", alias, dynamic_map, static_args, output_map)
 
-    def run(self, marker: Pose, block: Pose, held: Pose, giver_scene: Pose, receiver_scene: Pose, home: dict) -> ExecutionResult:
+    def run(self, marker: Pose, block: Pose, held: Pose, giver_scene: Pose, receiver_scene: Pose) -> ExecutionResult:
         give, _ = handover_poses(_in_scene(giver_scene, block), _in_scene(giver_scene, held),
-                                       _in_scene(giver_scene, marker), giver_scene.inv(), receiver_scene.inv(),
-                                       [0.0, 0.0, 1.0])  # scene z is up
+                                 _in_scene(giver_scene, marker), giver_scene.inv(), receiver_scene.inv(),
+                                 [0.0, 0.0, 1.0])  # scene z is up
         give = _in_base(giver_scene, give)
-        back, pre = back_off(give, RETREAT), back_off(give, GIVE_PRE)
-        up = up_of(giver_scene)
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={
-            "give_pre_joints": joints_for(pre, home), "give_pre": pre, "give": give, "give_back": back,
-            "give_rise": Pose.from_numpy(back.position.to_numpy() + 0.02 * up, R.from_matrix(back.orientation.to_numpy()))})
+            "give": give, "give_back": back_off(give, RETREAT)})
 
 
 @node()
@@ -367,24 +396,39 @@ class ReceivePoses(BaseNode):
 
 @node()
 class PlacePoses(BaseNode):
-    """The receiver's place over `peg` (place_poses) of the block it holds at `tip`: `turn_down` (turned
-    where it is) and `turn_down_joints` (joints_for it, nearest the arm's `home` joints: the turn from
-    level to tool down is a joint move, like the giver's to level), `over` and `seat`; `keep`: place_poses'."""
+    """The receiver's place over `peg` (place_poses, from its joints now) of the block it holds at `tip`:
+    `over` and `seat`; `keep`: place_poses'."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("PlacePoses", alias, dynamic_map, static_args, output_map)
 
-    def run(self, peg: Pose, scene: Pose, tip: Pose, block: Pose, home: dict, keep: bool = False) -> ExecutionResult:
-        turn, over, seat = place_poses(peg, up_of(scene), tip, block, Pose(), keep)  # all in its base frame
-        return ExecutionResult(status=DemoStatus.PERFECT, outputs={
-            "turn_down": turn, "turn_down_joints": None if keep else joints_for(turn, home), "over": over, "seat": seat})
+    def run(self, peg: Pose, scene: Pose, tip: Pose, block: Pose, robot, keep: bool = False) -> ExecutionResult:
+        now = arm_joints(robot)
+        near = np.array([now[f"{j}.pos"] for j in _model().arm_joints])
+        over, seat = place_poses(peg, up_of(scene), tip, block, Pose(), near, keep)  # all in its base frame
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"over": over, "seat": seat})
+
+
+@node()
+class JointsFor(BaseNode):
+    """A joint goal for `robot` putting its tip at `pose` (joints_for, nearest its joints now): the moves
+    that turn the wrist between tool down and level (the planner's IK following the straight turn ran the
+    wrist into its limits)."""
+
+    level = Layer.UTILITY
+
+    def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
+        super().__init__("JointsFor", alias, dynamic_map, static_args, output_map)
+
+    def run(self, pose: Pose, robot) -> ExecutionResult:
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"joints": joints_for(pose, arm_joints(robot))})
 
 
 @node()
 class IsSeated(BaseNode):
-    """Whether the block sits down on the peg (scene.seated, the success check's), still held or not."""
+    """Fails (NotSeated) unless the block sits down on the peg (scene.seated, the success check's), held or not."""
 
     level = Layer.UTILITY
 
@@ -392,8 +436,9 @@ class IsSeated(BaseNode):
         super().__init__("IsSeated", alias, dynamic_map, static_args, output_map)
 
     def run(self, block: Pose, peg: Pose, scene: Pose) -> ExecutionResult:
-        ok = seated(_in_scene(scene, block), _in_scene(scene, peg))
-        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"seated": ok})
+        if not seated(_in_scene(scene, block), _in_scene(scene, peg)):
+            return ExecutionResult(status=DemoStatus.FAILURE, error_message="NotSeated: the block is not down on the peg")
+        return ExecutionResult(status=DemoStatus.PERFECT)
 
 
 @node()

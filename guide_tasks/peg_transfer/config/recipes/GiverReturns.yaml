@@ -1,0 +1,12 @@
+# The giver, out of the way, back to its home joints (init.yaml: tool down over its pegs). Its own arm
+# only: Finish's branch beside PlaceOnPeg.
+node_type: CompositeNode
+name: GiverReturns
+level: SEQUENCE
+dynamic_map: {giver: giver, sim_namespace: sim_namespace, scene_id: scene_id}
+children:
+  - ref: SetPrompt
+    alias: AnnounceGiverReturn
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_id: scene_id}
+    static_args: {subtask: "${prompts.return}"}
+  - {ref: MoveToJointConfiguration, alias: GiverHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home.giver}", speed: 0.2}}

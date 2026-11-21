@@ -1,11 +1,14 @@
 # The one TASK: the block from the giver's peg to the receiver's. Each arm measures the scene frame
-# (/PegTransfer, identity in the scene: its z is up) in its own base, where its poses are.
+# (/PegTransfer, identity in the scene: its z is up) in its own base, where its poses are. Where both
+# arms move, each one's segment is a branch of a ParallelExecuter (Reach, Finish), its prompt prefixed with
+# its image side (sides: PSM1 right); every point an arm moves to is a target, an approach to one, or a
+# clearance from a tool or object.
 # A grasp that closed on air reopens, rises straight up out of it, comes back over the block and picks
 # it again (Regrasp).
 node_type: CompositeNode
 name: Transfer
 level: TASK
-dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id}
+dynamic_map: {robot: robot, giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id}
 children:
   - ref: GetPrimPose
     alias: GiverScene
@@ -17,17 +20,70 @@ children:
     dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: /PegTransfer}
     output_map: {pose: receiver_scene}
+  - ref: GetPrimPose
+    alias: LocateHandover
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: /PegTransfer/handover}
+    output_map: {pose: marker}
+  - ref: GetPrimPose
+    alias: LocateBlock
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.block}"}
+    output_map: {pose: block_pose}
+  - {ref: GraspPose, dynamic_map: {block: block_pose, scene: giver_scene}, output_map: {pose: grasp_pose}}
+  # the giver goes for the block while the receiver moves to where it will take it
+  - node_type: CompositeNode
+    name: Reach
+    level: SUBTASK
+    dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_id: scene_id, block_pose: block_pose, grasp_pose: grasp_pose, marker: marker, giver_scene: giver_scene, receiver_scene: receiver_scene}
+    children:
+      - {ref: ExchangePose, dynamic_map: {block: block_pose, grasp: grasp_pose, marker: marker, giver_scene: giver_scene, receiver_scene: receiver_scene}}
+      - node_type: ParallelExecuter
+        name: ReachBoth
+        prefix: "${sides}"
+        dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_id: scene_id, grasp_pose: grasp_pose, standby: standby}
+        branches:
+          - ref: GiverApproach
+          - ref: ReceiverToExchange
   - ref: PickBlock
   - ref: LiftOff
   - ref: HandOver
-  - ref: PlaceOnPeg
+  # the giver goes home while the receiver places the block
+  - node_type: CompositeNode
+    name: Finish
+    level: SUBTASK
+    dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene}
+    children:
+      - ref: GetPrimPose
+        alias: LocatePeg
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim_path: "${plan.target_peg}"}
+        output_map: {pose: peg_pose}
+      - ref: GetPrimPose
+        alias: LocatePlacingTip
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim_path: "${tip_prim.receiver}"}
+        output_map: {pose: placing_tip}
+      - ref: GetPrimPose
+        alias: LocateCarried
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim_path: "${plan.block}"}
+        output_map: {pose: carried}
+      - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried, robot: receiver}}
+      - node_type: ParallelExecuter
+        name: FinishBoth
+        prefix: "${sides}"
+        dynamic_map: {giver: giver, receiver: receiver, psm1: psm1, psm2: psm2, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene, peg_pose: peg_pose, over: over}
+        branches:
+          - ref: GiverReturns
+          - ref: PlaceOnPeg
   - ref: ReturnToStart
 fallbacks:
   PickBlock:
     node_type: RecoveryNode
     name: Regrasp
     level: SUBTASK
-    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, giver: giver, over_grasp: over_grasp, grasp_target: grasp_target}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, giver: giver, over_grasp: over_grasp, grasp_target: grasp_target, grasp_pose: grasp_pose}
     resume_target: PickBlock
     max_retries: 2
     children:
@@ -41,5 +97,7 @@ fallbacks:
         dynamic_map: {l_pose: grasp_target}
         static_args: {r_pose: {position: [0.0, 0.0, "${offsets.approach}"]}}  # straight up, out of the miss
         output_map: {pose: missed_up}
-      - {ref: MoveToCartesianPose, alias: UpFromMiss, dynamic_map: {robot: giver, target_pose: missed_up}, static_args: {speed: 0.05, cartesian: true}}
-      - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true}}
+      # clear of the block, the rise blends into the move back over it, and that into the descent
+      - {ref: MoveToCartesianPose, alias: UpFromMiss, dynamic_map: {robot: giver, target_pose: missed_up}, static_args: {speed: 0.05, cartesian: true, precise_end: false}}
+      - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true, precise_end: false}}
+      - {ref: MoveToCartesianPose, alias: DownToGrasp, dynamic_map: {robot: giver, target_pose: grasp_pose}, static_args: {speed: 0.05, cartesian: true}}
