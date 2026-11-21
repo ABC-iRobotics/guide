@@ -1,11 +1,16 @@
+from contextvars import ContextVar
 from logging import getLogger
 from typing import Any, Dict, Optional
 
-from guide_ex.core.states import ExecutionResult, Layer
+from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+
+# (run, branch index) per enclosing ParallelExecuter branch, outermost first; () outside one
+BRANCH: ContextVar[tuple] = ContextVar("guide_ex_branch", default=())
 
 
 class BaseNode:
     level: Layer
+    claims_robots = True  # a leaf claims the robots in its inputs inside a ParallelExecuter branch
 
     def __init__(
         self,
@@ -49,6 +54,10 @@ class BaseNode:
     def execute(self, context: dict) -> ExecutionResult:
         """Handles dependency injection before calling the specific node logic."""
         inputs = self.map_inputs(context)
+        refused = self._claim(inputs)
+        if refused:
+            self.logger.error(f"[{self.name}] {refused}")  # a composite parent drops error_message
+            return ExecutionResult(DemoStatus.FAILURE, error_message=f"[{self.name}] {refused}")
 
         # Run the specific node logic with resolved inputs
         result = self.run(**inputs)
@@ -57,6 +66,21 @@ class BaseNode:
         result.outputs = self.map_outputs(result.outputs)
 
         return result
+
+    def _claim(self, inputs: dict) -> str:
+        """Inside ParallelExecuter branches, claim every robot (anything with send_action) in `inputs`
+        for this branch at each enclosing executer. Returns why not if another branch holds one, else
+        "". A no-op outside an executer."""
+        frames = BRANCH.get()
+        if not (frames and self.claims_robots):
+            return ""
+        for value in inputs.values():
+            if callable(getattr(value, "send_action", None)):
+                for run, branch in frames:
+                    other = run.claim(branch, value)
+                    if other is not None:
+                        return f"robot {value!r} belongs to parallel branch {other}, not {branch}"
+        return ""
 
     def _apply_override(self, overrides: Dict[str, "BaseNode"]) -> None:
         """A leaf has nothing to replace; CompositeNode overrides this."""

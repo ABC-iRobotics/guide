@@ -1,4 +1,5 @@
 from guide_ex.core.base_node import BaseNode
+from guide_ex.core.parallel import prompt
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
 from guide_ex.recipe import node
 from guide_msgs import srv
@@ -175,6 +176,9 @@ class SetPrompt(BaseNode):
         recorded beside them as GUIDE's ``procedure`` style). Sending the prompts that are
         already active changes nothing, so a retried node may announce itself again.
 
+        Inside a ParallelExecuter branch the prompts go into the branch's slot: the executer
+        sends all branches' prompts joined into one, each prefixed with its arm's image side.
+
         Args:
             robot (ROS2Robot): The ROS2 robot to use for service calls.
             sim_namespace (str): The simulation namespace.
@@ -185,12 +189,15 @@ class SetPrompt(BaseNode):
         Returns:
             ExecutionResult: PERFECT once the scene has the prompts, FAILURE otherwise.
         """
-        return _call_recording_service(
-            robot,
-            "set_prompt",
-            srv.SetPrompt,
-            sim_namespace,
-            srv.SetPrompt.Request(id=scene_id, task=task, subtask=subtask),
-            timeout_sec,
-            f"Set the prompts of scene {scene_id} to task {task!r}, subtask {subtask!r}",
-        )
+        def send(task, subtask):
+            return _call_recording_service(
+                robot,
+                "set_prompt",
+                srv.SetPrompt,
+                sim_namespace,
+                srv.SetPrompt.Request(id=scene_id, task=task, subtask=subtask),
+                timeout_sec,
+                f"Set the prompts of scene {scene_id} to task {task!r}, subtask {subtask!r}",
+            )
+
+        return prompt(task, subtask, send)

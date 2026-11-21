@@ -10,7 +10,8 @@ from omegaconf import OmegaConf
 from omegaconf.errors import OmegaConfBaseException
 
 from guide_ex.core.base_node import BaseNode
-from guide_ex.core.composite_node import CompositeNode, RecoveryNode
+from guide_ex.core.composite_node import CompositeNode, RecoveryNode, ranked
+from guide_ex.core.parallel import ParallelExecuter
 from guide_ex.core.states import Layer
 from guide_ex.recipe.registry import Registry, RecipeError, RecipeTemplate, load_defaults, read_spec
 from guide_ex.recipe.values import convert
@@ -18,10 +19,12 @@ from guide_ex.recipe.values import convert
 NODE_KEYS = {
     "ref", "node_type", "name", "alias", "level", "children", "fallbacks", "resume_target",
     "max_retries", "mode", "max_loops", "condition_expr", "true_branch", "false_branch",
-    "dynamic_map", "static_args", "output_map", "overrides", "when",
+    "dynamic_map", "static_args", "output_map", "overrides", "when", "branches", "prefix",
 }
 LEAF_KEYS = {"ref", "alias", "level", "dynamic_map", "static_args", "output_map", "when"}
 RECOVERY_KEYS = {"resume_target", "max_retries"}
+PARALLEL_KEYS = {"node_type", "name", "alias", "level", "branches", "prefix",
+                 "dynamic_map", "static_args", "output_map", "when"}
 COMPOSITES = {"CompositeNode": CompositeNode, "RecoveryNode": RecoveryNode}
 
 
@@ -124,6 +127,8 @@ class _Loader:
             raise RecipeError(f"{here}: `when` must be true or false, got {when!r}")
         if not when:
             return None
+        if spec.get("node_type") == "ParallelExecuter":
+            return self._parallel(spec, where, path, chain)
         if "node_type" in spec:
             return self._composite(spec, where, path, chain)
         try:
@@ -157,17 +162,42 @@ class _Loader:
         except ValueError as e:
             raise RecipeError(f"{here}: {e}") from None
 
+    def _parallel(self, spec: dict, where: str, path: str, chain: tuple) -> BaseNode:
+        name = spec.get("name")
+        if not name:
+            raise RecipeError(f"{where}: {path or '<top>'}: a ParallelExecuter needs a `name`")
+        path = f"{path}.{spec.get('alias') or name}" if path else spec.get("alias") or name
+        here = f"{where}: {path}"
+        extra = set(spec) - PARALLEL_KEYS
+        if extra:
+            raise RecipeError(f"{here}: a ParallelExecuter takes {sorted(PARALLEL_KEYS)}, not {sorted(extra)}")
+        if spec.get("level", "UTILITY") != "UTILITY":
+            raise RecipeError(f"{here}: a ParallelExecuter is UTILITY, not {spec['level']}")
+        prefix = spec.get("prefix") or {}
+        if not (isinstance(prefix, dict) and all(isinstance(v, str) for v in prefix.values())):
+            raise RecipeError(f"{here}: `prefix` maps robot context keys to image sides, got {prefix!r}")
+        branches = [n for i, b in enumerate(spec.get("branches") or [])
+                    if (n := self.build(b, where, f"{path}.branches[{i}]", chain)) is not None]
+        if not branches:
+            raise RecipeError(f"{here}: a ParallelExecuter needs `branches`")
+        return ParallelExecuter(
+            name, branches, prefix=prefix, alias=spec.get("alias"), dynamic_map=spec.get("dynamic_map") or {},
+            static_args={k: self._typed(v, here) for k, v in (spec.get("static_args") or {}).items()},
+            output_map=spec.get("output_map") or {})
+
     def _composite(self, spec: dict, where: str, path: str, chain: tuple) -> BaseNode:
         kind, name = spec["node_type"], spec.get("name")
         if kind not in COMPOSITES:
             raise RecipeError(
-                f"{where}: {path or '<top>'}: node_type is CompositeNode or RecoveryNode, got {kind!r}")
+                f"{where}: {path or '<top>'}: node_type is CompositeNode or RecoveryNode (or ParallelExecuter), got {kind!r}")
         if not name:
             raise RecipeError(f"{where}: {path or '<top>'}: a {kind} needs a `name`")
         path = f"{path}.{spec.get('alias') or name}" if path else spec.get("alias") or name
         here = f"{where}: {path}"
         if kind == "CompositeNode" and RECOVERY_KEYS & set(spec):
             raise RecipeError(f"{here}: {sorted(RECOVERY_KEYS & set(spec))} belong to a RecoveryNode")
+        if {"branches", "prefix"} & set(spec):
+            raise RecipeError(f"{here}: {sorted({'branches', 'prefix'} & set(spec))} belong to a ParallelExecuter")
         if kind == "RecoveryNode" and "resume_target" not in spec:
             raise RecipeError(f"{here}: a RecoveryNode needs a `resume_target`")
         try:
@@ -250,11 +280,14 @@ def _check(node: BaseNode, where: str, path: str = "") -> None:
     """The whole tree, overrides applied: levels fit, and every fallback guards a child and
     resumes at one."""
     path = f"{path}.{node.name}" if path else node.name
+    if isinstance(node, ParallelExecuter):
+        for branch in node.branches:
+            _check(branch, where, path)
     if not isinstance(node, CompositeNode):
         return
     names = [c.name for c in node.children]
-    for child in node.children:
-        if child.level != Layer.UTILITY and child.level >= node.level:
+    for child in (n for c in node.children for n in ranked(c)):
+        if child.level >= node.level:
             raise RecipeError(
                 f"{where}: {path}: child {child.name} ({child.level.name}) is not below {node.level.name}")
     for key, recovery in node.fallbacks.items():

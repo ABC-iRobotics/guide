@@ -4,7 +4,17 @@ from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionMode, ExecutionResult, Layer
 
 
+def ranked(node: BaseNode) -> List[BaseNode]:
+    """The nodes `node` puts at its parent's level: itself, or for a UTILITY node the nodes it runs
+    (a ParallelExecuter's branches, which rank as its parent's children). Other utilities: none."""
+    if node.level != Layer.UTILITY:
+        return [node]
+    return [n for branch in getattr(node, "branches", ()) for n in ranked(branch)]
+
+
 class CompositeNode(BaseNode):
+    claims_robots = False  # its leaves claim
+
     def __init__(
         self,
         name: str,
@@ -32,8 +42,8 @@ class CompositeNode(BaseNode):
         self.max_loops = max_loops
 
         # VALIDATION: Children must be strictly lower
-        for child in self.children:
-            if child.level != Layer.UTILITY and child.level >= self.level:
+        for child in (n for c in self.children for n in ranked(c)):
+            if child.level >= self.level:
                 raise ValueError(
                     f"[Architecture Violation] '{self.name}' ({self.level.name}) "
                     f"cannot contain child '{child.name}' ({child.level.name})."
