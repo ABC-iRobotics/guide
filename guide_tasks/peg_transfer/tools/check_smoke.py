@@ -93,8 +93,11 @@ def main():
         want = (f"Move the {prov['colour']} block from the {IMAGE_SIDE[prov['giver']]} to the "
                 f"{IMAGE_SIDE['psm1' if prov['giver'] == 'psm2' else 'psm2']} side.")
         tasks = set(ep["task"])
-        if missing or tasks != {want}:
-            ok, why = False, why + [f"ep {ep['episode_index'].iloc[0]}: {missing} frames unlabelled, task {tasks}"]
+        # a parallel block's subtask names both arms, image right (psm1) first: never half of it
+        half = [r["content"] for r in rows if r["style"] == "subtask" and ": " in r["content"]
+                and not (r["content"].startswith("Right: ") and " Left: " in r["content"])]
+        if missing or tasks != {want} or half:
+            ok, why = False, why + [f"ep {ep['episode_index'].iloc[0]}: {missing} frames unlabelled, task {tasks}, half prompts {half}"]
         timelines.append([(round(r["timestamp"], 1), r["content"]) for r in rows if r["style"] == "subtask"])
     gates["3 language"] = (ok and bool(episodes), "; ".join(why) or "procedure+task+subtask on every frame")
 
@@ -119,7 +122,7 @@ def main():
     first = sum(p["attempt"] == 0 for p in saved)
     failed = collections.Counter(" < ".join(p.get("failed") or ["?"]) for p in lines if not p.get("saved"))
     unseen = [(p["episode"], m) for p, tl in zip(saved, timelines) for m in p["misses"]
-              if SUBTASKS[RETRY[m]] not in [c for _, c in tl]]
+              if not any(SUBTASKS[RETRY[m]] in c for _, c in tl)]  # in a parallel block: within its joined prompt
     rate = len(saved) / max(len(lines), 1)
     gates["5 success + recoveries"] = (rate >= 0.8 and not unseen,
                                        f"{len(saved)}/{len(lines)} attempts saved ({first} first-try), "
