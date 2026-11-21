@@ -132,6 +132,17 @@ def test_prompts_join_in_prefix_order_with_unprefixed_last(ctx):
     assert ctx["log"][-1] == ("", "Right: Turn the block level. Left: Move to the exchange point. Hold the view.")
 
 
+def test_no_half_prompt_goes_out_before_every_branch_prompted_or_ended(ctx):
+    node = both([arm("Left", "psm1", announce("L", subtask="Reach.")),
+                 arm("Right", "psm2", Move("Wait", dynamic_map={"robot": "robot"}, static_args={"seconds": 0.1}),
+                     announce("R", subtask="Go."), announce("R2", subtask="Turn.")),
+                 arm("Mute", "ecm", Move("Wait", dynamic_map={"robot": "robot"}, static_args={"seconds": 0.2}))],
+                prefix={"psm1": "Right", "psm2": "Left"})
+
+    assert node.execute(ctx).status == DemoStatus.PERFECT
+    assert ctx["log"] == [("", "Right: Reach. Left: Turn.")]  # held until Mute ended, then one join
+
+
 def test_a_nested_executer_writes_its_join_into_the_parent_slot(ctx):
     prefix = {"psm2": "Right", "psm1": "Left"}
     inner = both([arm("Left", "psm1", announce("L", task="Hand the peg over.", subtask="Reach.")),

@@ -16,6 +16,8 @@ class _Run:
         self.claims, self.sending = threading.Lock(), threading.Lock()  # sending holds no claim up
         self.owner = {}  # id(robot) -> branch index
         self.prompts = [{"task": "", "subtask": ""} for _ in range(n)]
+        self.ready = [False] * n  # prompted or ended: no join goes out before every branch is, so no half prompt
+        self.send = None
         self.context, self.prefix, self.parent = context, prefix, parent
 
     def claim(self, branch: int, robot) -> Optional[int]:
@@ -48,11 +50,26 @@ class _Run:
         with self.sending:  # one at a time, so the scene never gets an older join after a newer one
             mine = self.prompts[branch]
             mine["task"], mine["subtask"] = task or mine["task"], subtask or mine["subtask"]
-            task, subtask = self._joined("task"), self._joined("subtask")
-            if self.parent is None:
-                return send(task, subtask)
-            run, outer = self.parent
-            return run.prompt(outer, task, subtask, send)
+            self.send = send
+            return self._flush(branch)
+
+    def done(self, branch: int) -> None:
+        """`branch` ended: a join held back for it goes out now."""
+        with self.sending:
+            if not self.ready[branch]:
+                self._flush(branch)
+
+    def _flush(self, branch: int) -> ExecutionResult:
+        """Mark `branch` ready; once all are, pass the joined prompts up (the caller holds `sending`).
+        ponytail: a branch that never prompts holds its siblings' prompts until it ends."""
+        self.ready[branch] = True
+        if self.send is None or not all(self.ready):
+            return ExecutionResult(DemoStatus.PERFECT)
+        task, subtask = self._joined("task"), self._joined("subtask")
+        if self.parent is None:
+            return self.send(task, subtask)
+        run, outer = self.parent
+        return run.prompt(outer, task, subtask, self.send)
 
 
 def prompt(task: str, subtask: str, send) -> ExecutionResult:
@@ -93,6 +110,8 @@ class ParallelExecuter(BaseNode):
             except Exception as e:  # one branch's error must not hide the others' results
                 self.logger.exception(f"[{self.name}] branch {i} ({branch.name}) raised")
                 return ExecutionResult(DemoStatus.FAILURE, error_message=repr(e))
+            finally:
+                run.done(i)
 
         # copy_context per branch: each thread starts from this one's contextvars, so nested executers see their parents
         with ThreadPoolExecutor(len(self.branches), thread_name_prefix=self.name) as pool:
