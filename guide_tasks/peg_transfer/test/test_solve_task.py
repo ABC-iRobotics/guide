@@ -23,11 +23,14 @@ from guide_ex.steps.simulation.isaac.prim import GetPrimPose
 from guide_ex.steps.simulation.success import IsTaskSuccessful
 from guide_ex.utility import recording
 from guide_ex.utility.wait import WaitForSeconds
+from guide_motion.model import Model
+
+PSM = Model.load("psm")
 
 PERFECT = ExecutionResult(DemoStatus.PERFECT)
-BASES = {  # davinci_sim's RCMs, each base tilted toward the board
-    "psm1": Pose(Point([-0.13, 0.82, 0.95]), Rotation(R.from_euler("y", -30, degrees=True))),
-    "psm2": Pose(Point([0.13, 0.82, 0.95]), Rotation(R.from_euler("y", 30, degrees=True))),
+BASES = {  # davinci_sim's RCMs, each base tilted toward the board (measured; handover IK needs them)
+    "psm1": Pose(Point([-0.13, 0.82, 0.95]), Rotation(R.from_quat([-0.1297, -0.3817, -0.2945, 0.8664]))),
+    "psm2": Pose(Point([0.13, 0.82, 0.95]), Rotation(R.from_quat([-0.1297, 0.3817, 0.2945, 0.8664]))),
     "ecm": Pose(Point([0.0, 0.9, 1.0])),
 }
 HOME = Pose(Point([0.0, 0.0, -0.177]))  # the tip at the home joints, base frame
@@ -49,9 +52,9 @@ class World:
                      plan["target_peg"]: np.array([-sx * 0.043, 0.75, 0.80 + PEG_H / 2])}
         self.plan, self.target = plan, self.pegs[plan["target_peg"]]
         self.block = self.pegs[plan["source_peg"]] + [0, 0, BLOCK_HALF_H - PEG_H / 2]
-        self.yaw = R.from_euler("z", plan["yaw"][plan["layout"].index(plan["colour"])], degrees=True)
+        self.yaw = R.from_euler("z", plan["yaw"][plan["layout"].index(plan["colour"])], degrees=True)  # turns with a holder
         self.tips = {k: BASES[k] * HOME for k in ("psm1", "psm2")}
-        self.holders, self.prompts, self.calls, self.saved = {}, [], [], None  # arm: the block's centre in its tip
+        self.holders, self.prompts, self.calls, self.saved = {}, [], [], None  # arm: the block in its tip (Pose)
 
     def world(self, prim):
         if prim == self.plan["block"]:
@@ -63,7 +66,9 @@ class World:
     def move_tip(self, arm, tip):
         self.tips[arm] = tip
         if arm in self.holders:
-            centre = tip.position.to_numpy() + tip.orientation.to_numpy() @ self.holders[arm]
+            held = tip * self.holders[arm]
+            self.yaw = R.from_matrix(held.orientation.to_numpy())
+            centre = held.position.to_numpy()
             off_axis = np.hypot(*(centre[:2] - self.target[:2])) > 0.0025
             on_top = self.target[2] + PEG_H / 2 + BLOCK_HALF_H
             if off_axis and np.hypot(*(centre[:2] - self.target[:2])) < 0.0065 and centre[2] < on_top:
@@ -95,8 +100,9 @@ def world(monkeypatch):
     def joints(self, robot, target_configuration, speed=1.0):
         w = holder["w"]
         w.calls.append((self.name, arm(robot)))
-        if arm(robot) != "ecm":
-            w.move_tip(arm(robot), BASES[arm(robot)] * HOME)
+        if arm(robot) != "ecm":  # the tip where robots/psm's forward kinematics put it
+            p, rot_ = PSM.ee_pose(np.array([target_configuration[f"{j}.pos"] for j in PSM.arm_joints]))
+            w.move_tip(arm(robot), BASES[arm(robot)] * Pose.from_numpy(p, R.from_matrix(rot_)))
         return PERFECT
 
     def grip(self, robot, gripper_goal_pos):
@@ -106,7 +112,7 @@ def world(monkeypatch):
         assert joint == "psm_tool_gripper1_joint" and q in (-0.5 * st.OPEN_RAD, 0.5 * st.SQUEEZE_RAD)  # description.json's scale
         tip = w.tips[arm(robot)]
         if q > 0 and tg.holds(tip, Pose(Point(w.block))):
-            w.holders[arm(robot)] = tip.orientation.to_numpy().T @ (w.block - tip.position.to_numpy())
+            w.holders[arm(robot)] = tip.inv() * w.world(w.plan["block"])
         elif q < 0:
             w.holders.pop(arm(robot), None)
         return PERFECT
@@ -152,8 +158,8 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
     assert result.status == DemoStatus.PERFECT and result.outputs["task_success"] and w.saved
     receiver = plan["receiver"]
     by = dict(w.calls)  # the last arm each node ran on
-    for name in ("LocateBlock", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift", "Give",
-                 "GiverLetsGo", "GiverBacksOff", "GiverHome"):
+    for name in ("LocateBlock", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift", "TurnLevel", "Give",
+                 "GiverLetsGo", "GiverBacksOff", "GiverRises", "GiverHome"):
         assert by[name] == giver, name
     for name in ("ReceiverOpens", "ApproachReceive", "MoveToReceive", "ReceiverCloses", "LocatePeg", "TurnDown",
                  "AlignOverPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
@@ -162,6 +168,8 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
     # arms move one at a time: the receiver's first move comes after the giver's last before it lets go
     names = [n for n, _ in w.calls]
     assert names.index("ApproachReceive") > names.index("Give") and names.index("GiverBacksOff") > names.index("ReceiverCloses")
+    # collision-free retreat: the giver backs out along its jaws, then rises, then goes home
+    assert names.index("GiverBacksOff") < names.index("GiverRises") < names.index("GiverHome")
 
 
 def test_the_prompts_at_three_levels(world):
@@ -174,8 +182,8 @@ def test_the_prompts_at_three_levels(world):
     assert list(dict.fromkeys(subtasks)) == list(st.SUBTASKS.values())[:5]  # no miss, no recovery's
 
 
-@pytest.mark.parametrize("stage,recovery,retry", [("grasp", "BackOverBlock", "regrasp"),
-                                                  ("handover", "BackToReceivePre", "rereceive"),
+@pytest.mark.parametrize("stage,recovery,retry", [("grasp", "UpFromMiss", "regrasp"),
+                                                  ("handover", "BackOutOfMiss", "rereceive"),
                                                   ("place", "LiftOffPegTop", "replace")])
 def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(world, stage, recovery, retry):
     plan = make_plan(3, "psm2")
@@ -196,6 +204,24 @@ def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(wor
     assert result.status == DemoStatus.FAILURE and recovery not in [n for n, _ in w.calls]
 
 
+@pytest.mark.parametrize("descent,then", [("MoveToGrasp", "CloseOnBlock"), ("MoveToReceive", "ReceiverCloses"),
+                                          ("Lower", "LocatePlaced")])
+def test_a_descent_stalled_on_contact_closes_where_it_stopped(world, monkeypatch, descent, then):
+    move = MoveToCartesianPose.run
+
+    def stalls_once(self, robot, target_pose, **kw):
+        result = move(self, robot, target_pose, **kw)  # the fake arm gets there; the real one stalled 1-2 mm short
+        if self.name == descent and not world.get("stalled"):
+            world["stalled"] = True
+            return ExecutionResult(DemoStatus.FAILURE)
+        return result
+    monkeypatch.setattr(MoveToCartesianPose, "run", stalls_once)
+    w, result = run(world, make_plan(0, "psm1"))
+
+    names = [n for n, _ in w.calls]
+    assert result.outputs["task_success"] and names[names.index(descent) + 1] == then
+
+
 def test_light_fail_plans_exactly_one_miss_and_retry_mixed_one_or_two():
     light, mixed = st.variant("light_fail"), st.variant("retry_mixed")
     assert st.variant("flawless") == {"miss": {}} and st.planned_misses(st.variant("flawless"), "red", None) == ({}, [])
@@ -211,14 +237,15 @@ def test_light_fail_plans_exactly_one_miss_and_retry_mixed_one_or_two():
     assert counts == {1, 2}
 
 
-def test_without_recoveries_strips_every_fallback():
+def test_without_recoveries_strips_every_fallback_but_the_contact_closes():
     tree = st.without_recoveries(st.build_tree(st.init_yaml(), make_plan(0, "psm1")))
-    stack = [tree]
+    stack, kept = [tree], set()
     while stack:
         node = stack.pop()
-        assert not getattr(node, "fallbacks", None), node.name
+        kept |= {r.name for r in (getattr(node, "fallbacks", None) or {}).values()}
         stack += [c for c in [*getattr(node, "children", []), getattr(node, "true_branch", None),
                               getattr(node, "false_branch", None)] if c is not None]
+    assert kept == {"MoveToGraspContact", "MoveToReceiveContact", "LowerContact"}
 
 
 def test_the_ecm_hold_is_a_jittered_joint_target():
@@ -229,8 +256,9 @@ def test_the_ecm_hold_is_a_jittered_joint_target():
         hold = st.ecm_hold(entry, np.random.default_rng(seed))
         q = np.array(list(hold.values()))
         assert list(hold) == [f"{j}.pos" for j in entry["joint_names"]]
-        assert np.all(np.abs(q - entry["default_joint_states"] - st.ECM_VIEW) <= st.ECM_JITTER)
-    assert st.ecm_hold(entry, None) == dict(zip(hold, map(float, np.add(entry["default_joint_states"], st.ECM_VIEW))))
+        assert np.all(np.abs(q - entry["default_joint_states"]) <= st.ECM_JITTER)
+        assert q[2] >= 0.0  # insertion stays off its lower limit
+    assert st.ecm_hold(entry, None) == dict(zip(hold, map(float, entry["default_joint_states"])))
 
 
 @pytest.mark.parametrize("recipe", ["flawless", "light_fail", "retry_mixed"])

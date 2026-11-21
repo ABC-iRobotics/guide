@@ -55,3 +55,14 @@ children:
 mode: condition
 condition_expr: holding
 false_branch: {ref: NodeException, alias: NotHolding}
+# a descent that stalls on contact a millimetre or two short (a jaw on the wall or the peg) closes
+# where it stopped: CheckHolding judges the grip
+fallbacks:
+  MoveToGrasp:
+    node_type: RecoveryNode
+    name: MoveToGraspContact
+    level: SEQUENCE
+    resume_target: CloseOnBlock
+    max_retries: 1
+    children:
+      - {ref: WaitForSeconds, alias: MoveToGraspStalled, static_args: {seconds: 0.1}}

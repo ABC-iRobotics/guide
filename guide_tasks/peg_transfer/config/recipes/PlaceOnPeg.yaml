@@ -1,6 +1,6 @@
 # The receiver, tool down already, turns the block where it holds it (as measured in its jaws), brings it over the target peg (its bottom 1 cm
 # over the peg top), lowers it to 1 mm over the board (Seat, which fails NotSeated unless the block sits
-# down on the peg: targets.IsSeated, the success check's test), lets go and backs 2 cm up.
+# down on the peg: targets.IsSeated, the success check's test), lets go and backs 3 cm up, its jaws clear of the peg top.
 # light_fail / retry_mixed (MissPose miss.place): the block comes down 4.5-5.5 mm off the peg's axis
 # and lands on the peg top; Replace lifts it back over the peg and Seat runs again.
 node_type: CompositeNode
@@ -27,8 +27,9 @@ children:
     dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: "${plan.block}"}
     output_map: {pose: carried}
-  - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}}
-  - {ref: MoveToCartesianPose, alias: TurnDown, dynamic_map: {robot: receiver, target_pose: turn_down}, static_args: {speed: 0.1, cartesian: true}}
+  - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}, static_args: {home: "${psm.home.receiver}"}}
+  # a joint move: the planner's IK following the straight turn from level to tool down ran the wrist into its limits
+  - {ref: MoveToJointConfiguration, alias: TurnDown, dynamic_map: {robot: receiver, target_configuration: turn_down_joints}, static_args: {speed: 0.1}}
   - {ref: MoveToCartesianPose, alias: MoveOverPeg, dynamic_map: {robot: receiver, target_pose: over}, static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}}
   - node_type: CompositeNode
     name: Seat
@@ -56,12 +57,21 @@ children:
     mode: condition
     condition_expr: seated
     false_branch: {ref: NodeException, alias: NotSeated}
+    fallbacks:  # stalled on the peg top or the board: IsSeated judges where it stopped
+      Lower:
+        node_type: RecoveryNode
+        name: LowerContact
+        level: SEQUENCE
+        resume_target: LocatePlaced
+        max_retries: 1
+        children:
+          - {ref: WaitForSeconds, alias: LowerStalled, static_args: {seconds: 0.1}}
   - {ref: OpenJaw, alias: Release, dynamic_map: {robot: receiver}}
   - {ref: WaitForSeconds, alias: ReleaseSettle, static_args: {seconds: 0.5}}
   - ref: TransformPose
     alias: RetreatPose
     dynamic_map: {l_pose: seat_target}
-    static_args: {r_pose: {position: [0.0, 0.0, 0.02]}}
+    static_args: {r_pose: {position: [0.0, 0.0, 0.03]}}
     output_map: {pose: retreat}
   - {ref: MoveToCartesianPose, alias: Retreat, dynamic_map: {robot: receiver, target_pose: retreat}, static_args: {speed: 0.1, cartesian: true}}
 fallbacks:
@@ -69,7 +79,7 @@ fallbacks:
     node_type: RecoveryNode
     name: Replace
     level: SEQUENCE
-    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, receiver: receiver, over_target: over_target}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver: receiver, over_target: over_target, peg_pose: peg_pose, receiver_scene: receiver_scene}
     resume_target: Seat
     max_retries: 2
     children:
@@ -78,6 +88,18 @@ fallbacks:
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
         static_args: {subtask: "${prompts.replace}"}
       - {ref: MoveToCartesianPose, alias: LiftOffPegTop, dynamic_map: {robot: receiver, target_pose: over_target}, static_args: {speed: 0.05, cartesian: true}}
+      # the peg top may have pushed the block along the jaws: over and seat again from where it now sits
+      - ref: GetPrimPose
+        alias: RelocatePlacingTip
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim_path: "${tip_prim.receiver}"}
+        output_map: {pose: placing_tip}
+      - ref: GetPrimPose
+        alias: RelocateCarried
+        dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+        static_args: {prim_path: "${plan.block}"}
+        output_map: {pose: carried}
+      - {ref: PlacePoses, alias: ReplacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}, static_args: {home: "${psm.home.receiver}"}}
       - ref: SetPrompt
         alias: BackToPlace
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}

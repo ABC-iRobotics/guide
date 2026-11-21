@@ -119,7 +119,12 @@ class Scene(SceneOrchestrator):
 
     def is_success_postprocess(self, result):
         block, peg_pose, *touching = result
-        return seated(block, peg_pose) and not any(touching)
+        ok = seated(block, peg_pose) and not any(touching)
+        if not ok:  # which half failed: the block off its peg, or a jaw still on it
+            b, p = block.position.to_numpy(), peg_pose.position.to_numpy()
+            self._logger.info(f"Not a success: block {np.hypot(*(b[:2] - p[:2])) * 1e3:.1f} mm off the peg's axis, "
+                              f"{(b[2] - p[2] + PEG_H / 2) * 1e3:.1f} mm over its foot; jaws touching {list(touching)}")
+        return ok
 
     def reset_preprocess(self, instructions):
         return instructions

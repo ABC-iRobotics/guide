@@ -1,6 +1,7 @@
 # The one TASK: the block from the giver's peg to the receiver's. Each arm measures the scene frame
 # (/PegTransfer, identity in the scene: its z is up) in its own base, where its poses are.
-# A grasp that closed on air reopens over the block and picks it again (Regrasp).
+# A grasp that closed on air reopens, rises straight up out of it, comes back over the block and picks
+# it again (Regrasp).
 node_type: CompositeNode
 name: Transfer
 level: TASK
@@ -26,7 +27,7 @@ fallbacks:
     node_type: RecoveryNode
     name: Regrasp
     level: SUBTASK
-    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, giver: giver, over_grasp: over_grasp}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, giver: giver, over_grasp: over_grasp, grasp_target: grasp_target}
     resume_target: PickBlock
     max_retries: 2
     children:
@@ -35,4 +36,10 @@ fallbacks:
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
         static_args: {subtask: "${prompts.regrasp}"}
       - {ref: OpenJaw, alias: OpenForRegrasp, dynamic_map: {robot: giver}}
+      - ref: TransformPose
+        alias: UpFromMissPose
+        dynamic_map: {l_pose: grasp_target}
+        static_args: {r_pose: {position: [0.0, 0.0, "${offsets.approach}"]}}  # straight up, out of the miss
+        output_map: {pose: missed_up}
+      - {ref: MoveToCartesianPose, alias: UpFromMiss, dynamic_map: {robot: giver, target_pose: missed_up}, static_args: {speed: 0.05, cartesian: true}}
       - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true}}

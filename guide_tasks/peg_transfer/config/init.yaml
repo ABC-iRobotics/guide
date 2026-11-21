@@ -14,22 +14,30 @@ camera_encoding: rgb_h264
 # The arms are in the scene USD, each anchored to the world at its setup-joint pose (4
 # articulations with the cart). The profile (guide_motion robots/<profile>) gives joint
 # names, jaws, tool and base frames and home; controller: oscbf with oscbf.robot = profile.
+# default_joint_states (the arm, then the jaws) is each arm's home, where Reset puts it and where an
+# episode starts: the PSMs tool down (jaws down), tips 4.5 cm either side of the board's centre line and
+# 5.5 cm over it, in view (mirrored arms: one profile home cannot serve both); the ECM pulled out to
+# insertion 0.005 and tilted 0.05 rad up from davinci_sim's pose, 0.24 m from the pegs' centre, the
+# whole board, the handover box and both start tips in both images (fx 772: 50 deg across).
 robots:
   psm1:
     profile: psm
     in_scene: true
     path: '/PSM1/psm'
     oscbf: {mode: torque}   # gains/barriers come from robots/psm
+    default_joint_states: [0.231, 0.114, 0.153, -1.504, -1.065, 0.0, 0.0, 0.0]
   psm2:
     profile: psm
     in_scene: true
     path: '/PSM2/psm'
     oscbf: {mode: torque}
+    default_joint_states: [-0.231, 0.114, 0.153, 1.504, -1.065, 0.0, 0.0, 0.0]
   ecm:
     profile: ecm
     in_scene: true
     path: '/ECM/ecm'
     oscbf: {mode: torque}
+    default_joint_states: [0.0, 0.0786, 0.005, 0.0]
 
 # The ECM's stereo pair (nominal da Vinci Classic SD, davinci_sim/scene/scene_info.json camera).
 cameras:

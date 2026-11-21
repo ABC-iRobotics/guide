@@ -18,7 +18,7 @@ arm by role, the giver or the receiver (${hand.*}, psm1 or psm2), the ECM holdin
 Every pose target comes from peg_transfer.targets (the tilted PSM bases leave the library's base-z-up
 poses no use). Variation lives in those targets only: the ECM's hold, the handover marker, MissPose's
 planned misses (config/variants/: flawless, light_fail, retry_mixed); never in send_action's params.
-A flawless episode runs without recoveries: a failing step discards it and the layout is drawn again.
+A flawless episode runs without retries (contact closes kept): a failing step discards it and the layout is drawn again.
 """
 
 import argparse
@@ -48,10 +48,8 @@ OPEN_RAD = 0.164
 # Closing aims past shut, like the dVRK's negative jaw angles: on a wall the drive (0.5 N m/rad) then
 # squeezes with 0.05 rad of error, not the 0.003 left at 0, and the block no longer droops out of level
 SQUEEZE_RAD = 0.1
-ECM_JITTER = (0.02, 0.02, 0.005, 0.0)  # +- per ECM joint: yaw, pitch (rad), insertion (m), tool roll
-# added to the ECM's default joints: tilted up 0.05 rad and pulled back 6 cm, so the left image holds the
-# handover (4-6 cm over the board, off its top edge before) as well as the near pegs
-ECM_VIEW = (0.0, 0.05, -0.06, 0.0)
+# +- per ECM joint about its home (init.yaml): yaw, pitch (rad), insertion (m; home 0.005, its limit 0), tool roll
+ECM_JITTER = (0.02, 0.02, 0.004, 0.0)
 # 0.1x cube_stack's motion noise (guide_motion NoiseParams): the PSM works at millimetres
 NOISE = {"sigma": 0.0012, "aim": 0.003, "blend": 0.004, "aim_late": True}
 SETTLE_S = 2.0  # sim s after Randomize: the blocks drop onto their pegs
@@ -81,9 +79,8 @@ def planned_misses(v, key, rng) -> tuple[dict, list[str]]:
 
 
 def ecm_hold(entry, rng) -> dict:
-    """The ECM's joint target: its default joints moved by ECM_VIEW, each then uniformly within ECM_JITTER
-    (rng None: none)."""
-    q = np.asarray(entry["default_joint_states"], float) + ECM_VIEW
+    """The ECM's joint target: its default joints (init.yaml), each uniformly within ECM_JITTER (rng None: none)."""
+    q = np.asarray(entry["default_joint_states"], float)
     if rng is not None:
         q = q + rng.uniform(-1, 1, len(q)) * ECM_JITTER
     return {f"{j}.pos": float(v) for j, v in zip(entry["joint_names"], q)}
@@ -96,7 +93,6 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
     from guide_motion.description import ROBOTS_DIR
 
     robots = {k: resolve(v) for k, v in init["robots"].items()}
-    psm = robots[plan["giver"]]
     gripper = json.loads((ROBOTS_DIR / "psm" / "description.json").read_text())["gripper"]
     roles = {"giver": plan["giver"], "receiver": plan["receiver"]}
     return {
@@ -104,7 +100,8 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
         "plan": plan,
         "prompts": SUBTASKS,
         "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
-        "psm": {"home": {f"{j}.pos": q for j, q in zip(psm["joint_names"], psm["default_joint_states"])}},
+        "psm": {"home": {role: {f"{j}.pos": q for j, q in zip(robots[r]["joint_names"], robots[r]["default_joint_states"])}
+                         for role, r in roles.items()}},  # each arm's own (init.yaml)
         "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
         "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP},  # m along the tool's z
@@ -119,9 +116,10 @@ def build_tree(init, plan, **variation):
 
 
 def without_recoveries(node):
-    """Drop every recovery (fallback) in the tree: a failing step then ends the episode."""
+    """Drop every recovery (fallback) in the tree but the contact ones (a descent stalled on contact a
+    millimetre short closes where it stopped: no retry in the data): a failing step then ends the episode."""
     if getattr(node, "fallbacks", None):
-        node.fallbacks = {}
+        node.fallbacks = {k: r for k, r in node.fallbacks.items() if r.name.endswith("Contact")}
     for child in [*getattr(node, "children", []), getattr(node, "true_branch", None), getattr(node, "false_branch", None)]:
         if child is not None:
             without_recoveries(child)

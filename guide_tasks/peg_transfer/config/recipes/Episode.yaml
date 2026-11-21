@@ -24,10 +24,13 @@ children:
     alias: HoldCamera
     dynamic_map: {robot: ecm}
     static_args: {target_configuration: "${camera.hold}", speed: 0.2}
-  # Both PSMs home, unrecorded: a failed attempt leaves its arms where it stopped (Randomize moves
+  # Both PSMs home (init.yaml: tool down over the board, in view), unrecorded: a failed attempt
+  # leaves its arms where it stopped (Randomize moves
   # only the blocks), and a wrist left at roll 232 deg could not reach the next grasp.
-  - {ref: MoveToJointConfiguration, alias: GiverStartsHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home}", speed: 0.2}}
-  - {ref: MoveToJointConfiguration, alias: ReceiverStartsHome, dynamic_map: {robot: receiver}, static_args: {target_configuration: "${psm.home}", speed: 0.2}}
+  - {ref: MoveToJointConfiguration, alias: GiverStartsHome, dynamic_map: {robot: giver}, static_args: {target_configuration: "${psm.home.giver}", speed: 0.2}}
+  - {ref: MoveToJointConfiguration, alias: ReceiverStartsHome, dynamic_map: {robot: receiver}, static_args: {target_configuration: "${psm.home.receiver}", speed: 0.2}}
+  # still before the first frame: the first frame shows both tools at their start, not moving there
+  - {ref: WaitForSeconds, alias: StartSettle, static_args: {seconds: 0.5}}
   - ref: StartEpisode
   - ref: Transfer
   - ref: CheckSuccess
