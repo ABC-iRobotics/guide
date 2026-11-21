@@ -101,7 +101,9 @@ def test_handover_is_level_jaw_to_jaw_within_the_joint_limits(giver, receiver):
         base = Pose(Point([0.0, 0.0, 0.0]), BASE[receiver].orientation)
         for x, y in itertools.product((0.007, 0.05), (0.685, 0.735)):  # peg_transfer.usd: the pegs, board jitter
             peg = at_rcm(Pose(Point([x * np.sign(RCM[receiver][0]), y, 0.80 + PEG_H / 2])))
-            for tip in tg.place_poses(peg, UP, at_rcm(receive), at_rcm(moved), base):  # over, seat
+            over, seat = tg.place_poses(peg, UP, at_rcm(receive), at_rcm(moved), base)
+            high = Pose(Point(over.position.to_numpy() + rot(over)[:, 2] * tg.APPROACH), over.orientation)  # PlaceOnPeg's turn
+            for tip in (high, over, seat):
                 assert np.isfinite(tg.wrist_load(base, tip.position.to_numpy(), rot(tip))), (x, y)
 
 

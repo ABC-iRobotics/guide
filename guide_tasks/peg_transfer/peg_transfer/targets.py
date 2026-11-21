@@ -283,7 +283,8 @@ def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose, near=None, ke
     wall, or turned in them), the arm's base at `base`: the least turn of the block's axis to up (a block
     drooping in the jaws comes down straight onto the peg), its centre over the peg's axis, its bottom 1 cm
     over the peg top, then down at the seat (SEAT_GAP over the board). The ring turns freely about the
-    round peg: of the turns about up the wrist reaches at both, the one turning the wrist least from the
+    round peg: of the turns about up the wrist reaches at both (and APPROACH up the tool from over, where
+    PlaceOnPeg turns it down), the one turning the wrist least from the
     arm's joints `near` (robots/psm order; one joint move carries the block from the handover over the
     peg, turning it down: the least wrist turn sweeps it least; the turn nearest home swung it 16 mm wide),
     the wrist's load (wrist_load) adding. `keep` (a replace, tool down over the peg already): the jaws keep
@@ -306,6 +307,8 @@ def place_poses(peg: Pose, up, tip: Pose, block: Pose, base: Pose, near=None, ke
         over, low = poses(rot)
         if not np.isfinite(wrist_load(base, low.position.to_numpy(), rot)):
             return np.inf
+        if not np.isfinite(wrist_load(base, over.position.to_numpy() + rot[:, 2] * APPROACH, rot)):
+            return np.inf  # PlaceOnPeg turns tool down APPROACH up the tool from over, then comes down
         turn = (lambda q: 0.0) if near is None else (lambda q: 0.25 * np.abs(q - near)[3:].sum())
         return min((load + turn(q) for load, q in wrist_ik(base, over.position.to_numpy(), rot)), default=np.inf)
     rots = [_about(up, k * np.pi / 12) @ m for k in range(-12, 12)]
