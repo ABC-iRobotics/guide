@@ -248,6 +248,9 @@ def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(wor
     assert stages == [stage] and result.outputs["task_success"] and w.saved
     names = [n for n, _ in w.calls]
     assert names.count(recovery) == 1
+    for arm in ("psm1", "psm2"):  # no free end runs into another: the robot's queue handover can't chain two
+        seq = [n for n, a in w.calls if a == arm and n in w.flags]
+        assert not any(not w.flags[a][1] and not w.flags[b][1] for a, b in zip(seq, seq[1:])), seq
     # the subtask timeline shows the retry, then the subtask it retries again
     subtasks = [p for level, p in w.prompts if level == "subtask"]
     i = next(k for k, p in enumerate(subtasks) if st.SUBTASKS[retry] in p)  # in a parallel block: joined

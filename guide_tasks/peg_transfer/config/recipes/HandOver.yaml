@@ -127,7 +127,7 @@ fallbacks:
         output_map: {pose: receive_back}
       # out of the miss along its jaws, blending into the move back in front of the wall, and that (perturbed,
       # no aim: ApproachReceive's) into MoveToReceive
-      - {ref: MoveToCartesianPose, alias: BackOutOfMiss, dynamic_map: {robot: receiver, target_pose: receive_back}, static_args: {speed: 0.05, cartesian: true, precise_end: false}}
+      - {ref: MoveToCartesianPose, alias: BackOutOfMiss, dynamic_map: {robot: receiver, target_pose: receive_back}, static_args: {speed: 0.05, cartesian: true}}  # precise: BackToReceivePre ends free
       - {ref: MoveToCartesianPose, alias: BackToReceivePre, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true, perturb: true, precise_end: false}}
       - ref: SetPrompt
         alias: BackToHandover
