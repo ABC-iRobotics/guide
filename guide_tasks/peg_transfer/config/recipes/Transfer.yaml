@@ -101,3 +101,15 @@ fallbacks:
       - {ref: MoveToCartesianPose, alias: UpFromMiss, dynamic_map: {robot: giver, target_pose: missed_up}, static_args: {speed: 0.05, cartesian: true, precise_end: false}}
       - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true, precise_end: false}}
       - {ref: MoveToCartesianPose, alias: DownToGrasp, dynamic_map: {robot: giver, target_pose: grasp_pose}, static_args: {speed: 0.05, cartesian: true}}
+      - {ref: WaitForSeconds, alias: RegraspSettle, static_args: {seconds: 0.1}}
+    # stalled on contact a millimetre short (1.0 mm, 3 times in a row in Isaac: no fallback aborted the
+    # episode), it closes where it stopped, as GiverApproach's MoveToGraspContact: PickBlock judges the grip
+    fallbacks:
+      DownToGrasp:
+        node_type: RecoveryNode
+        name: DownToGraspContact
+        level: SEQUENCE
+        resume_target: RegraspSettle
+        max_retries: 1
+        children:
+          - {ref: WaitForSeconds, alias: DownToGraspStalled, static_args: {seconds: 0.1}}

@@ -257,6 +257,23 @@ def test_a_descent_stalled_on_contact_closes_where_it_stopped(world, monkeypatch
     assert result.outputs["task_success"] and names[names.index(descent) + 1] == then
 
 
+def test_a_regrasp_stalled_on_contact_closes_where_it_stopped(world, monkeypatch):
+    move = MoveToCartesianPose.run
+
+    def stalls(self, robot, target_pose, **kw):
+        result = move(self, robot, target_pose, **kw)
+        return ExecutionResult(DemoStatus.FAILURE) if self.name == "DownToGrasp" else result
+    monkeypatch.setattr(MoveToCartesianPose, "run", stalls)
+    plan = make_plan(3, "psm2")
+    miss, _ = st.planned_misses({"failures": {"counts": [1], "weights": [1.0]},
+                                 "stages": {"grasp": st.variant("light_fail")["stages"]["grasp"]}},
+                                plan["colour"], np.random.default_rng(0))
+    w, result = run(world, plan, miss={**miss, "seed": 5})
+
+    names = [n for n, a in w.calls if a == "psm2"]
+    assert result.outputs["task_success"] and names[names.index("DownToGrasp") + 1] == "CloseOnBlock"
+
+
 def test_light_fail_plans_exactly_one_miss_and_retry_mixed_one_or_two():
     light, mixed = st.variant("light_fail"), st.variant("retry_mixed")
     assert st.variant("flawless") == {"miss": {}} and st.planned_misses(st.variant("flawless"), "red", None) == ({}, [])
