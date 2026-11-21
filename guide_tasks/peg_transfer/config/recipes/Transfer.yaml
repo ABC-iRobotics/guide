@@ -30,7 +30,7 @@ children:
     dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: "${plan.block}"}
     output_map: {pose: block_pose}
-  - {ref: GraspPose, dynamic_map: {block: block_pose, scene: giver_scene}, output_map: {pose: grasp_pose}}
+  - {ref: GraspPose, dynamic_map: {block: block_pose, scene: giver_scene, robot: giver}, output_map: {pose: grasp_pose}}
   # the giver goes for the block while the receiver moves to where it will take it
   - node_type: CompositeNode
     name: Reach

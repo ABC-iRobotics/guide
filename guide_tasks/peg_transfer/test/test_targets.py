@@ -58,6 +58,12 @@ def test_the_grasp_is_tool_down_across_a_wall_and_near_the_bend_free_axis():
         walls = [rot(b) @ [np.cos(a), np.sin(a), 0] for a in tg.WALLS]
         t = tg.grasp_pose(b, UP, base)
         assert min(tg.axis_deviation(rot(t)[:, 0], w) for w in walls) <= tg.MAX_DEVIATION + 1e-9, yaw
+        # from the ready pose (roll +-86 deg), the grip or its FLIP the wrist turns least to: no half turn
+        for roll in (1.5, -1.5):
+            near = np.array([0.0, 0.0, 0.15, roll, -1.06, 0.0])
+            g = tg.grasp_pose(b, UP, base, near)
+            q = min((q for _, q in tg.wrist_ik(base, g.position.to_numpy(), rot(g))), key=lambda q: abs(q[3] - roll))
+            assert tg.holds(g, b) and abs(q[3] - roll) < np.radians(90), (yaw, roll, np.degrees(q[3]))
 
 
 def test_the_lift_clears_the_peg_by_a_block_height():

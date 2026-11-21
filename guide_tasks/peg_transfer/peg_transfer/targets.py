@@ -115,11 +115,13 @@ def holds(tip: Pose, block: Pose) -> bool:
     return bool(np.linalg.norm(grip_centres(tip) - block.position.to_numpy(), axis=1).min() <= HOLD_TOL)
 
 
-def grasp_pose(block: Pose, up, base: Pose | None = None) -> Pose:
+def grasp_pose(block: Pose, up, base: Pose | None = None, near=None) -> Pose:
     """Tool down on one of the block's walls, the jaws turned at most MAX_DEVIATION off the bend-free
     closing axis (across the wall within 15 deg): without `base`, the wall whose normal lies nearest
     that axis; given the arm's `base`, the wall that loads its wrist least (wrist_load: a wrist driven
-    to its limits stalled short of the grasp). near_home either way."""
+    to its limits stalled short of the grasp). near_home, or given the arm's joints `near` (robots/psm order),
+    of the grip and its FLIP the one its wrist turns least to (near_home's pick from the ready pose's roll of
+    +-86 deg swung the wrist 160 deg on the way, the shaft sweeping 20 cm out of view)."""
     c, b = block.position.to_numpy(), block.orientation.to_numpy()
     free = bend_free_x(c, -np.asarray(up, float))
     normals = [np.cos(a) * b[:, 0] + np.sin(a) * b[:, 1] for a in WALLS]
@@ -130,7 +132,12 @@ def grasp_pose(block: Pose, up, base: Pose | None = None) -> Pose:
     # the turned jaws) leaves the wall and they close on air
     tips = [near_home(tip_for(c, frame(toward_free(free, n, up), up))) for n in normals
             if axis_deviation(n, free) <= 2 * MAX_DEVIATION + 1e-9]
-    return min(tips, key=lambda t: wrist_load(base, t.position.to_numpy(), t.orientation.to_numpy()))
+    best = min(tips, key=lambda t: wrist_load(base, t.position.to_numpy(), t.orientation.to_numpy()))
+    if near is None:
+        return best
+    p, rot = best.position.to_numpy(), best.orientation.to_numpy()
+    turn = lambda r: min((np.abs(q - near)[3:].sum() for _, q in wrist_ik(base, p, r)), default=np.inf)
+    return Pose.from_numpy(p, R.from_matrix(min((rot, rot @ FLIP), key=turn)))
 
 
 def _about(axis, angle) -> np.ndarray:
@@ -324,15 +331,17 @@ def arm_joints(robot) -> dict:
 
 @node()
 class GraspPose(BaseNode):
-    """The giver's tool-down grasp of the block (grasp_pose), in its base frame."""
+    """The giver's tool-down grasp of the block (grasp_pose, from its joints now), in its base frame."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("GraspPose", alias, dynamic_map, static_args, output_map)
 
-    def run(self, block: Pose, scene: Pose) -> ExecutionResult:
-        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": grasp_pose(block, up_of(scene), base=Pose())})
+    def run(self, block: Pose, scene: Pose, robot) -> ExecutionResult:
+        now = arm_joints(robot)
+        near = np.array([now[f"{j}.pos"] for j in _model().arm_joints])
+        return ExecutionResult(status=DemoStatus.PERFECT, outputs={"pose": grasp_pose(block, up_of(scene), Pose(), near)})
 
 
 @node()
