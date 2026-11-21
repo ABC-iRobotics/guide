@@ -22,7 +22,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveOverBlock
     dynamic_map: {robot: giver, target_pose: over_grasp}
-    static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false}  # no aim: its fade-out left 0.4-1.3 mm off the wall at the face (jaws: +-0.42 mm)
+    static_args: {speed: 0.2, cartesian: true, perturb: true}  # precise, unaimed: blended (noise carried into the descent) the grasp stalled 7-8 mm short, 14-16 deg off, in 5 of 15 perturbed episodes, 0 of 5 clean
   - ref: MissPose
     alias: MissGrasp
     dynamic_map: {pose: grasp_pose}

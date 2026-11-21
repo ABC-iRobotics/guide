@@ -206,7 +206,7 @@ def test_free_space_moves_are_perturbed_and_blend_into_the_next_pose_move(world)
     w, _ = run(world, plan)
 
     free = {n for n, (_, precise, _) in w.flags.items() if not precise}
-    assert free == {"MoveOverBlock", "ApproachReceive", "GiverBacksOff", "DownOverPeg", "Retreat"}
+    assert free == {"ApproachReceive", "GiverBacksOff", "DownOverPeg", "Retreat"}  # the grasp hover ends precise
     assert {n for n, (perturb, _, _) in w.flags.items() if perturb} == {
         "MoveOverBlock", "ToExchange", "ApproachReceive", "DownOverPeg", "GiverHome", "ReceiverHome"}
     assert {n for n, (_, _, aim) in w.flags.items() if aim} == {"DownOverPeg"}  # the hover over the peg (+-2.6 mm); the grasp (+-0.42 mm) is not aimed
