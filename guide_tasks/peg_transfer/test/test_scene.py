@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -51,6 +52,7 @@ def test_the_direction_is_fifty_fifty():
 
 def test_success_is_the_block_seated_on_the_target_peg_and_let_go():
     scene = Scene.__new__(Scene)
+    scene._logger = logging.getLogger("test")
     on_board = 0.80 + BLOCK_HALF_H
 
     assert scene.is_success_postprocess([Pose(position=Point([-0.043, 0.69, on_board])), PEG, False, False])
