@@ -183,7 +183,7 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
                  "GiverLetsGo", "GiverBacksOff", "GiverHome"):
         assert by[name] == giver, name
     for name in ("ToExchange", "ReceiverOpens", "ApproachReceive", "MoveToReceive", "ReceiverCloses", "LocatePeg",
-                 "TurnDownOverPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
+                 "TurnDownOverPeg", "LowerOntoPeg", "Lower", "Release", "Retreat", "ReceiverHome"):
         assert by[name] == receiver, name
     assert by["HoldCamera"] == "ecm"
     # each arm's moves in the user's flow, every point a target, an approach to one or a clearance
@@ -192,7 +192,7 @@ def test_both_directions_transfer_the_block_each_node_on_its_arm(world, giver):
     assert [n for n, a in moves if a == giver] == ["OpenForPick", "MoveOverBlock", "MoveToGrasp", "CloseOnBlock", "Lift",
                                                    "TurnLevel", "GiverLetsGo", "GiverBacksOff", "GiverHome"]
     assert [n for n, a in moves if a == receiver] == ["ToExchange", "ApproachReceive", "ReceiverOpens", "MoveToReceive",
-                                                      "ReceiverCloses", "TurnDownOverPeg", "Lower", "Release", "Retreat",
+                                                      "ReceiverCloses", "TurnDownOverPeg", "LowerOntoPeg", "Lower", "Release", "Retreat",
                                                       "ReceiverHome"]
     names = [n for n, _ in w.calls]
     assert names.index("ApproachReceive") > names.index("TurnLevel") and names.index("GiverBacksOff") > names.index("ReceiverCloses")
@@ -239,7 +239,7 @@ def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(wor
 
 
 @pytest.mark.parametrize("descent,then", [("MoveToGrasp", "CloseOnBlock"), ("MoveToReceive", "ReceiverCloses"),
-                                          ("Lower", "LocatePlaced")])
+                                          ("LowerOntoPeg", "LocatePlaced"), ("Lower", "Release")])
 def test_a_descent_stalled_on_contact_closes_where_it_stopped(world, monkeypatch, descent, then):
     move = MoveToCartesianPose.run
 
@@ -280,7 +280,7 @@ def test_without_recoveries_strips_every_fallback_but_the_contact_closes():
         kept |= {r.name for r in (getattr(node, "fallbacks", None) or {}).values()}
         stack += [c for c in [*getattr(node, "children", []), *getattr(node, "branches", []), getattr(node, "true_branch", None),
                               getattr(node, "false_branch", None)] if c is not None]
-    assert kept == {"MoveToGraspContact", "MoveToReceiveContact", "LowerContact"}
+    assert kept == {"MoveToGraspContact", "MoveToReceiveContact", "LowerContact", "SeatContact"}
 
 
 def test_the_ecm_hold_is_a_jittered_joint_target():

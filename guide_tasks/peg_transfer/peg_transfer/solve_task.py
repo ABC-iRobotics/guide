@@ -14,7 +14,7 @@ arm by role, the giver or the receiver (${hand.*}, psm1 or psm2), the ECM holdin
            LiftOff (SUBTASK "Lift it off the peg.")
            HandOver (SUBTASK "Hand it over.")  Receive (condition: received), fallback Rereceive
            Finish (SUBTASK, ParallelExecuter "Right: Place it on the peg. Left: Return to start.")
-             GiverReturns  ||  PlaceOnPeg (IsSeated fails NotSeated: Replace)
+             GiverReturns  ||  PlaceOnPeg (OnPeg fails NotSeated: Replace)
            ReturnToStart (SUBTASK "Return to start.": the receiver home)
 
 A parallel block's branch prompts join with the image side of its arm (sides: PSM1 is image right).
@@ -41,7 +41,7 @@ from guide_ex.core.states import DemoStatus
 from guide_ex.recipe import load, recipes_dir
 from guide_ex.recipe.solve import SERVICES, make_robots
 from peg_transfer.scene import IMAGE_SIDE
-from peg_transfer.targets import APPROACH, DROP, LIFT  # importing registers its nodes (GraspPose, ...)
+from peg_transfer.targets import APPROACH, DROP, LIFT, TOUCH  # importing registers its nodes (GraspPose, ...)
 
 SUBTASKS = {"reach": "Reach for the block.", "exchange": "Move to the exchange point.", "pick": "Pick up the block.", "lift": "Lift it off the peg.", "handover": "Hand it over.",
             "place": "Place it on the peg.", "return": "Return to start.",
@@ -121,7 +121,7 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
                          for role, r in roles.items()}},  # each arm's own (init.yaml)
         "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "wide": gripper["scale"][0] * WIDE_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
-        "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP},  # m along the tool's z
+        "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP, "touch": -TOUCH},  # m along the tool's z
         "miss": miss or {},
     }
 

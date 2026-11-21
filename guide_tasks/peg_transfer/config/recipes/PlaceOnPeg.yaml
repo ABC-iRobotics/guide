@@ -1,10 +1,12 @@
 # The receiver carries the block from the handover over the target peg, turning it tool down on the way
 # (one joint move to Finish's targets.PlacePoses `over`, the turn about up that turns its wrist least; the
-# block's bottom 1 cm over the peg top), lowers it to 1 mm over the board, and IsSeated fails (NotSeated)
-# unless the block sits down on the peg (the success check's test); then it lets go wide and backs 3 cm
-# up, its jaws clear of the peg top. Its own arm only: Finish's branch beside GiverReturns.
+# block's bottom 1 cm over the peg top), lowers it 1.5 mm onto the peg (targets.TOUCH), and OnPeg fails
+# (NotSeated) unless the block went onto the peg, not its top; then it lowers it to 1 mm over the board,
+# lets go wide and backs 3 cm up, its jaws clear of the peg top. Its own arm only: Finish's branch beside
+# GiverReturns.
 # light_fail / retry_mixed (MissPose miss.place): the block comes down 4.5-5.5 mm off the peg's axis
-# and lands on the peg top; Replace lifts it back over the peg and the place runs again from MissPlace.
+# and lands on the peg top; Replace lifts it back over the peg, re-aims from where it now sits in the jaws
+# and the place runs again from TouchPose.
 node_type: CompositeNode
 name: PlaceOnPeg
 level: SEQUENCE
@@ -23,17 +25,23 @@ children:
   - {ref: JointsFor, alias: OverPegJoints, dynamic_map: {pose: over_target, robot: receiver}, output_map: {joints: over_joints}}
   - {ref: MoveToJointConfiguration, alias: TurnDownOverPeg, dynamic_map: {robot: receiver, target_configuration: over_joints}, static_args: {speed: 0.1}}
   - ref: TransformPose
-    alias: SeatPose
+    alias: TouchPose
     dynamic_map: {l_pose: over_target}
-    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.down}"]}}  # targets.DROP down the tool
-    output_map: {pose: seat_target}
-  - {ref: MoveToCartesianPose, alias: Lower, dynamic_map: {robot: receiver, target_pose: seat_target}, static_args: {speed: 0.05, cartesian: true}}
+    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.touch}"]}}  # targets.TOUCH down the tool
+    output_map: {pose: touch_target}
+  - {ref: MoveToCartesianPose, alias: LowerOntoPeg, dynamic_map: {robot: receiver, target_pose: touch_target}, static_args: {speed: 0.05, cartesian: true}}
   - ref: GetPrimPose
     alias: LocatePlaced
     dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: "${plan.block}"}
     output_map: {pose: placed}
-  - {ref: IsSeated, dynamic_map: {block: placed, peg: peg_pose, scene: receiver_scene}}
+  - {ref: IsSeated, alias: OnPeg, dynamic_map: {block: placed, peg: peg_pose, scene: receiver_scene}, static_args: {entering: true}}
+  - ref: TransformPose
+    alias: SeatPose
+    dynamic_map: {l_pose: over_target}
+    static_args: {r_pose: {position: [0.0, 0.0, "${offsets.down}"]}}  # targets.DROP down the tool
+    output_map: {pose: seat_target}
+  - {ref: MoveToCartesianPose, alias: Lower, dynamic_map: {robot: receiver, target_pose: seat_target}, static_args: {speed: 0.05, cartesian: true}}
   - {ref: OpenJaw, alias: Release, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.wide}"}}}
   - {ref: WaitForSeconds, alias: ReleaseSettle, static_args: {seconds: 0.5}}
   - ref: TransformPose
@@ -43,7 +51,7 @@ children:
     output_map: {pose: retreat}
   - {ref: MoveToCartesianPose, alias: Retreat, dynamic_map: {robot: receiver, target_pose: retreat}, static_args: {speed: 0.1, cartesian: true}}
 fallbacks:
-  Lower:  # stalled on the peg top or the board: IsSeated judges where it stopped
+  LowerOntoPeg:  # stalled on the peg top: OnPeg judges where it stopped
     node_type: RecoveryNode
     name: LowerContact
     level: SEQUENCE
@@ -51,12 +59,20 @@ fallbacks:
     max_retries: 1
     children:
       - {ref: WaitForSeconds, alias: LowerStalled, static_args: {seconds: 0.1}}
-  IsSeated:
+  Lower:  # stalled on the board, the block down on the peg: let go there
+    node_type: RecoveryNode
+    name: SeatContact
+    level: SEQUENCE
+    resume_target: Release
+    max_retries: 1
+    children:
+      - {ref: WaitForSeconds, alias: SeatStalled, static_args: {seconds: 0.1}}
+  OnPeg:
     node_type: RecoveryNode
     name: Replace
     level: SEQUENCE
     dynamic_map: {sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver: receiver, over_target: over_target, peg_pose: peg_pose, receiver_scene: receiver_scene}
-    resume_target: MissPlace
+    resume_target: TouchPose
     max_retries: 2
     children:
       - ref: SetPrompt
@@ -75,8 +91,14 @@ fallbacks:
         dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
         static_args: {prim_path: "${plan.block}"}
         output_map: {pose: carried}
-      - {ref: PlacePoses, alias: ReplacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried, robot: receiver}, static_args: {keep: true}}
+      - ref: PlacePoses
+        alias: ReplacePoses
+        dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried, robot: receiver}
+        static_args: {keep: true}
+        output_map: {over: over_target}
       - ref: SetPrompt
         alias: BackToPlace
         dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_id: scene_id}
         static_args: {subtask: "${prompts.place}"}
+      # tool down already: a straight move over the peg (no joint move: MissPose misses once anyway)
+      - {ref: MoveToCartesianPose, alias: OverPegAgain, dynamic_map: {robot: receiver, target_pose: over_target}, static_args: {speed: 0.05, cartesian: true}}

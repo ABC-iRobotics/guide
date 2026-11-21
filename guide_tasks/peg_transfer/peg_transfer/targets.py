@@ -28,7 +28,7 @@ from guide_core.types.geometry import Pose
 from guide_ex.core.base_node import BaseNode
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
 from guide_ex.recipe import node
-from peg_transfer.scene import BLOCK_HALF_H, PEG_H, seated
+from peg_transfer.scene import BLOCK_HALF_H, PEG_H, SEATED_XY, seated
 
 # block.obj (SurRoL): corners at 0, +-120 deg (r 9.7 mm), inner hexagon (inradius 4.16 mm), so the
 # walls are thinnest midway between corners, outer face 4.85 mm from the centre.
@@ -40,6 +40,9 @@ APPROACH = 0.015  # m over the grasp before descending to it
 LIFT = PEG_H + 2 * BLOCK_HALF_H  # m straight up: the block's bottom a block height over the peg top
 SEAT_GAP = 0.001  # m left under the block when it is let go: the jaws never press it into the board
 DROP = PEG_H + 0.010  # m from over the peg (the block's bottom 1 cm over its top) down to the seat
+# m from over the peg down until the block's bottom is 1.5 mm onto it: after a miss it lands on the peg top and
+# the jaws push it 1.5 mm, still held (lowering all the way pushed it 8-34 mm up the jaws or out of them)
+TOUCH = DROP - PEG_H + 0.0015
 # Largest turn of the closing axis off the bend-free one: tool_yaw grows with it and with the bend
 # (IK on robots/psm: 15 deg needs <= 0.35 rad of its 0.52 at the lift height).
 MAX_DEVIATION = np.radians(15.0)
@@ -428,15 +431,18 @@ class JointsFor(BaseNode):
 
 @node()
 class IsSeated(BaseNode):
-    """Fails (NotSeated) unless the block sits down on the peg (scene.seated, the success check's), held or not."""
+    """Fails (NotSeated) unless the block sits down on the peg (scene.seated, the success check's), held or not.
+    `entering`: only that the block's axis is on the peg's (it went onto the peg, not onto its top)."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("IsSeated", alias, dynamic_map, static_args, output_map)
 
-    def run(self, block: Pose, peg: Pose, scene: Pose) -> ExecutionResult:
-        if not seated(_in_scene(scene, block), _in_scene(scene, peg)):
+    def run(self, block: Pose, peg: Pose, scene: Pose, entering: bool = False) -> ExecutionResult:
+        b, p = _in_scene(scene, block), _in_scene(scene, peg)
+        off = np.hypot(*(b.position.to_numpy() - p.position.to_numpy())[:2])
+        if not (off <= SEATED_XY if entering else seated(b, p)):
             return ExecutionResult(status=DemoStatus.FAILURE, error_message="NotSeated: the block is not down on the peg")
         return ExecutionResult(status=DemoStatus.PERFECT)
 
