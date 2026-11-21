@@ -209,7 +209,7 @@ def test_free_space_moves_are_perturbed_and_blend_into_the_next_pose_move(world)
     assert free == {"MoveOverBlock", "ApproachReceive", "GiverBacksOff", "DownOverPeg", "Retreat"}
     assert {n for n, (perturb, _, _) in w.flags.items() if perturb} == {
         "MoveOverBlock", "ToExchange", "ApproachReceive", "DownOverPeg", "GiverHome", "ReceiverHome"}
-    assert {n for n, (_, _, aim) in w.flags.items() if aim} == {"MoveOverBlock", "DownOverPeg"}  # hovers over a descent
+    assert {n for n, (_, _, aim) in w.flags.items() if aim} == {"DownOverPeg"}  # the hover over the peg (+-2.6 mm); the grasp (+-0.42 mm) is not aimed
     for arm in ("psm1", "psm2"):  # a free end hands over to the arm's next Cartesian move, not a joint move or a jaw
         names = [n for n, a in w.calls if a == arm and (n in w.flags or n.startswith(("Turn", "Open", "Close", "Receiver", "Giver")))]
         assert all(names[names.index(n) + 1] in w.flags for n in free if n in names), names
