@@ -28,6 +28,8 @@ children:
     alias: MoveOverBlock
     dynamic_map: {robot: giver, target_pose: over_grasp}
     static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}
+  # the aimed miss corrected over the block: corrected on the way down, a jaw landed on the 0.7 mm wall
+  - {ref: MoveToCartesianPose, alias: AlignOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.05, cartesian: true}}
   - ref: MissPose
     alias: MissGrasp
     dynamic_map: {pose: grasp_pose}

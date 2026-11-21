@@ -23,6 +23,7 @@ A flawless episode runs without recoveries: a failing step discards it and the l
 
 import argparse
 import json
+import logging
 import re
 import threading
 import time
@@ -37,13 +38,20 @@ from guide_ex.recipe.solve import SERVICES, make_robots
 from peg_transfer.targets import APPROACH, DROP, LIFT  # importing registers its nodes (GraspPose, ...)
 
 SUBTASKS = {"pick": "Pick up the block.", "lift": "Lift it off the peg.", "handover": "Hand it over.",
-            "place": "Place it on the peg.", "return": "Return to start."}
+            "place": "Place it on the peg.", "return": "Return to start.",
+            # a recovery announces itself: the subtask timeline shows the miss and its retry
+            "regrasp": "Open and grasp it again.", "rereceive": "Open and take it again.",
+            "replace": "Lift it and place it again."}
 # Jaw opening (rad between the jaws, 2x each jaw's angle; 0 closes). The grasp straddles the 0.7 mm wall
 # with 0.082 rad per jaw (0.77 mm at the tips); wider jaws land on the peg (T10: tip 6.5-7 mm high).
 OPEN_RAD = 0.164
-RECEIVE_RAD = 0.164  # the receiver's, onto the held block (no peg in the hole)
+# Closing aims past shut, like the dVRK's negative jaw angles: on a wall the drive (0.5 N m/rad) then
+# squeezes with 0.05 rad of error, not the 0.003 left at 0, and the block no longer droops out of level
+SQUEEZE_RAD = 0.1
 ECM_JITTER = (0.02, 0.02, 0.005, 0.0)  # +- per ECM joint: yaw, pitch (rad), insertion (m), tool roll
-ROLL_GAIN = 0.5  # share of the marker's +-30 deg roll the handover takes (tool_yaw saturates beyond ~15)
+# added to the ECM's default joints: tilted up 0.05 rad and pulled back 6 cm, so the left image holds the
+# handover (4-6 cm over the board, off its top edge before) as well as the near pegs
+ECM_VIEW = (0.0, 0.05, -0.06, 0.0)
 # 0.1x cube_stack's motion noise (guide_motion NoiseParams): the PSM works at millimetres
 NOISE = {"sigma": 0.0012, "aim": 0.003, "blend": 0.004, "aim_late": True}
 SETTLE_S = 2.0  # sim s after Randomize: the blocks drop onto their pegs
@@ -73,8 +81,9 @@ def planned_misses(v, key, rng) -> tuple[dict, list[str]]:
 
 
 def ecm_hold(entry, rng) -> dict:
-    """The ECM's joint target: its default joints, each moved uniformly within ECM_JITTER (rng None: none)."""
-    q = np.asarray(entry["default_joint_states"], float)
+    """The ECM's joint target: its default joints moved by ECM_VIEW, each then uniformly within ECM_JITTER
+    (rng None: none)."""
+    q = np.asarray(entry["default_joint_states"], float) + ECM_VIEW
     if rng is not None:
         q = q + rng.uniform(-1, 1, len(q)) * ECM_JITTER
     return {f"{j}.pos": float(v) for j, v in zip(entry["joint_names"], q)}
@@ -96,10 +105,8 @@ def recipe_values(init, plan, miss=None, hold=None) -> dict:
         "prompts": SUBTASKS,
         "tip_prim": {role: f"{robots[r]['path']}/psm_tool_tip_link" for role, r in roles.items()},
         "psm": {"home": {f"{j}.pos": q for j, q in zip(psm["joint_names"], psm["default_joint_states"])}},
-        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD,
-                "receive": gripper["scale"][0] * RECEIVE_RAD, "closed": 0.0},
+        "jaw": {"joint": gripper["joints"][0], "open": gripper["scale"][0] * OPEN_RAD, "closed": -gripper["scale"][0] * SQUEEZE_RAD},
         "camera": {"hold": hold or ecm_hold(robots["ecm"], None)},
-        "handover": {"roll_gain": ROLL_GAIN},
         "offsets": {"approach": APPROACH, "lift": LIFT, "down": -DROP},  # m along the tool's z
         "miss": miss or {},
     }
@@ -154,12 +161,19 @@ def solve_task(scene_id, robots, sim_namespace, init, path="", draw=0, scene_see
     tree = build_tree(init, plan, miss={**miss, "seed": int(rng.integers(2**31))}, hold=hold)
     if not stages and not v.get("miss"):
         without_recoveries(tree)
-    result = tree.execute(episode_context(robots, sim_namespace, scene_id, path))
+    fatal = logging.Handler()  # the failed node and its composites, innermost first, for the provenance
+    fatal.failed = []
+    fatal.emit = lambda r: fatal.failed.extend(re.findall(r"\[FATAL\] '(\w+)' failed", r.getMessage()))
+    logging.getLogger("guide_ex").addHandler(fatal)
+    try:
+        result = tree.execute(episode_context(robots, sim_namespace, scene_id, path))
+    finally:
+        logging.getLogger("guide_ex").removeHandler(fatal)
     saved = result.status == DemoStatus.PERFECT and bool(result.outputs.get("task_success"))
     if not saved:
         log.error(f"[FAILURE] Scene {scene_id}: {result.outputs.get('task_reason') or result.error_message or 'aborted'}")
     return saved, {"recipe": recipe, "misses": stages, "master": masters[0], "giver": plan["giver"],
-                   "colour": plan["colour"], "target_peg": plan["target_peg"]}
+                   "colour": plan["colour"], "target_peg": plan["target_peg"], "failed": fatal.failed}
 
 
 def cycle(recipes, i) -> str:

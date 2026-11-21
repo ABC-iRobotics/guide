@@ -1,13 +1,14 @@
-# The giver turns its wrist level where it is (jaws horizontal, pointing at the receiver) and brings
-# the block to the handover marker (/PegTransfer/handover, jittered by randomize.yaml); the receiver
-# opens, comes 10 mm short, then takes the same wall from the block's other face and closes (Receive,
-# which fails NotReceived unless the block sits in its jaws: targets.IsHeld). The giver lets go, backs off 20 mm and goes home.
+# Tool down throughout (turned level, the block slid out of the jaws): the giver brings the block it
+# holds to the handover marker (/PegTransfer/handover, jittered by randomize.yaml), turned so that one
+# of its free walls faces the receiver (targets.HandoverPoses); the receiver comes over that
+# wall, opens and takes it from above like a grasp (Receive, which fails NotReceived unless the block sits in
+# its jaws: targets.IsHeld). The giver lets go, backs 20 mm up and goes home.
 # retry_mixed / light_fail (MissPose miss.receive): the receiver closes 18-22 mm along the wall, on
-# air; Rereceive opens it, backs it off and Receive runs again.
+# air; Rereceive opens it, lifts it back over the wall and Receive runs again.
 node_type: CompositeNode
 name: HandOver
 level: SUBTASK
-dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, giver_scene: giver_scene, receiver_scene: receiver_scene, lifted: lifted}
+dynamic_map: {robot: robot, giver: giver, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, giver_scene: giver_scene, receiver_scene: receiver_scene}
 children:
   - ref: SetPrompt
     alias: AnnounceHandover
@@ -18,18 +19,36 @@ children:
     dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: /PegTransfer/handover}
     output_map: {pose: marker}
+  - ref: GetPrimPose
+    alias: LocateHeldBlock
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.block}"}
+    output_map: {pose: held_block}
+  - ref: GetPrimPose
+    alias: LocateHoldingTip
+    dynamic_map: {robot: giver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${tip_prim.giver}"}
+    output_map: {pose: holding_tip}
+  - ref: GetPrimPose
+    alias: LocateWaitingTip
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${tip_prim.receiver}"}
+    output_map: {pose: waiting_tip}
   - ref: HandoverPoses
-    dynamic_map: {marker: marker, giver_scene: giver_scene, receiver_scene: receiver_scene, at: lifted}
-    static_args: {roll_gain: "${handover.roll_gain}"}
-  - {ref: MoveToCartesianPose, alias: TurnLevel, dynamic_map: {robot: giver, target_pose: turn}, static_args: {speed: 0.1, cartesian: true}}
-  - {ref: MoveToCartesianPose, alias: Give, dynamic_map: {robot: giver, target_pose: give}, static_args: {speed: 0.2, cartesian: true, perturb: true}}
-  - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.receive}"}}}
+    dynamic_map: {marker: marker, block: held_block, held: holding_tip, giver_scene: giver_scene, receiver_scene: receiver_scene, receiver_tip: waiting_tip}
+  # the receiver waits under the marker: up first, jaws shut, before the block comes (rising under the
+  # held block, open, it knocked it out of the giver's jaws), then over it, and only there it opens
+  - {ref: MoveToCartesianPose, alias: ReceiverRises, dynamic_map: {robot: receiver, target_pose: receive_rise}, static_args: {speed: 0.2, cartesian: true}}
+  - {ref: MoveToCartesianPose, alias: Give, dynamic_map: {robot: giver, target_pose: give}, static_args: {speed: 0.1, cartesian: true, perturb: true}}
   - {ref: MoveToCartesianPose, alias: ApproachReceive, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}}
+  - {ref: OpenJaw, alias: ReceiverOpens, dynamic_map: {robot: receiver}}
   - node_type: CompositeNode
     name: Receive
     level: SEQUENCE
-    dynamic_map: {receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, receive: receive}
+    dynamic_map: {receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, receive: receive, receive_pre: receive_pre}
     children:
+      # ApproachReceive's aimed miss corrected over the wall: corrected on the way down, a jaw landed on it
+      - {ref: MoveToCartesianPose, alias: AlignOverWall, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.05, cartesian: true}}
       - ref: MissPose
         alias: MissReceive
         dynamic_map: {pose: receive}
@@ -61,9 +80,18 @@ fallbacks:
     node_type: RecoveryNode
     name: Rereceive
     level: SEQUENCE
-    dynamic_map: {receiver: receiver, receive_pre: receive_pre}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, receiver: receiver, receive_pre: receive_pre}
     resume_target: Receive
     max_retries: 2
     children:
-      - {ref: OpenJaw, alias: ReopenToReceive, dynamic_map: {robot: receiver}, static_args: {gripper_goal_pos: {"${jaw.joint}": "${jaw.receive}"}}}
+      - ref: SetPrompt
+        alias: AnnounceRereceive
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+        static_args: {subtask: "${prompts.rereceive}"}
+      - {ref: OpenJaw, alias: ReopenToReceive, dynamic_map: {robot: receiver}}
       - {ref: MoveToCartesianPose, alias: BackToReceivePre, dynamic_map: {robot: receiver, target_pose: receive_pre}, static_args: {speed: 0.1, cartesian: true}}
+      - ref: SetPrompt
+        alias: BackToHandover
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+        static_args: {subtask: "${prompts.handover}"}
+

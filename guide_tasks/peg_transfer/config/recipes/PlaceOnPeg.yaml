@@ -1,4 +1,4 @@
-# The receiver turns tool down where it holds the block, brings it over the target peg (its bottom 1 cm
+# The receiver, tool down already, turns the block where it holds it (as measured in its jaws), brings it over the target peg (its bottom 1 cm
 # over the peg top), lowers it to 1 mm over the board (Seat, which fails NotSeated unless the block sits
 # down on the peg: targets.IsSeated, the success check's test), lets go and backs 2 cm up.
 # light_fail / retry_mixed (MissPose miss.place): the block comes down 4.5-5.5 mm off the peg's axis
@@ -6,7 +6,7 @@
 node_type: CompositeNode
 name: PlaceOnPeg
 level: SUBTASK
-dynamic_map: {robot: robot, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene, receive: receive}
+dynamic_map: {robot: robot, receiver: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace, scene_id: scene_id, receiver_scene: receiver_scene}
 children:
   - ref: SetPrompt
     alias: AnnouncePlace
@@ -17,7 +17,17 @@ children:
     dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
     static_args: {prim_path: "${plan.target_peg}"}
     output_map: {pose: peg_pose}
-  - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, at: receive}}
+  - ref: GetPrimPose
+    alias: LocatePlacingTip
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${tip_prim.receiver}"}
+    output_map: {pose: placing_tip}
+  - ref: GetPrimPose
+    alias: LocateCarried
+    dynamic_map: {robot: receiver, sim_namespace: sim_namespace, scene_namespace: scene_namespace}
+    static_args: {prim_path: "${plan.block}"}
+    output_map: {pose: carried}
+  - {ref: PlacePoses, dynamic_map: {peg: peg_pose, scene: receiver_scene, tip: placing_tip, block: carried}}
   - {ref: MoveToCartesianPose, alias: TurnDown, dynamic_map: {robot: receiver, target_pose: turn_down}, static_args: {speed: 0.1, cartesian: true}}
   - {ref: MoveToCartesianPose, alias: MoveOverPeg, dynamic_map: {robot: receiver, target_pose: over}, static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}}
   - node_type: CompositeNode
@@ -59,8 +69,17 @@ fallbacks:
     node_type: RecoveryNode
     name: Replace
     level: SEQUENCE
-    dynamic_map: {receiver: receiver, over_target: over_target}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, receiver: receiver, over_target: over_target}
     resume_target: Seat
     max_retries: 2
     children:
+      - ref: SetPrompt
+        alias: AnnounceReplace
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+        static_args: {subtask: "${prompts.replace}"}
       - {ref: MoveToCartesianPose, alias: LiftOffPegTop, dynamic_map: {robot: receiver, target_pose: over_target}, static_args: {speed: 0.05, cartesian: true}}
+      - ref: SetPrompt
+        alias: BackToPlace
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+        static_args: {subtask: "${prompts.place}"}
+

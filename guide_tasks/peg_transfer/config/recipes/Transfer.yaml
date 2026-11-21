@@ -26,9 +26,13 @@ fallbacks:
     node_type: RecoveryNode
     name: Regrasp
     level: SUBTASK
-    dynamic_map: {giver: giver, over_grasp: over_grasp}
+    dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, giver: giver, over_grasp: over_grasp}
     resume_target: PickBlock
     max_retries: 2
     children:
+      - ref: SetPrompt
+        alias: AnnounceRegrasp
+        dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id}
+        static_args: {subtask: "${prompts.regrasp}"}
       - {ref: OpenJaw, alias: OpenForRegrasp, dynamic_map: {robot: giver}}
       - {ref: MoveToCartesianPose, alias: BackOverBlock, dynamic_map: {robot: giver, target_pose: over_grasp}, static_args: {speed: 0.1, cartesian: true}}

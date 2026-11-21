@@ -25,12 +25,12 @@ def rot(pose):
     return pose.orientation.to_numpy()
 
 
-def test_tool_down_points_the_jaws_down_with_the_bend_free_closing_axis():
-    near = Pose(Point([0, 0, 0]), Rotation(R.identity()))
-    m = tg.tool_down(BLOCK.position.to_numpy() - RCM["psm1"], UP, near)
-    assert np.allclose(m[:, 2], UP) and abs(m[:, 0] @ UP) < 1e-9
-    assert tg.axis_deviation(m[:, 0], tg.bend_free_x(BLOCK.position.to_numpy() - RCM["psm1"], -UP)) < 1e-9
-    assert m[:, 0] @ near.orientation.to_numpy()[:, 0] >= 0  # the sign nearer the current wrist
+def test_near_home_keeps_the_grip_and_turns_the_closing_axis_to_base_x():
+    tip = tg.tip_for(BLOCK.position.to_numpy(), tg.frame([-1.0, 0.2, 0.0], UP))
+    flipped = tg.near_home(tip)
+    assert rot(flipped)[0, 0] > 0 and np.allclose(rot(flipped)[:, 2], UP)
+    assert np.allclose(flipped.position.to_numpy(), tip.position.to_numpy())  # the same grip, the jaws swapped
+    assert tg.holds(flipped, BLOCK) and tg.near_home(flipped) is flipped
 
 
 def test_the_grasp_is_tool_down_across_a_wall_and_near_the_bend_free_axis():
@@ -38,7 +38,8 @@ def test_the_grasp_is_tool_down_across_a_wall_and_near_the_bend_free_axis():
     pose = tg.grasp_pose(block, UP)
     m, c = rot(pose), block.position.to_numpy()
     assert np.allclose(m[:, 2], UP)
-    assert np.allclose(pose.position.to_numpy(), c + m @ tg.GRIP)  # the tip GRIP off the block's centre
+    assert np.linalg.norm(tg.grip_centres(pose) - c, axis=1).min() < 1e-12  # the tip GRIP off the block's centre
+    assert m[0, 0] >= 0  # near_home: tool_roll near home
     assert tg.axis_deviation(m[:, 0], tg.bend_free_x(c, -UP)) <= tg.MAX_DEVIATION + 1e-9
     walls = [rot(block) @ [np.cos(a), np.sin(a), 0] for a in tg.WALLS]
     # within MAX_DEVIATION of the wall normal it grips (exactly on it when that is in reach)
@@ -51,43 +52,43 @@ def test_the_lift_clears_the_peg_by_a_block_height():
     assert bottom_on_peg + tg.LIFT - (0.80 + PEG_H) == pytest.approx(2 * BLOCK_HALF_H)
 
 
-def test_the_level_turn_points_the_jaws_horizontally_at_the_receiver():
-    at = BLOCK.position.to_numpy() + [0, 0, tg.LIFT]
-    m = tg.level_turn(at, RCM["psm1"], RCM["psm2"] - RCM["psm1"])
-    pointing = -m[:, 2]
-    assert abs(pointing @ UP) < 1e-9 and pointing @ (RCM["psm2"] - RCM["psm1"]) > 0
-    assert abs(m[:, 0] @ np.cross(at - RCM["psm1"], pointing)) == pytest.approx(np.linalg.norm(np.cross(at - RCM["psm1"], pointing)))
-
-
 @pytest.mark.parametrize("giver,receiver", [("psm1", "psm2"), ("psm2", "psm1")])
 def test_handover_poses_over_the_whole_jitter_box(giver, receiver):
     lo, hi = HANDOVER["position"]["distribution.uniform"]["lower"], HANDOVER["position"]["distribution.uniform"]["upper"]
-    rlo, rhi = HANDOVER["rotation"]["distribution.uniform"]["lower"][0], HANDOVER["rotation"]["distribution.uniform"]["upper"][0]
-    p = np.sign(RCM[receiver][0] - RCM[giver][0]) * np.array([1.0, 0, 0])
-    for corner in itertools.product(*zip(lo, hi)):
-        for roll in (rlo, 0.0, rhi):
-            marker = Pose(Point(corner), Rotation(R.from_euler("x", roll, degrees=True)))
-            give, receive = tg.handover_poses(marker, RCM[giver], RCM[receiver], st.ROLL_GAIN)
+    for yaw in (0, 40, 100):
+        block = Pose(Point([0.043 * np.sign(RCM[giver][0]), 0.69, 0.80 + BLOCK_HALF_H]), Rotation(R.from_euler("z", yaw, degrees=True)))
+        held = tg.grasp_pose(Pose(Point(block.position.to_numpy() - RCM[giver]), block.orientation), UP)
+        held = Pose(Point(held.position.to_numpy() + RCM[giver]), held.orientation)  # scene frame
+        for corner in itertools.product(*zip(lo, hi)):
+            give, receive = tg.handover_poses(block, held, Pose(Point(corner)), RCM[giver], RCM[receiver], UP)
             g, r = rot(give), rot(receive)
-            # the block's centre at the marker, from either tip
-            assert np.allclose(give.position.to_numpy() - g @ tg.GRIP, corner)
+            # both tool down, the block's centre at the marker from either tip
+            assert np.allclose(g[:, 2], UP) and np.allclose(r[:, 2], UP)
+            assert np.linalg.norm(tg.grip_centres(give) - corner, axis=1).min() < 1e-12
             assert np.allclose(receive.position.to_numpy() - r @ tg.GRIP, corner)
-            # jaws level, pointing at each other; the same closing axis from the two faces
-            assert np.allclose(-g[:, 2], p) and np.allclose(-r[:, 2], -p) and np.allclose(g[:, 0], r[:, 0])
-            # the closing axis turned off the arms' bisector by the scaled marker roll only
-            free = tg.bend_free_x(np.array(corner) - RCM[giver], p)
-            assert tg.axis_deviation(g[:, 0], free) <= abs(np.radians(roll)) * st.ROLL_GAIN + np.radians(10)
+            # the giver keeps its grip (the block turned with it), each closing axis near its arm's bend-free one
+            assert np.allclose((block.inv() * held).position.to_numpy(),
+                               (Pose(Point(corner), Rotation(R.from_matrix(g @ rot(held).T @ rot(block)))).inv() * give).position.to_numpy())
+            for tip, rcm in ((g, RCM[giver]), (r, RCM[receiver])):
+                assert tg.axis_deviation(tip[:, 0], tg.bend_free_x(np.array(corner) - rcm, -UP)) <= tg.MAX_DEVIATION + 1e-9
+            # a small turn of the held block: a large one swung the tool wide and shook the block loose
+            assert R.from_matrix(g @ rot(held).T).magnitude() <= np.radians(60.0)
+            # different walls: the tips 2 x WALL_R x sin(60 deg) apart
+            assert np.linalg.norm(give.position.to_numpy() - receive.position.to_numpy()) > tg.WALL_R
 
 
-def test_place_poses_seat_the_block_1_mm_over_the_board_and_come_down_the_drop():
-    peg = Pose(Point([0.043, 0.75, 0.80 + PEG_H / 2]))
-    near = Pose(Point([0, 0, 0]), Rotation(R.identity()))
-    over, seat = tg.place_poses(Pose(Point(peg.position.to_numpy() - RCM["psm2"])), UP, near)
-    m = rot(seat)
-    centre = seat.position.to_numpy() - m @ tg.GRIP + RCM["psm2"]
-    assert np.allclose(centre, [0.043, 0.75, 0.80 + tg.SEAT_GAP + BLOCK_HALF_H])
+def test_place_poses_seat_the_block_as_held_1_mm_over_the_board_and_come_down_the_drop():
+    peg = np.array([0.043, 0.75, 0.80 + PEG_H / 2]) - RCM["psm2"]  # RCM at the origin
+    block = Pose(Point([0.0, 0.72, 0.85] - RCM["psm2"]), Rotation(R.from_euler("z", 25, degrees=True)))
+    tip = tg.grasp_pose(block, UP) * Pose(Point([0.0, 0.004, 0.001]))  # slid 4 mm along the wall, 1 mm down
+    turn, over, seat = tg.place_poses(Pose(Point(peg)), UP, tip, block)
+    m, held = rot(seat), (tip.inv() * block).position.to_numpy()
+    assert np.allclose(seat.position.to_numpy() + m @ held, peg + UP * (tg.SEAT_GAP + BLOCK_HALF_H - PEG_H / 2))
     assert np.allclose(over.position.to_numpy() - seat.position.to_numpy(), UP * tg.DROP)
-    assert np.allclose(m[:, 2], UP) and np.allclose(rot(over), m)
+    assert np.allclose(m[:, 2], UP) and np.allclose(rot(over), m) and np.allclose(rot(turn), m)
+    assert np.allclose(turn.position.to_numpy(), tip.position.to_numpy())  # turned where it holds the block
+    assert tg.axis_deviation(m[:, 0], tg.bend_free_x(peg, -UP)) <= np.radians(10.0) + 1e-9
+    assert m[:, 0] @ rot(tip)[:, 0] > 0  # the short way round: the jaws not swapped
     assert tg.DROP - PEG_H == pytest.approx(0.010)  # over the peg: the block's bottom 1 cm over its top
 
 
@@ -114,7 +115,8 @@ def test_miss_offsets_lie_in_the_tip_frame_within_their_range(stage, axis):
 def test_the_prompts_at_three_levels():
     assert PROCEDURE == "Transfer the block to the other side."
     assert list(st.SUBTASKS.values()) == ["Pick up the block.", "Lift it off the peg.", "Hand it over.",
-                                          "Place it on the peg.", "Return to start."]
+                                          "Place it on the peg.", "Return to start.", "Open and grasp it again.",
+                                          "Open and take it again.", "Lift it and place it again."]
     for seed in range(20):
         rng, _ = SeedTree.create(1).generator(seed)
         plan = draw_plan(Randomizer(rng, RandomizationRecord(seed=seed)))

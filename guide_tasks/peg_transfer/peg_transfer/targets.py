@@ -11,8 +11,8 @@ Every orientation here stays near that axis, so tool_yaw is left a small share.
 
 A block is held at one wall of its triangular ring, the jaws across it (one in the hole,
 one outside): the tip sits at GRIP from the block centre, in the tip frame, whichever arm
-holds it. The ring is a prism, so it may land upside down: the receiver, which takes it
-jaw-to-jaw from the other face, seats it flipped.
+holds it. The handover keeps the block upright, tool down: the receiver takes another wall
+from above while the giver still holds its own.
 
 Poses in and out are in the acting robot's base frame (GetPrimPose's frame, S2b Ruling 4);
 `scene` is the /PegTransfer prim's pose in that frame (identity in the scene, so its z is up).
@@ -40,6 +40,8 @@ DROP = PEG_H + 0.010  # m from over the peg (the block's bottom 1 cm over its to
 # Largest turn of the closing axis off the bend-free one: tool_yaw grows with it and with the bend
 # (IK on robots/psm: 15 deg needs <= 0.35 rad of its 0.52 at the lift height).
 MAX_DEVIATION = np.radians(15.0)
+TURN_COST = 0.1  # rad of deviation a rad of handover turn costs: the least deviation, unless a far smaller turn
+FLIP = np.diag([-1.0, -1.0, 1.0])  # half a turn about the tip's z (the shaft)
 HOLD_TOL = 0.003  # m: a held block's centre lies within this of where the tip's grip puts it
 
 
@@ -73,11 +75,24 @@ def tip_for(centre, rot) -> Pose:
     return Pose.from_numpy(np.asarray(centre, float) + rot @ GRIP, R.from_matrix(rot))
 
 
+def near_home(tip: Pose) -> Pose:
+    """`tip`, or the same grip turned half a turn about the shaft (FLIP: the jaws swap sides), whichever
+    keeps the closing axis on base x's side: tool_roll then stays within about 90 deg of home. (The IK
+    took the far branch, roll 232 deg, and the handover's turn ran into the 260 deg limit.)"""
+    rot = tip.orientation.to_numpy()
+    return tip if rot[0, 0] >= 0 else Pose.from_numpy(tip.position.to_numpy(), R.from_matrix(rot @ FLIP))
+
+
+def grip_centres(tip: Pose) -> np.ndarray:
+    """The two block centres a grip at `tip` may hold: GRIP off it, as is or FLIPped."""
+    p, rot = tip.position.to_numpy(), tip.orientation.to_numpy()
+    return np.array([p - rot @ GRIP, p - rot @ FLIP @ GRIP])
+
+
 def holds(tip: Pose, block: Pose) -> bool:
-    """Whether the jaws hold the block: its centre within HOLD_TOL of the centre tip_for puts at `tip`.
+    """Whether the jaws hold the block: its centre within HOLD_TOL of a centre the grip at `tip` holds.
     Jaws closed on air, beside the block or on its top leave it farther (a bbox clash does not tell)."""
-    centre = tip.position.to_numpy() - tip.orientation.to_numpy() @ GRIP
-    return bool(np.linalg.norm(block.position.to_numpy() - centre) <= HOLD_TOL)
+    return bool(np.linalg.norm(grip_centres(tip) - block.position.to_numpy(), axis=1).min() <= HOLD_TOL)
 
 
 def grasp_pose(block: Pose, up) -> Pose:
@@ -87,7 +102,7 @@ def grasp_pose(block: Pose, up) -> Pose:
     free = bend_free_x(c, -np.asarray(up, float))
     normals = [np.cos(a) * b[:, 0] + np.sin(a) * b[:, 1] for a in WALLS]
     x = min(normals, key=lambda n: axis_deviation(n, free))
-    return tip_for(c, frame(toward_free(free, x, up), up))
+    return near_home(tip_for(c, frame(toward_free(free, x, up), up)))
 
 
 def _about(axis, angle) -> np.ndarray:
@@ -101,26 +116,32 @@ def toward_free(free, wanted, up, limit=MAX_DEVIATION) -> np.ndarray:
     return _about(up, float(np.clip(angle, -limit, limit))) @ free
 
 
-def handover_poses(marker: Pose, giver_rcm, receiver_rcm, roll_gain: float = 1.0):
-    """(giver tip, receiver tip) at the handover, scene frame. The block's centre is at the marker;
-    the giver's jaws point level at the receiver, the receiver's back at the giver, both across the
-    giver's wall, from the block's two faces. Their closing axis bisects the two arms' bend-free
-    axes; the marker's roll about the pointing line (times roll_gain) turns the pair."""
+def handover_poses(block: Pose, held: Pose, marker: Pose, giver_rcm, receiver_rcm, up):
+    """(giver tip, receiver tip) at the handover, scene frame, both tool down: the giver brings the block
+    it holds (`block`, held at the tip pose `held`) to the marker, turned about `up` so that its own
+    jaws and one of the block's two free walls lie nearest the two arms' bend-free axes (the larger
+    deviation least: tool_yaw needs about twice the deviation and stops at 30 deg), a large turn
+    costing TURN_COST (it swung the tool far off its line and shook the block loose); the receiver
+    takes that wall from above, like a grasp. The block stays upright:
+    turned level, it slid out of the jaws (T12)."""
+    up = np.asarray(up, float)
     c = marker.position.to_numpy()
-    between = np.asarray(receiver_rcm, float) - np.asarray(giver_rcm, float)
-    p = _unit([between[0], between[1], 0.0])
-    free_g, free_r = bend_free_x(c - giver_rcm, p), bend_free_x(c - receiver_rcm, -p)
-    x = _unit(free_g + (free_r if free_r @ free_g >= 0 else -free_r))
-    roll = roll_gain * float(marker.orientation.to_scipy().as_rotvec() @ p)
-    giver = frame(_about(p, roll) @ x, -p)
-    receiver = giver @ R.from_euler("x", np.pi).as_matrix()
-    return tip_for(c, giver), tip_for(c, receiver)
-
-
-def level_turn(at, rcm, toward) -> np.ndarray:
-    """The giver's wrist turned level at `at` (scene frame), jaws pointing horizontally `toward`."""
-    p = _unit([toward[0], toward[1], 0.0])
-    return frame(bend_free_x(np.asarray(at, float) - rcm, p), -p)
+    in_block = block.inv() * held  # the giver's tip in the block frame
+    t, tr = in_block.position.to_numpy(), in_block.orientation.to_numpy()
+    normals = [np.array([np.cos(a), np.sin(a), 0.0]) for a in WALLS]
+    held_wall = int(np.argmax([t @ n for n in normals]))  # the wall the tip sits at
+    free_g, free_r = bend_free_x(c - giver_rcm, -up), bend_free_x(c - receiver_rcm, -up)
+    best = None
+    for yaw in np.radians(np.arange(-180.0, 180.0, 1.0)):  # ponytail: 1 deg grid search, cheap (720 dot products)
+        b = _about(up, yaw) @ block.orientation.to_numpy()
+        dev_g = axis_deviation(b @ tr[:, 0], free_g)
+        for k, n in enumerate(normals):
+            key = max(dev_g, axis_deviation(b @ n, free_r)) + TURN_COST * abs(yaw)
+            if k != held_wall and (best is None or key < best[0]):
+                best = (key, b, b @ n)
+    _, b, n = best
+    giver = Pose.from_numpy(c + b @ t, R.from_matrix(b @ tr))
+    return giver, tip_for(c, frame(toward_free(free_r, n, up), up))
 
 
 def back_off(tip: Pose, distance: float) -> Pose:
@@ -128,21 +149,17 @@ def back_off(tip: Pose, distance: float) -> Pose:
     return tip * Pose.from_numpy(np.array([0.0, 0.0, distance]), R.identity())
 
 
-def tool_down(at, up, near: Pose) -> np.ndarray:
-    """Tool down at `at` with the bend-free closing axis (a held block on a peg may face any way),
-    its sign the one nearer `near`'s, so the wrist turns the least."""
-    x = bend_free_x(at, -np.asarray(up, float))
-    return frame(x if x @ near.orientation.to_numpy()[:, 0] >= 0 else -x, up)
-
-
-def place_poses(peg: Pose, up, near: Pose):
-    """(over, seat), tool down: the block's centre over the peg's axis with its bottom 1 cm over the
-    peg top, and down at the seat (SEAT_GAP over the board)."""
-    up = np.asarray(up, float)
-    p = peg.position.to_numpy()
-    rot = tool_down(p, up, near)
+def place_poses(peg: Pose, up, tip: Pose, block: Pose):
+    """(turn, over, seat), tool down, from the block as it sits in the jaws at `tip` (it may have slid
+    along the wall): turned about up at the tip until its closing axis lies within 10 deg of the
+    bend-free one at the peg (tool_yaw needs about twice that), then the block's centre over the peg's
+    axis, its bottom 1 cm over the peg top, and down at the seat (SEAT_GAP over the board)."""
+    up, p = np.asarray(up, float), peg.position.to_numpy()
+    rot = frame(toward_free(bend_free_x(p, -up), tip.orientation.to_numpy()[:, 0], up, np.radians(10.0)), up)
+    held = (tip.inv() * block).position.to_numpy()  # the block's centre in the tip frame
     seat = p + up * (SEAT_GAP + BLOCK_HALF_H - PEG_H / 2)
-    return tip_for(seat + up * DROP, rot), tip_for(seat, rot)
+    at = lambda centre: Pose.from_numpy(centre - rot @ held, R.from_matrix(rot))
+    return Pose.from_numpy(tip.position.to_numpy(), R.from_matrix(rot)), at(seat + up * DROP), at(seat)
 
 
 def _in_scene(scene: Pose, pose: Pose) -> Pose:
@@ -168,40 +185,42 @@ class GraspPose(BaseNode):
 
 @node()
 class HandoverPoses(BaseNode):
-    """The handover, from the marker as the giver measures it and the scene as each arm does: `turn`
-    (the giver's wrist turned level where it is, `at`), `give` and `give_back` (20 mm back) in the
-    giver's frame, `receive` and `receive_pre` (10 mm back) in the receiver's."""
+    """The handover (handover_poses), from the marker, the held block and the giver's tip as the giver
+    measures them and the scene as each arm does: `give` and `give_back` (20 mm up) in the giver's
+    frame, `receive`, `receive_pre` (APPROACH over it) and `receive_rise` in the receiver's.
+    `receive_rise`: the receiver's tip (`receiver_tip`, where it waits, under the marker) straight up
+    to receive_pre's height, turned like it, so it comes over the block from the side, not through it."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("HandoverPoses", alias, dynamic_map, static_args, output_map)
 
-    def run(self, marker: Pose, giver_scene: Pose, receiver_scene: Pose, at: Pose,
-            roll_gain: float = 1.0) -> ExecutionResult:
+    def run(self, marker: Pose, block: Pose, held: Pose, giver_scene: Pose, receiver_scene: Pose,
+            receiver_tip: Pose) -> ExecutionResult:
         rcm_g, rcm_r = (s.inv().position.to_numpy() for s in (giver_scene, receiver_scene))
-        give, receive = handover_poses(_in_scene(giver_scene, marker), rcm_g, rcm_r, roll_gain)
-        here = _in_scene(giver_scene, at).position.to_numpy()
-        turn = _in_base(giver_scene, Pose.from_numpy(here, R.from_matrix(level_turn(here, rcm_g, rcm_r - rcm_g))))
-        give, receive = _in_base(giver_scene, give), _in_base(receiver_scene, receive)
+        give, receive = handover_poses(_in_scene(giver_scene, block), _in_scene(giver_scene, held),
+                                       _in_scene(giver_scene, marker), rcm_g, rcm_r, [0.0, 0.0, 1.0])  # scene z is up
+        give, receive = _in_base(giver_scene, give), near_home(_in_base(receiver_scene, receive))
+        pre, up, start = back_off(receive, APPROACH), up_of(receiver_scene), receiver_tip.position.to_numpy()
+        rise = Pose.from_numpy(start + up * ((pre.position.to_numpy() - start) @ up), R.from_matrix(pre.orientation.to_numpy()))
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={
-            "turn": turn, "give": give, "give_back": back_off(give, 0.02),
-            "receive": receive, "receive_pre": back_off(receive, 0.01)})
+            "give": give, "give_back": back_off(give, 0.02),
+            "receive": receive, "receive_pre": pre, "receive_rise": rise})
 
 
 @node()
 class PlacePoses(BaseNode):
-    """The receiver's place over `peg` (place_poses): `turn_down` (tool down where it holds the block,
-    at `at`), `over` and `seat`."""
+    """The receiver's place over `peg` (place_poses) of the block it holds at `tip`: `turn_down` (turned
+    where it is), `over` and `seat`."""
 
     level = Layer.UTILITY
 
     def __init__(self, alias=None, dynamic_map=None, static_args=None, output_map=None):
         super().__init__("PlacePoses", alias, dynamic_map, static_args, output_map)
 
-    def run(self, peg: Pose, scene: Pose, at: Pose) -> ExecutionResult:
-        over, seat = place_poses(peg, up_of(scene), at)
-        turn = Pose.from_numpy(at.position.to_numpy(), R.from_matrix(tool_down(at.position.to_numpy(), up_of(scene), at)))
+    def run(self, peg: Pose, scene: Pose, tip: Pose, block: Pose) -> ExecutionResult:
+        turn, over, seat = place_poses(peg, up_of(scene), tip, block)
         return ExecutionResult(status=DemoStatus.PERFECT, outputs={"turn_down": turn, "over": over, "seat": seat})
 
 
