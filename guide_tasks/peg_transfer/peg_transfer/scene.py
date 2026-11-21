@@ -20,8 +20,10 @@ COLOURS = ("red", "green", "blue", "yellow", "orange", "purple")
 SIDE_PEGS = {"psm1": tuple(range(6)), "psm2": tuple(range(6, 12))}
 IMAGE_SIDE = {"psm1": "right", "psm2": "left"}
 # Seated: the block's centre within this of the peg's axis, and at most this above the board top
-# (a block caught on the peg top sits a peg height higher).
-SEATED_XY = 0.0025
+# (a block caught on the peg top sits a peg height higher). The hole (inradius 4.16 mm, corners 4.8) lets
+# the 1.5 mm peg sit up to 2.7-3.3 mm off the block's centre (Isaac: seated blocks read 2.6-2.7 mm off);
+# a block down beside the peg sits >= 6.3 mm off (outer face 4.85 mm + the peg's radius).
+SEATED_XY = 0.0035
 SEATED_Z = BLOCK_HALF_H + 0.003
 BLOCK_YAW = 120.0  # deg; the triangular ring repeats every 120
 

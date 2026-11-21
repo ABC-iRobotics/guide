@@ -56,6 +56,7 @@ def test_success_is_the_block_seated_on_the_target_peg_and_let_go():
     on_board = 0.80 + BLOCK_HALF_H
 
     assert scene.is_success_postprocess([Pose(position=Point([-0.043, 0.69, on_board])), PEG, False, False])
+    assert scene.is_success_postprocess([Pose(position=Point([-0.040, 0.69, on_board])), PEG, False])  # peg on the hole's wall
     assert not scene.is_success_postprocess([Pose(position=Point([-0.039, 0.69, on_board])), PEG, False])  # 4 mm off
     assert not scene.is_success_postprocess([Pose(position=Point([-0.043, 0.69, 0.80 + PEG_H + BLOCK_HALF_H])), PEG])
     assert not scene.is_success_postprocess([Pose(position=Point([-0.043, 0.69, on_board])), PEG, False, True])  # held
