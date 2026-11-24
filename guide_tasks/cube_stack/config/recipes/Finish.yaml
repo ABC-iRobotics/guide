@@ -1,5 +1,6 @@
 # The closing TASK, once the tower stands: its own prompt (the procedure is never a frame's task), go
-# home, let the tower settle, ask the scene, save the episode only if it sees the tower.
+# home (a perturbed pose move to the tool pose at the home joints, ${robot.home_pose}; if it is refused,
+# the home joints, then the pose move again), let the tower settle, ask the scene, save the episode only if it sees the tower.
 node_type: CompositeNode
 name: Finish
 level: TASK
@@ -13,7 +14,20 @@ children:
     level: SUBTASK
     dynamic_map: {robot: robot}
     children:
-      - ref: MoveHome
+      - ref: MoveToCartesianPose
+        alias: MoveToHome
+        dynamic_map: {robot: robot}
+        static_args: {target_pose: "${robot.home_pose}", speed: 1.0, perturb: true}
       - {ref: WaitForSeconds, alias: WaitForTower, static_args: {seconds: 2.0}}
+    fallbacks:
+      MoveToHome:
+        node_type: RecoveryNode
+        name: HomeViaJoints
+        level: SEQUENCE
+        dynamic_map: {robot: robot}
+        resume_target: MoveToHome
+        max_retries: 1
+        children:
+          - {ref: MoveHome, alias: HomeViaJointsToHome}
   - ref: CheckSuccess
   - ref: StopEpisode

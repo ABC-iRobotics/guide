@@ -20,6 +20,8 @@ overrides one.
 """
 
 from guide_ex.core.states import DemoStatus
+from guide_ex.recipe import load, recipes_dir
+from guide_ex.recipe.solve import episode_context, init_yaml
 
 from cube_stack import solve_task as st
 from cube_stack.scene import CUBE
@@ -29,8 +31,10 @@ class SceneOracle:
     """``oracle()`` -> {"task": ..., "subtask": ...} the scene is at."""
 
     def __init__(self, robot, sim_namespace, scene_id, plan):
-        self.tree = st.load_recipe("SceneOracle", robot, plan)  # config/recipes/SceneOracle.yaml
-        self.context = st.episode_context(robot, sim_namespace, scene_id, plan)
+        recipes = recipes_dir("cube_stack", st.__file__)
+        self.tree = load(recipes / "SceneOracle.yaml", values=st.values(init_yaml(st), plan, {}, {}, None),
+                         search_paths=[recipes])
+        self.context = episode_context(st, {"franka": robot}, sim_namespace, scene_id, plan)
         self.plan = plan
         self.done = False
 

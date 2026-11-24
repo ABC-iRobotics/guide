@@ -48,7 +48,8 @@ fallbacks:
     max_retries: 2
     children:
       - {ref: OpenGripper, alias: OpenForRegrasp}
-      - {ref: WaitForSeconds, alias: OpenForRegraspSettle, static_args: {seconds: 1.0}}
+      # 1 s of sim time: the lift's free tail runs out first, so Pick's free MoveOverCube starts afresh
+      - {ref: WaitForSeconds, alias: OpenForRegraspSettle, dynamic_map: {timer: robot}, static_args: {seconds: 1.0}}
       - ref: LocateCube
       - ref: TransformPose
         alias: TurnGrasp
@@ -78,7 +79,7 @@ fallbacks:
       - ref: SetPrompt
         alias: AnnounceSetDown
         dynamic_map: {robot: robot, sim_namespace: sim_namespace, scene_id: scene_id, subtask: set_down}
-      - {ref: MoveToCartesianPose, alias: BackOverCube, dynamic_map: {robot: robot, target_pose: over_cube_pose}, static_args: {speed: 0.5, cartesian: true}}
+      - {ref: MoveToCartesianPose, alias: BackOverCube, dynamic_map: {robot: robot, target_pose: over_cube_pose}, static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}}
       - {ref: MoveToCartesianPose, alias: SetDown, dynamic_map: {robot: robot, target_pose: grasp_pose}, static_args: {speed: 0.2, cartesian: true}}
       - {ref: OpenGripper, alias: OpenForRepick}
       - {ref: WaitForSeconds, alias: OpenForRepickSettle, static_args: {seconds: 1.0}}

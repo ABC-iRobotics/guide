@@ -5,7 +5,6 @@ physics (cubes follow a closed gripper, fall onto whatever is below when let go)
 the tree runs exactly as built for Isaac, minus Isaac.
 """
 
-import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -15,6 +14,7 @@ from cube_stack.scene import plan
 
 from guide_core.types.geometry import Point, Pose
 from guide_ex.core.states import DemoStatus, ExecutionResult, Layer
+from guide_ex.recipe import solve
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
@@ -38,6 +38,7 @@ class World:
         self.misses = self.slips = self.slides = 0
         self.failing_moves = []
         self.prompts, self.moves, self.saved = [], [], None
+        self.flags = []  # (move, perturb, precise_end, aim) per arm move, home joints included; ("wait",) per wait
         self.yaws = []  # (move, heading of the hand's x in degrees)
         self.scattered = 0  # cubes let go of from height
 
@@ -71,8 +72,9 @@ def world(monkeypatch):
         position = w.cubes[prim_path] if prim_path in w.cubes else np.zeros(3)  # the scene frame: the origin
         return ExecutionResult(DemoStatus.PERFECT, outputs={"pose": Pose(position=Point(position))})
 
-    def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, jitter=None, aim=False):
+    def move(self, robot, target_pose, speed=1.0, cartesian=False, perturb=False, precise_end=True, aim=False):
         w.moves.append(self.name)
+        w.flags.append((self.name, perturb, precise_end, aim))
         x = target_pose.orientation.to_scipy().as_matrix()[:2, 0]
         w.yaws.append((self.name, round(float(np.degrees(np.arctan2(x[1], x[0]))) % 360, 3)))
         if self.name in w.failing_moves:
@@ -90,6 +92,7 @@ def world(monkeypatch):
 
     def home(self, robot, target_configuration, speed=1.0):
         w.moves.append(self.name)
+        w.flags.append((self.name, False, True, False))
         w.tcp = np.array([0.0, 0.0, 0.5])
         if w.held:
             w.cubes[w.held] = w.tcp - (0, 0, GRASP)
@@ -124,7 +127,7 @@ def world(monkeypatch):
         MoveToJointConfiguration: home,
         SetGripperState: grip,
         IsPrimClashing: clashing,
-        WaitForSeconds: lambda self, seconds, timer=None: PERFECT,
+        WaitForSeconds: lambda self, seconds, timer=None: w.flags.append(("wait",)) or PERFECT,
         recording.SetPrompt: prompt,
         recording.StartRecording: lambda self, *a, **k: PERFECT,
         recording.StopRecording: stop,
@@ -140,10 +143,20 @@ def world(monkeypatch):
 ROBOT = SimpleNamespace(config=SimpleNamespace(arm_joint_names=[f"fr3_joint{i}" for i in range(1, 8)], gripper_joint_names=["fr3_finger_joint1"]))
 
 
+INIT = solve.init_yaml(st)
+
+
+def tree(drawn, miss=None, v=None, rng=None):
+    return solve.build_tree(st, INIT, drawn, miss, v, rng)
+
+
+def context(drawn):
+    return solve.episode_context(st, {"franka": ROBOT}, "/Sim_0", 0, drawn)
+
+
 def run(world):
     drawn = plan(COLOURS)
-    tree = st.build_tree(ROBOT, drawn)
-    return tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn))
+    return tree(drawn).execute(context(drawn))
 
 
 def test_builds_the_tower_announcing_each_layer(world):
@@ -170,7 +183,7 @@ def test_builds_the_tower_announcing_each_layer(world):
 
 def test_the_layers_are_guide_exs():
     """The procedure stacks, each placement is a task, the pick and the place its subtasks."""
-    root = st.build_tree(ROBOT, plan(COLOURS))
+    root = tree(plan(COLOURS))
     found = {}
 
     def walk(node):
@@ -246,9 +259,9 @@ def test_with_recoveries_off_a_failure_ends_the_episode_unsaved(world, trouble):
     for k, v in trouble.items():
         setattr(world, k, v)
     drawn = plan(COLOURS)
-    tree = st.without_recoveries(st.build_tree(ROBOT, drawn))
+    root = solve.without_recoveries(tree(drawn))
 
-    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.FAILURE
+    assert root.execute(context(drawn)).status == DemoStatus.FAILURE
     assert world.saved is None
 
 
@@ -304,63 +317,45 @@ def test_the_oracle_names_the_task_and_subtask_the_demonstration_announces(world
 def test_the_tree_works_in_the_robot_base_frame():
     """OSCBF takes poses in the robot's base frame only (S2b Ruling 4): LocateScene measures the
     base itself, so the scene conversion is the identity, and rest is 0.3 m in front of the base."""
-    context = st.episode_context(ROBOT, "/Sim_0", 0, plan(COLOURS))
+    ctx = context(plan(COLOURS))
 
-    assert context["scene_path"] == "/fr3/fr3_link0"
-    assert np.allclose(context["rest_pose"].position.to_numpy(), [0.3, 0.0, 0.5])
-
-
-def test_scenarios_replace_a_failing_layout_and_redraw_a_failing_trajectory(monkeypatch, tmp_path):
-    runs, outcomes = [], iter([False, True, True, False, True])  # seed 0 fails clean; trajectory 2 fails once
-    monkeypatch.setattr(st, "solve_task", lambda *a, **k: runs.append(k) or next(outcomes))
-    monkeypatch.setattr(st, "discard_open_episode", lambda *a: None)
-    monkeypatch.setattr(st, "finalize", lambda *a: None)
-    log = SimpleNamespace(info=print, error=print)
-    robot = SimpleNamespace(node=SimpleNamespace(get_logger=lambda: log), _noise=None)
-    st._generating.acquire()
-
-    st.generate_scenarios([{"red_block": 3}], 1, 3, 0, robot, "/Sim_0", str(tmp_path / "set"))
-
-    assert [(k["scene_seed"], k["clean"], k["no_recovery"]) for k in runs] == [
-        (0, True, True), (1, True, True), (1, False, True), (1, False, True), (1, False, True)]
-    assert all(k["zones"] == {"red_block": 3} for k in runs) and len({k["draw"] for k in runs}) == 5
-    lines = (tmp_path / "set.provenance.jsonl").read_text().splitlines()
-    assert [json.loads(line)["saved"] for line in lines] == [False, True, True, False, True]
-    assert not st._generating.locked()
+    assert ctx["scene_path"] == "/fr3/fr3_link0"
+    assert np.allclose(ctx["rest_pose"].position.to_numpy(), [0.3, 0.0, 0.5])
 
 
 @pytest.mark.parametrize("name", ["flawless", "light_fail", "hard_fail"])
 def test_each_stacking_recipe_still_builds_the_tower(world, name):
-    """Every miss of the recipe on (p = 1), recoveries off but Regrasp (scenario mode): a first grasp
-    closes on air and is regrasped, a first release is picked again, and the tower stands."""
+    """Every miss of the recipe on (p = 1), the recoveries kept when it plans misses (solve_episode's rule):
+    a first grasp closes on air and is regrasped, a first release is picked again, and the tower stands."""
     drawn = plan(COLOURS)
-    v = st.variant(name)
+    v = {**solve.variant(st, name), "grasp": {"tilt_deg": 3.0}}
     m = {k: {**x, "p": 1.0} for k, x in v["miss"].items()}
-    tree = st.build_tree(ROBOT, drawn, miss={**m, "seed": 3}, stacked=v.get("tower", {}).get("stacked"), tilt=0.05)
-    tree = st.without_recoveries(tree, keep=("Pick",) if m else ())
+    root = tree(drawn, {**m, "seed": 3}, v, np.random.default_rng(0))
+    if not m:
+        solve.without_recoveries(root)
 
-    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.PERFECT
+    assert root.execute(context(drawn)).status == DemoStatus.PERFECT
     assert world.tower() and world.saved is True
     if "place" in m:  # misplaced cubes are picked again
         assert world.moves.count("MoveToGrasp") > len(ORDER) - 1
 
 
 def test_planned_misses_draw_distinct_cells_keyed_on_the_right_cube():
-    v = st.variant("retry")
+    v = solve.variant(st, "retry")
     for seed in range(50):
-        miss, cells = st.planned_misses(v, ORDER, np.random.default_rng(seed))
+        miss, cells = solve.planned_misses(v, st.slots({"order": ORDER}), np.random.default_rng(seed))
         assert 1 <= len(cells) <= 3 and len(set(cells)) == len(cells)
         for cell in cells:
             stage, i = cell.split("@")
             for target, spec in v["stages"][stage].items():
-                key = ORDER[int(i)] if target in st.PICK_TARGETS else ORDER[int(i) - 1]
+                key = ORDER[int(i)] if target in ("pre_grasp", "grasp") else ORDER[int(i) - 1]
                 assert miss[target]["at"][key] == spec
         assert sum(len(t["at"]) for t in miss.values()) == sum(len(v["stages"][c.split("@")[0]]) for c in cells)
 
 
 def test_retry_mixed_draws_noise_only_episodes_and_no_aim_misses():
-    v = st.variant("retry_mixed")
-    counts = [len(st.planned_misses(v, ORDER, np.random.default_rng(s))[1]) for s in range(400)]
+    v = solve.variant(st, "retry_mixed")
+    counts = [len(solve.planned_misses(v, st.slots({"order": ORDER}), np.random.default_rng(s))[1]) for s in range(400)]
     assert min(counts) == 0 and max(counts) == 3 and 0.3 < counts.count(0) / 400 < 0.5
     assert not {"pick_aim", "place_aim"} & set(v["stages"])
 
@@ -368,11 +363,42 @@ def test_retry_mixed_draws_noise_only_episodes_and_no_aim_misses():
 @pytest.mark.parametrize("seed", range(6))
 def test_a_retry_episode_recovers_from_its_failures_and_builds_the_tower(world, seed):
     drawn = plan(COLOURS)
-    v = st.variant("retry")
+    v = solve.variant(st, "retry")
     v["failures"] = {"counts": [3], "weights": [1.0]}
-    miss, cells = st.planned_misses(v, drawn["order"], np.random.default_rng(seed))
-    tree = st.build_tree(ROBOT, drawn, miss={**miss, "seed": seed}, stacked=v["tower"]["stacked"])
-    tree = st.without_recoveries(tree, keep=("Pick",))
+    miss, cells = solve.planned_misses(v, st.slots(drawn), np.random.default_rng(seed))
 
-    assert tree.execute(st.episode_context(ROBOT, "/Sim_0", 0, drawn)).status == DemoStatus.PERFECT, cells
+    assert tree(drawn, {**miss, "seed": seed}, v).execute(context(drawn)).status == DemoStatus.PERFECT, cells
     assert world.tower() and world.saved is True
+
+
+def test_the_unclutch_offset_and_grasp_tilt_are_drawn_values_none_without_rng():
+    v = {"grasp": {"tilt_deg": 5.0}}
+    drawn = st.values(INIT, plan(COLOURS), {}, v, np.random.default_rng(1))
+    still = st.values(INIT, plan(COLOURS), {}, v, None)
+
+    assert still["unclutch"] == {"offset": [0.0, 0.0, -0.1], "yaw": 0.0} and still["grasp"]["tilt"] == 0.0
+    assert np.all(np.abs(np.subtract(drawn["unclutch"]["offset"], [0, 0, -0.1])) <= st.UNCLUTCH[:3])
+    assert 0 < abs(drawn["grasp"]["tilt"]) <= np.radians(5.0) and drawn["unclutch"]["yaw"] != 0.0
+
+
+FREE = {"MoveOverCube", "LiftCube", "MoveToPrePlace", "BackOverCube"}  # every free end of the tree
+
+
+@pytest.mark.parametrize("trouble", [{}, {"misses": 1}, {"slips": 1}, {"slides": 2},
+                                     {"failing_moves": ["MoveOverSupport"] * 3},
+                                     {"failing_moves": ["MoveToPrePlace", "LowerOntoSupport", "MoveToHome"]}])
+def test_the_motion_rules_hold_on_every_route(world, trouble):
+    """Free space blends (precise_end false), contact ends and the grasp and place hovers end precise, only
+    the descent to the pre-place is aimed, and no free end follows another unless a wait lies between (the
+    free tail has run out by then: the regrasp opens the hand first)."""
+    for k, x in trouble.items():
+        setattr(world, k, x)
+
+    assert run(world).status == DemoStatus.PERFECT
+    moves = [f for f in world.flags if f[0] != "wait"]
+    assert {n for n, _, precise, _ in moves if not precise} <= FREE
+    assert {n for n, _, precise, _ in moves if precise} & FREE == set()
+    assert {n for n, *_, aim in moves if aim} == {"MoveToPrePlace"}
+    assert all(perturb for n, perturb, *_ in moves if n in FREE | {"MoveToPreGrasp", "MoveOverSupport", "MoveToHome"})
+    ends = [f[2] if f[0] != "wait" else "wait" for f in world.flags]
+    assert not any(a is False and b is False for a, b in zip(ends, ends[1:])), world.flags

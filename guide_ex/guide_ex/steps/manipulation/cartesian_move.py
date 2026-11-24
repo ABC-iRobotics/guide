@@ -27,7 +27,6 @@ class MoveToCartesianPose(BaseNode):
         min_fraction: float = 0.95,
         perturb: bool = False,
         precise_end: bool = True,
-        jitter: list | None = None,
         aim: bool = False,
     ) -> ExecutionResult:
         """
@@ -44,10 +43,9 @@ class MoveToCartesianPose(BaseNode):
                 oscbf plans straight lines or refuses).
             perturb (bool): An aim error around the planned path (DART-style demonstrations).
             precise_end (bool): False: no settling at the goal, the next pose move blends in.
-            jitter (list): [x, y, z (m), yaw (rad)], a uniform random offset of the goal.
             aim (bool): With precise_end False: miss the goal horizontally, the next move
                 correcting it (the hover before a descent).
-                The four act only with the robot's motion noise on (controller: oscbf).
+                The three act only with the robot's motion noise on (controller: oscbf).
         Returns:
             ExecutionResult: The result of the move execution.
         """
@@ -77,7 +75,6 @@ class MoveToCartesianPose(BaseNode):
                     min_fraction=min_fraction,
                     perturb=perturb,
                     precise_end=precise_end,
-                    jitter=jitter,
                     aim=aim,
                 )
                 if success:

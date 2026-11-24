@@ -1,2 +1,4 @@
 # Flawless stacking: every target is the goal (the motion noise's perturbed paths aside).
 miss: {}
+# Any variant may also tilt each episode's grasp about the fingers' free axis, uniform in +-tilt_deg:
+# grasp: {tilt_deg: 5.0}

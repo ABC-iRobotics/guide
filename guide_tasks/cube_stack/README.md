@@ -92,10 +92,18 @@ possible tasks):
 | subtask, recovery | `Set it down.` |
 | task and subtask, after the last placement | `Return home.` (the closing task; the procedure is never a task) |
 
-Rest, detours and the final home are the home *joint configuration*
+The unclutch start and the detours are the home *joint configuration*
 (`MoveToJointConfiguration`): a 7-DoF arm reaches a pose in many postures and each
 Cartesian move keeps the current one, so postures drift; a rest *pose* lets the planner
-pick any of them. One episode's last pick failed six times in a row that way.
+pick any of them. One episode's last pick failed six times in a row that way. The final
+home is a pose move to the tool pose at those joints (perturbed like any free-space move;
+refused, it goes through the home joints).
+
+Motion (guide_ex's rules): free-space moves are perturbed and blend into the next one
+(`precise_end: false`: the move over the cube, the lift, the descent to the pre-place, the
+set-down's way back over the cube); the grasp and place hovers and every contact move end
+precise; only the descent to the pre-place is aimed (a horizontal miss the lowering corrects).
+No free end follows another without a wait between (`test_the_motion_rules_hold_on_every_route`).
 
 ## Recovery routes
 
@@ -114,8 +122,15 @@ Cubes spawned too close to grasp are prevented rather than recovered (assumption
 
 ## Usage
 
-The arm moves under OSCBF (`robots.franka.controller: oscbf` in `config/init.yaml`, as block_bin's;
-`moveit` brings MoveIt up instead), with every pose in the robot's base frame, `fr3_link0`.
+The arm moves under OSCBF (`robots.franka.controller: oscbf` in `config/init.yaml`), with every
+pose in the robot's base frame, `fr3_link0`. The solver is `guide_ex.recipe.solve`'s (`serve`), with
+cube_stack's hooks: `ros2 run cube_stack solve_task --namespace /Sim_0/Scene_0 [--motion-noise [JSON]]
+[--recipe flawless,retry_mixed] [--seed-base N] [--perturb-all]`. `--recipe` names variants in
+`config/variants/`, taken in turn; a variant's `grasp: {tilt_deg}` tilts each grasp (was `--grasp-tilt`).
+Every other episode runs without motion noise (`--perturb-all`: none), the misses kept; an episode
+that plans no miss runs without recoveries (the contact closes aside), as does every scenario-mode run.
+Every attempt is logged to `<path>.provenance.jsonl` (seed, recipe, misses, master seed, failed
+node, the arm goals with their flags, saved).
 
 ```bash
 ros2 launch guide_core bringup.launch.py

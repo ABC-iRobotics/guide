@@ -338,17 +338,12 @@ condition_expr: holding
 false_branch: {ref: NodeException, alias: NotHolding}
 ```
 
-The solver loads its top recipe with the values the recipes interpolate (`${robot.gripper_joint}`,
-`${plan.tasks[0]}`, `${cube.edge}`, ...) and runs it (`guide_tasks/cube_stack/cube_stack/solve_task.py`,
-trimmed):
+The task's solver (`guide_tasks/cube_stack/cube_stack/solve_task.py`) is a module of hooks: its
+`values()` returns what the recipes interpolate (`${robot.gripper_joint}`, `${plan.tasks[0]}`,
+`${cube.edge}`, ...), and `guide_ex.recipe.solve` loads the top recipe with them and runs it (trimmed):
 ```python
-def load_recipe(name, robot, plan):
-    """config/recipes/<name>.yaml as a GUIDE-EX tree, for this robot and plan."""
-    recipes = recipes_dir()  # config/recipes: in the source tree, else in the installed share
-    return load(recipes / f"{name}.yaml", values=recipe_values(robot, plan), search_paths=[recipes])
-
-tree = load_recipe("Episode", robot, plan)
-result = tree.execute(episode_context(robot, sim_namespace, scene_id, plan, path))
+tree = build_tree(task, init, plan, miss, v, rng)  # config/recipes/Episode.yaml, values=task.values(...)
+result = tree.execute(episode_context(task, robots, sim_namespace, scene_id, plan, path))
 ```
 A recipe that names an unknown node, misses a value or breaks the layers fails at `load()`,
 naming its file and the node. The reusable leaves live in `guide_ex/guide_ex/steps/` (motion,

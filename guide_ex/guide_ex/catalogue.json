@@ -469,7 +469,6 @@
         "min_fraction=0.95",
         "perturb=False",
         "precise_end=True",
-        "jitter=None",
         "aim=False"
       ],
       "kind": "leaf",

@@ -1,5 +1,6 @@
-# Free the arm at home: the home joints, 10 cm straight down (it moves even if it already was home, and
-# keeps home's posture for the first pick), open the hand.
+# Free the arm at home: the home joints, about 10 cm down (it moves even if it already was home, and
+# keeps home's posture for the first pick), open the hand. ${unclutch.offset} (m, scene axes) and
+# ${unclutch.yaw} (rad, about the tool) are drawn per episode (solve_task.values), so first picks start apart.
 node_type: CompositeNode
 name: Unclutch
 level: SUBTASK
@@ -10,12 +11,18 @@ children:
     alias: UnclutchPose
     dynamic_map: {r_pose: rest_pose}
     static_args:
-      l_pose: {position: [0.0, 0.0, -0.1]}
+      l_pose: {position: "${unclutch.offset}"}
+    output_map: {pose: unclutch_pose}
+  - ref: TransformPose
+    alias: UnclutchTurn
+    dynamic_map: {l_pose: unclutch_pose}
+    static_args:
+      r_pose: {orientation: {euler: ['z', "${unclutch.yaw}"]}}
     output_map: {pose: unclutch_pose}
   - ref: MoveToCartesianPose
     alias: MoveToUnclutch
     dynamic_map: {robot: robot, target_pose: unclutch_pose}
-    static_args: {speed: 1.0, cartesian: true, jitter: [0.03, 0.03, 0.01, 0.1745]}
+    static_args: {speed: 1.0, cartesian: true}
   - ref: OpenGripper
   - ref: WaitForSeconds
     alias: OpenGripperSettle

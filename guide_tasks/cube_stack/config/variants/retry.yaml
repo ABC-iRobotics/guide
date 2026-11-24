@@ -3,7 +3,7 @@
 # a recovery (guide_ex MissPose planned misses, keyed on the cube picked or the cube placed on).
 # A stage moves MissPose targets, {target: {axes, r}}: span in the target's frame (x the fingers' free
 # axis, y their closing axis, z down) and length [lo, hi] m. Stages moving one target exclude each
-# other at a placement. The solver draws them per episode (solve_task.planned_misses).
+# other at a placement. The solver draws them per episode (guide_ex.recipe.solve.planned_misses over solve_task.slots).
 failures: {counts: [1, 2, 3], weights: [0.40, 0.35, 0.25]}
 stages:
   pick_aim: {pre_grasp: {axes: xy, r: [0.01, 0.025]}}   # pre-grasp beside the cube, the descent corrects
