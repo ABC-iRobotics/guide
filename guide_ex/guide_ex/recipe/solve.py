@@ -351,7 +351,7 @@ def _attempts(task, scene_id, robots, sim_namespace, init, path):
     <path>.provenance.jsonl. Five attempts raising in a row (a timed-out sim call each) end the run."""
     robot = next(iter(robots.values()))
     log = robot.node.get_logger()
-    record = Path(f"{path.rstrip('/')}.provenance.jsonl")
+    record = Path(f"{path.rstrip('/')}.provenance.jsonl").expanduser()  # the recorder expands a request's ~ too
     count = {"draws": 0, "errors": 0}
 
     def attempt(key, **kw):
