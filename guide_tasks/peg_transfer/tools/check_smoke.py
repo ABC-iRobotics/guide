@@ -4,7 +4,7 @@ Run (the package's sources importable):
     ~/ros2_ws/.venv/bin/python guide_tasks/peg_transfer/tools/check_smoke.py ~/dataset/peg_transfer [--n 10]
 
 Reads <path>/dataset_*/ (meta/info.json, meta/guide_info.json, meta/tasks.parquet, data/**/*.parquet) and
-<path>.provenance.jsonl (one line per attempt, solve_task.generate). Prints each gate PASS/FAIL, the failed
+<path>.provenance.jsonl (one line per attempt, guide_ex.recipe.solve.generate). Prints each gate PASS/FAIL, the failed
 attempts per subtask and each episode's subtask timeline; exits 1 when a gate fails. Gate 7 (the videos by
 eye) is not checked here.
 """
@@ -19,7 +19,8 @@ import numpy as np
 import pandas as pd
 
 from peg_transfer.scene import IMAGE_SIDE
-from peg_transfer.solve_task import SEED_BLOCK, SUBTASKS
+from guide_ex.recipe.solve import SEED_BLOCK
+from peg_transfer.solve_task import SUBTASKS
 
 RETRY = {"grasp": "regrasp", "handover": "rereceive", "place": "replace"}  # a planned miss's recovery prompt
 

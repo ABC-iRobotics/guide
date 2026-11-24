@@ -8,7 +8,7 @@ Run (the package's sources and guide_motion importable):
 
 Reads <path>/dataset_*/ (observation.state psmN.x/y/z: each tip in its arm's base frame, 20 fps) and
 <path>.provenance.jsonl, whose i-th saved attempt is episode i and lists its arm goals (`moves`,
-solve_task.log_moves; a joint goal's tip by robots/psm's forward kinematics). Goals are matched to the path
+guide_ex.recipe.solve.log_moves; a joint goal's tip by robots/psm's forward kinematics). Goals are matched to the path
 in order: a precise one where the tip first comes within TOL of it, a free one where it passes closest.
 --twin: a recording of the same seeds (a clean run): its moves' numbers alongside, and each move's
 largest distance from the twin's path (the noise alone). --plot: both tips' paths seen from above (world,

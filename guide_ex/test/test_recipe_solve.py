@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
+from guide_ex.recipe import solve
 from guide_ex.recipe.solve import context, dataset_path, draw, episodes_saved, recipe_values, run_episodes
 
 REPLY = json.dumps({"task": "put the bowl on the plate", "target": "/objects/b", "goal": [{"on": ["/objects/b", "/objects/p"]}],
@@ -153,3 +155,95 @@ def test_make_robots_builds_every_init_robot_and_still_one_fr3():
     assert (type(fr3.config).__name__, fr3.config.namespace, fr3.config.frame_id) == (
         "FR3RobotConfig", "/Sim_0/Scene_0/franka", "fr3_link0")
     assert fr3.config.arm_action_type == ActionType.CARTESIAN_POSE and fr3.config.controller == "oscbf"
+
+
+ONE = {"failures": {"counts": [1, 2], "weights": [0.5, 0.5]},
+       "stages": {"grasp": {"grasp": {"axes": "y", "r": [0.01, 0.02]}}, "handover": {"receive": {"axes": "y", "r": [0.01, 0.02]}},
+                  "place": {"place": {"axes": "xy", "r": [0.004, 0.005]}}}}
+
+
+def test_planned_misses_one_slot_draws_distinct_stages_keyed_on_its_default():
+    assert solve.planned_misses({"miss": {"grasp": {"p": 1.0}}}, [{"*": "red"}], None) == ({"grasp": {"p": 1.0}}, [])
+    counts = set()
+    for seed in range(40):
+        miss, stages = solve.planned_misses(ONE, [{"*": "red"}], np.random.default_rng(seed))
+        assert len(stages) == len(set(stages)) == len(miss) and set(stages) <= set(ONE["stages"])
+        assert miss == {t: {"at": {"red": s}} for st in stages for t, s in ONE["stages"][st].items()}
+        counts.add(len(stages))
+    assert counts == {1, 2}
+
+
+def test_planned_misses_many_slots_draw_distinct_cells_keyed_per_target():
+    order = ["a", "b", "c", "d"]
+    slots = [{"pre_grasp": order[i], "grasp": order[i], "*": order[i - 1]} for i in range(1, len(order))]
+    v = {"failures": {"counts": [3], "weights": [1.0]},
+         "stages": {"air_grasp": {"grasp": {"axes": "x", "r": [0.045, 0.06]}}, "askew": {"place": {"axes": "xy", "r": [0.01, 0.02]}},
+                    "fall": {"place": {"axes": "xy", "r": [0.03, 0.04]}}}}
+    for seed in range(50):
+        miss, cells = solve.planned_misses(v, slots, np.random.default_rng(seed))
+        assert len(cells) == len(set(cells)) == 3
+        for cell in cells:  # placement i puts order[i] on order[i - 1]
+            stage, i = cell.split("@")
+            for target, spec in v["stages"][stage].items():
+                assert miss[target]["at"][order[int(i)] if target == "grasp" else order[int(i) - 1]] == spec
+        assert sum(len(t["at"]) for t in miss.values()) == 3  # askew and fall never at one placement
+
+
+def test_variant_reads_the_task_config(tmp_path):
+    (tmp_path / "pkg/config/recipes").mkdir(parents=True)
+    (tmp_path / "pkg/config/variants").mkdir()
+    (tmp_path / "pkg/config/variants/flawless.yaml").write_text("miss: {}\n")
+    task = SimpleNamespace(__package__="pkg", __file__=str(tmp_path / "pkg/pkg/solve_task.py"))
+    assert solve.config_dir(task) == tmp_path / "pkg/config" and solve.variant(task, "flawless") == {"miss": {}}
+
+
+def test_log_moves_records_pose_and_joint_goals_with_flags_not_jaws():
+    sent = []
+    robot = SimpleNamespace(config=SimpleNamespace(arm_joint_names=["j1", "j2"]), send_action=lambda a, *x, **k: sent.append(a) or True)
+    solve.log_moves("psm1", robot)
+    solve.MOVES.clear()
+    assert robot.send_action(SimpleNamespace(position=SimpleNamespace(x=0.1, y=0.2, z=0.3)), speed=0.1, perturb=True,
+                             precise_end=False, aim=True)
+    robot.send_action({"j1.pos": 0.5, "j2.pos": -0.5}, speed=0.2)
+    robot.send_action({"jaw.pos": 0.1})  # the jaw alone: not an arm goal
+    assert len(sent) == 3 and solve.MOVES == [
+        {"robot": "psm1", "position": [0.1, 0.2, 0.3], "speed": 0.1, "perturb": True, "precise_end": False, "aim": True},
+        {"robot": "psm1", "joints": {"j1.pos": 0.5, "j2.pos": -0.5}, "speed": 0.2}]
+
+
+def _offline(monkeypatch, outcomes, runs):
+    """solve_episode, discard and finalize faked; the robots one with a silent log."""
+    monkeypatch.setattr(solve, "solve_episode", lambda task, *a, **k: runs.append((a, k)) or (
+        next(outcomes), {"recipe": k["recipe"], "misses": [], "master": 1, "failed": []}))
+    monkeypatch.setattr(solve, "discard", lambda *a: None)
+    monkeypatch.setattr(solve, "finalize", lambda *a: None)
+    log = SimpleNamespace(info=lambda m: None, error=lambda m: None)
+    return {"r": SimpleNamespace(node=SimpleNamespace(get_logger=lambda: log))}
+
+
+def test_generate_redraws_a_failed_attempt_and_writes_the_provenance_check_smoke_reads(monkeypatch, tmp_path):
+    runs = []
+    robots = _offline(monkeypatch, iter([False, True, True]), runs)  # episode 0 fails once
+
+    solve.generate("task", [None, 4], 0, robots, "/Sim_0", {}, str(tmp_path / "set"), ["flawless", "light_fail"], seed_base=7)
+
+    assert [(a[5:], k["clean"], k["recipe"], k["zone"]) for a, k in runs] == [
+        ((1, 7), True, "flawless", None), ((2, 8), True, "flawless", None), ((3, 1007), False, "light_fail", 4)]
+    lines = [json.loads(s) for s in (tmp_path / "set.provenance.jsonl").read_text().splitlines()]
+    # check_smoke: seed = seed_base + episode * SEED_BLOCK + attempt, recipe and misses on every saved line
+    assert [(p["episode"], p["attempt"], p["seed"], p["saved"]) for p in lines] == [(0, 0, 7, False), (0, 1, 8, True), (1, 0, 1007, True)]
+    assert all({"recipe", "misses", "master", "failed", "draw", "scene_id", "clean", "moves"} <= set(p) for p in lines)
+    assert "zone" not in lines[0] and lines[2]["zone"] == 4
+
+
+def test_scenarios_replace_a_failing_layout_and_redraw_a_failing_trajectory(monkeypatch, tmp_path):
+    runs = []
+    robots = _offline(monkeypatch, iter([False, True, True, False, True]), runs)  # seed 0 fails clean; trajectory 2 once
+
+    solve.generate_scenarios("task", [{"red_block": 3}], 1, 3, 0, robots, "/Sim_0", {}, str(tmp_path / "set"), ["flawless"])
+
+    assert [(a[6], k["clean"], k["no_recovery"]) for a, k in runs] == [
+        (0, True, True), (1, True, True), (1, False, True), (1, False, True), (1, False, True)]
+    assert all(k["zones"] == {"red_block": 3} for _, k in runs) and [a[5] for a, _ in runs] == [1, 2, 3, 4, 5]
+    lines = [json.loads(s) for s in (tmp_path / "set.provenance.jsonl").read_text().splitlines()]
+    assert [p["saved"] for p in lines] == [False, True, True, False, True] and lines[0]["zones"] == {"red_block": 3}

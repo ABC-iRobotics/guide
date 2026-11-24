@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import RandomizationRecord, Randomizer, SeedTree
+from guide_ex.recipe import solve
 from guide_ex.utility.pose import MissPose
 
 UP = np.array([0.0, 0.0, 1.0])
@@ -19,7 +20,7 @@ RCM = {"psm1": np.array([-0.13, 0.82, 0.95]), "psm2": np.array([0.13, 0.82, 0.95
 BASE = {"psm1": Pose(Point(RCM["psm1"]), Rotation(R.from_quat([-0.1297, -0.3817, -0.2945, 0.8664]))),  # measured
         "psm2": Pose(Point(RCM["psm2"]), Rotation(R.from_quat([-0.1297, 0.3817, 0.2945, 0.8664])))}
 BLOCK = Pose(Point([-0.043, 0.69, 0.80 + BLOCK_HALF_H]), Rotation(R.from_euler("z", 40, degrees=True)))
-HANDOVER = yaml.safe_load((st.recipes_dir("peg_transfer", st.__file__).parent / "randomize.yaml").read_text())[
+HANDOVER = yaml.safe_load((solve.config_dir(st) / "randomize.yaml").read_text())[
     "place"]["randomizer.register"]["place"]["with.handover"]["modify.pose"]
 
 
@@ -161,7 +162,7 @@ def test_ik_keeps_every_joint_a_margin_inside_its_limits():
 
 @pytest.mark.parametrize("stage,axis", [("grasp", 1), ("handover", 1), ("place", None)])
 def test_miss_offsets_lie_in_the_tip_frame_within_their_range(stage, axis):
-    v = st.variant("light_fail")
+    v = solve.variant(st, "light_fail")
     (target, spec), = v["stages"][stage].items()
     lo, hi = spec["r"]
     tip = tg.grasp_pose(Pose(Point(BLOCK.position.to_numpy() - RCM["psm1"]), BLOCK.orientation), UP)

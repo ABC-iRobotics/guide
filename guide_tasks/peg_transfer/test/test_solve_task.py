@@ -16,6 +16,7 @@ from scipy.spatial.transform import Rotation as R
 from guide_core.types.geometry import Point, Pose, Rotation
 from guide_core.types.randomization import RandomizationRecord, Randomizer, SeedTree
 from guide_ex.core.states import DemoStatus, ExecutionResult
+from guide_ex.recipe import solve
 from guide_ex.steps.end_effector.gripper_control import SetGripperState
 from guide_ex.steps.manipulation.cartesian_move import MoveToCartesianPose
 from guide_ex.steps.manipulation.joint_move import MoveToJointConfiguration
@@ -66,7 +67,7 @@ class World:
         self.tips = {k: BASES[k] * HOME for k in ("psm1", "psm2")}
         self.holders, self.prompts, self.calls, self.saved = {}, [], [], None  # arm: the block in its tip (Pose)
         self.flags = {}  # a Cartesian move's (perturb, precise_end, aim), by name
-        self.q = {k: np.array(r["default_joint_states"][:6]) for k, r in st.init_yaml()["robots"].items() if k != "ecm"}
+        self.q = {k: np.array(r["default_joint_states"][:6]) for k, r in solve.init_yaml(st)["robots"].items() if k != "ecm"}
         WORLD["w"] = self
 
     def world(self, prim):
@@ -166,10 +167,10 @@ ROBOTS = {k: Arm(id=k) for k in ("psm1", "psm2", "ecm")}
 
 def run(holder, plan, miss=None, recoveries=True):
     holder["w"] = w = World(plan)
-    tree = st.build_tree(st.init_yaml(), plan, miss=miss)
+    tree = solve.build_tree(st, solve.init_yaml(st), plan, miss)
     if not recoveries:
-        st.without_recoveries(tree)
-    result = tree.execute(st.episode_context(ROBOTS, "/Sim_0", 0))
+        solve.without_recoveries(tree)
+    result = tree.execute(solve.episode_context(st, ROBOTS, "/Sim_0", 0, plan))
     return w, result
 
 
@@ -213,8 +214,8 @@ def test_free_space_moves_are_perturbed_and_blend_into_the_next_pose_move(world)
     for arm in ("psm1", "psm2"):  # a free end hands over to the arm's next Cartesian move, not a joint move or a jaw
         names = [n for n, a in w.calls if a == arm and (n in w.flags or n.startswith(("Turn", "Open", "Close", "Receiver", "Giver")))]
         assert all(names[names.index(n) + 1] in w.flags for n in free if n in names), names
-    home = st.recipe_values(st.init_yaml(), plan)["psm"]["home_pose"]["giver"]
-    p, _ = PSM.ee_pose(np.array(st.init_yaml()["robots"]["psm1"]["default_joint_states"][:6]))
+    home = st.values(solve.init_yaml(st), plan, {}, {}, None)["psm"]["home_pose"]["giver"]
+    p, _ = PSM.ee_pose(np.array(solve.init_yaml(st)["robots"]["psm1"]["default_joint_states"][:6]))
     assert np.allclose(home["position"], p)
 
 
@@ -228,7 +229,7 @@ def test_the_prompts_at_three_levels(world):
     s = st.SUBTASKS
     # the parallel blocks' prompts joined, each part prefixed with its arm's image side (PSM1 right, giver here)
     reach, finish = f"Right: {s['reach']} Left: {s['exchange']}", f"Right: {s['return']} Left: {s['place']}"
-    assert subtasks[0] == reach == st.recipe_values(st.init_yaml(), plan)["prompts"]["first"]
+    assert subtasks[0] == reach == st.values(solve.init_yaml(st), plan, {}, {}, None)["prompts"]["first"]
     full = [p for p in dict.fromkeys(subtasks) if ": " not in p or p in (reach, finish)]  # a block's first part alone aside
     assert full == [reach, s["pick"], s["lift"], s["handover"], finish, s["return"]]  # no miss, no recovery's
     assert all(": " not in p or p in (reach, finish) or p in (f"Right: {s['reach']}", f"Left: {s['exchange']}",
@@ -240,9 +241,9 @@ def test_the_prompts_at_three_levels(world):
                                                   ("place", "LiftOffPegTop", "replace")])
 def test_each_planned_miss_fails_once_and_its_recovery_finishes_the_transfer(world, stage, recovery, retry):
     plan = make_plan(3, "psm2")
-    miss, stages = st.planned_misses({"failures": {"counts": [1], "weights": [1.0]},
-                                      "stages": {stage: st.variant("light_fail")["stages"][stage]}},
-                                     plan["colour"], np.random.default_rng(0))
+    miss, stages = solve.planned_misses({"failures": {"counts": [1], "weights": [1.0]},
+                                         "stages": {stage: solve.variant(st, "light_fail")["stages"][stage]}},
+                                        st.slots(plan), np.random.default_rng(0))
     w, result = run(world, plan, miss={**miss, "seed": 5})
 
     assert stages == [stage] and result.outputs["task_success"] and w.saved
@@ -287,9 +288,9 @@ def test_a_regrasp_stalled_on_contact_closes_where_it_stopped(world, monkeypatch
         return ExecutionResult(DemoStatus.FAILURE) if self.name == "DownToGrasp" else result
     monkeypatch.setattr(MoveToCartesianPose, "run", stalls)
     plan = make_plan(3, "psm2")
-    miss, _ = st.planned_misses({"failures": {"counts": [1], "weights": [1.0]},
-                                 "stages": {"grasp": st.variant("light_fail")["stages"]["grasp"]}},
-                                plan["colour"], np.random.default_rng(0))
+    miss, _ = solve.planned_misses({"failures": {"counts": [1], "weights": [1.0]},
+                                    "stages": {"grasp": solve.variant(st, "light_fail")["stages"]["grasp"]}},
+                                   st.slots(plan), np.random.default_rng(0))
     w, result = run(world, plan, miss={**miss, "seed": 5})
 
     names = [n for n, a in w.calls if a == "psm2"]
@@ -297,22 +298,22 @@ def test_a_regrasp_stalled_on_contact_closes_where_it_stopped(world, monkeypatch
 
 
 def test_light_fail_plans_exactly_one_miss_and_retry_mixed_one_or_two():
-    light, mixed = st.variant("light_fail"), st.variant("retry_mixed")
-    assert st.variant("flawless") == {"miss": {}} and st.planned_misses(st.variant("flawless"), "red", None) == ({}, [])
+    light, mixed = solve.variant(st, "light_fail"), solve.variant(st, "retry_mixed")
+    assert solve.variant(st, "flawless") == {"miss": {}} and solve.planned_misses(solve.variant(st, "flawless"), [{"*": "red"}], None) == ({}, [])
     counts = set()
     for seed in range(60):
         rng = np.random.default_rng(seed)
-        miss, stages = st.planned_misses(light, "red", rng)
+        miss, stages = solve.planned_misses(light, [{"*": "red"}], rng)
         assert len(stages) == 1 and stages[0] in ("grasp", "handover", "place")
         assert miss == {t: {"at": {"red": s}} for t, s in light["stages"][stages[0]].items()}
-        miss, stages = st.planned_misses(mixed, "red", rng)
+        miss, stages = solve.planned_misses(mixed, [{"*": "red"}], rng)
         assert len(stages) == len(set(stages)) == len(miss) and set(miss) <= {"grasp", "receive", "place"}
         counts.add(len(stages))
     assert counts == {1, 2}
 
 
 def test_without_recoveries_strips_every_fallback_but_the_contact_closes():
-    tree = st.without_recoveries(st.build_tree(st.init_yaml(), make_plan(0, "psm1")))
+    tree = solve.without_recoveries(solve.build_tree(st, solve.init_yaml(st), make_plan(0, "psm1")))
     stack, kept = [tree], set()
     while stack:
         node = stack.pop()
@@ -325,7 +326,7 @@ def test_without_recoveries_strips_every_fallback_but_the_contact_closes():
 def test_the_ecm_hold_is_a_jittered_joint_target():
     from guide_core.scene.robot_profile import resolve
 
-    entry = resolve(st.init_yaml()["robots"]["ecm"])
+    entry = resolve(solve.init_yaml(st)["robots"]["ecm"])
     for seed in range(20):
         hold = st.ecm_hold(entry, np.random.default_rng(seed))
         q = np.array(list(hold.values()))
@@ -347,7 +348,7 @@ def test_solve_task_randomizes_draws_the_variant_and_saves(world, recipe):
                                  motion_episode=lambda *key, clean=False: None, sleep=lambda s: None)
               for k in ("psm1", "psm2", "ecm")}
 
-    saved, info = st.solve_task(0, robots, "/Sim_0", st.init_yaml(), draw=3, scene_seed=11, recipe=recipe)
+    saved, info = solve.solve_episode(st, 0, robots, "/Sim_0", solve.init_yaml(st), draw=3, scene_seed=11, recipe=recipe)
 
     assert saved and info["recipe"] == recipe and info["giver"] == "psm1" and info["failed"] == []
     assert {"flawless": 0, "light_fail": 1}.get(recipe, len(info["misses"])) == len(info["misses"]) <= 2
