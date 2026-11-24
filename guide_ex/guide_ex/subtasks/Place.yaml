@@ -33,7 +33,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToBinApproach
     dynamic_map: {robot: robot, target_pose: bin_approach_pose}
-    static_args: {speed: 0.5}
+    static_args: {speed: 0.5, cartesian: true, perturb: true}
   - ref: OpenGripper
   - ref: WaitForSeconds
     alias: WaitAfterOpen

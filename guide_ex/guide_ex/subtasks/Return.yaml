@@ -9,7 +9,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToRest
     dynamic_map: {robot: robot, target_pose: rest_pose}
-    static_args: {speed: 1.0}
+    static_args: {speed: 1.0, perturb: true}
   - ref: WaitForSeconds
     alias: WaitAfterTask
     dynamic_map: {timer: robot}

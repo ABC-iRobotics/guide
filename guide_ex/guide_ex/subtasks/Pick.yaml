@@ -1,5 +1,8 @@
 # Pick the target up from above (cube_pose): approach 10 cm over it, grasp 1 cm above its centre,
 # close, lift 20 cm, and fail (NoGrasp) unless the fingers hold it.
+# Retry demonstrations (MissPose; recipe values miss.pre_grasp, miss.grasp = {p, axes, r} or {at: {target: ..}}
+# and miss.seed; unset = off): the approach target may lie off the cube, the descent correcting it; the grasp
+# target may lie beside it, so the hand closes on air and NoGrasp sends the caller to its recovery.
 node_type: CompositeNode
 name: Pick
 level: SUBTASK
@@ -18,19 +21,30 @@ children:
     static_args:
       l_pose: {position: [0.0, 0.0, 0.1]}
     output_map: {pose: cube_approach_pose}
+  - ref: MissPose
+    alias: MissPreGrasp
+    dynamic_map: {pose: cube_approach_pose, key: target}
+    static_args: {miss: "${oc.select:miss.pre_grasp,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: cube_approach_target}
+  # The grasp hover ends precise (the descent starts from it); the approach is free space, so perturbed.
   - ref: MoveToCartesianPose
     alias: MoveToCubeApproach
-    dynamic_map: {robot: robot, target_pose: cube_approach_pose}
-    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
+    dynamic_map: {robot: robot, target_pose: cube_approach_target}
+    static_args: {speed: 0.5, cartesian: true, perturb: true}
   - ref: TransformPose
     alias: TransformCubeGraspPose
     dynamic_map: {r_pose: cube_pose}
     static_args:
       l_pose: {position: [0.0, 0.0, 0.01]}
     output_map: {pose: cube_grasp_pose}
+  - ref: MissPose
+    alias: MissGrasp
+    dynamic_map: {pose: cube_grasp_pose, key: target}
+    static_args: {miss: "${oc.select:miss.grasp,null}", seed: "${oc.select:miss.seed,0}"}
+    output_map: {pose: cube_grasp_target}
   - ref: MoveToCartesianPose
     alias: MoveToCube
-    dynamic_map: {robot: robot, target_pose: cube_grasp_pose}
+    dynamic_map: {robot: robot, target_pose: cube_grasp_target}
     static_args: {speed: 0.2, cartesian: true}
   - ref: CloseGripper
   - ref: WaitForSeconds
@@ -46,7 +60,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToCubeRetreat
     dynamic_map: {robot: robot, target_pose: cube_retreat_pose}
-    static_args: {speed: 0.5, cartesian: true, perturb: true}
+    static_args: {speed: 0.5, cartesian: true, perturb: true, precise_end: false}
   - ref: IsPrimClashing
     alias: CheckClash
     dynamic_map:

@@ -35,7 +35,7 @@ children:
   - ref: MoveToCartesianPose
     alias: MoveToPrePlace
     dynamic_map: {robot: robot, target_pose: pre_place_target}
-    static_args: {speed: 0.2, cartesian: true, precise_end: false}
+    static_args: {speed: 0.2, cartesian: true, perturb: true, precise_end: false, aim: true}
   - ref: MoveToCartesianPose
     alias: LowerOntoSupport
     dynamic_map: {robot: robot, target_pose: place_target}

@@ -29,7 +29,7 @@ def test_the_timeline_of_pick_reads_each_pose_after_the_node_that_gives_it():
     timeline(root, set(root.dynamic_map.values()), out)
     by_name = {name.strip(): (reads, lacking, gives) for _, name, reads, lacking, gives, _ in out}
     assert by_name["TransformCubeGraspPose"][2] == ["cube_grasp_pose"]
-    assert "cube_grasp_pose" in by_name["MoveToCube"][0]
+    assert "cube_grasp_target" in by_name["MoveToCube"][0]
     assert not [name for _, name, _, lacking, _, _ in out if lacking]
 
 
