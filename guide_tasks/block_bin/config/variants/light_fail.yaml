@@ -1,0 +1,6 @@
+# Light fail: one planned miss per episode, the pre-grasp hover beside the block; the descent corrects it
+# and the pick succeeds. A stage moves MissPose targets, {target: {axes, r}}: span in the target's frame
+# (x the fingers' free axis, y their closing axis, z down) and length [lo, hi] m (planned, keyed on the block).
+failures: {counts: [1], weights: [1.0]}
+stages:
+  pick_aim: {pre_grasp: {axes: xy, r: [0.01, 0.025]}}

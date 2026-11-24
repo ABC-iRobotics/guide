@@ -185,15 +185,14 @@ reuses `counts[0]` rather than erroring. Adding request-time bounds checking wou
 `num_zones` at the service layer, which is scene-side state — see the zone-querying service
 in the TODO doc.
 
-**Generation flow** (`block_bin/solve_task.py`):
+**Generation flow** (`guide_ex/recipe/solve.py`, `generate`):
 - Build a per-episode zone plan via `zone_plan()` (in `grid.py`, so future zoned tasks reuse
   it): `zones=[-1]` → `[0]*counts[0] + [1]*counts[0] + …`; `zones=[]` → free draws;
   `zones=[2,16],counts=[4,10] -> [2,2,2,2,16,…]`.
 - Each episode: `Randomize.Request(id, use_zone=True, zone=z)` → solve → record.
 
-**Python wrapper** (task-side helpers):
-- `zoned_request({2: 4, 16: 10}, path="")` → `zones=[2,16], counts=[4,10]`.
-- `all_zones_request(count=10, path="")` → `zones=[-1], counts=[count]`.
+**Requests** (no task-side helpers; build the `Demonstration` request directly):
+- `{zones: [2, 16], counts: [4, 10]}`; `{zones: [-1], counts: [10]}` is every zone.
 
 ## 6. Recording the zone (required)
 
@@ -264,7 +263,7 @@ Modified:
     instruction ignores `zone`; `zone<0`/`None` == free; injection reproduces.
   - `Demonstration` zone-plan expansion (all_zones / zones+counts / free).
   - Single-grid validation rejects a second `grid:` instruction.
-- **End-to-end (after rebuild):** run `block_bin`, `all_zones_request(10)` and a
+- **End-to-end (after rebuild):** run `block_bin`, `zones: [-1], counts: [10]` and a
   `{2:4,16:10}` batch; confirm the color-picked cube lands in the requested cells, the other
   blocks are free, `guide_episodes.jsonl` records each episode's `zone`/`zone_cell`, and
   `guide_info.json` carries the grid layout.

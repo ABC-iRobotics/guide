@@ -1,0 +1,3 @@
+# Flawless: every target is the goal (the motion noise's perturbed paths aside). Runs without
+# recoveries (the Contact closes kept): a failing step discards the episode (guide_ex.recipe.solve).
+miss: {}

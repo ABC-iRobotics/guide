@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import block_bin.solve_task as st  # noqa: E402
+from guide_ex.recipe import solve  # noqa: E402
 from guide_core.types.geometry import Point, Pose  # noqa: E402
 from guide_ex.steps.end_effector.gripper_control import SetGripperState  # noqa: E402
 from guide_msgs.srv import Pose as PoseSrv  # noqa: E402
@@ -25,15 +26,17 @@ class FakeRobot(ROS2Robot):
         pass
 
 
+@pytest.mark.parametrize("recipe", ["flawless", "light_fail", "retry", "retry_mixed"])
 @pytest.mark.parametrize("startup", [0.0, 2.0])  # dataset.camera_transition off, and on for 2 s
-def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, startup):
+def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(startup, recipe):
     robot = FakeRobot.__new__(FakeRobot)
     robot.node = SimpleNamespace(get_logger=lambda: logging.getLogger("dry"),
                                  get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=0)))
     robot.config = SimpleNamespace(frame_id="fr3_link0", arm_joint_names=[f"fr3_joint{i}" for i in range(1, 8)], gripper_joint_names=["fr3_finger_joint1"],
                                    arm_action_type=ActionType.CARTESIAN_POSE, gripper_action_type=ActionType.JOINT_POSITION)
     robot._reentrant_callback_group = None
-    moves, asked, slept = [], [], []
+    robot.motion_episode = lambda *key, clean=False: None
+    moves, flags, asked, slept = [], [], [], []
     robot.sleep = lambda seconds: slept.append((seconds, len(moves)))
     robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[0.04])
 
@@ -41,6 +44,8 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, st
         moves.append(action)
         if isinstance(action, dict):  # the fingers jump to the goal: each gripper step settles at once
             robot.joint_state = SimpleNamespace(name=["fr3_finger_joint1"], position=[action["fr3_finger_joint1.pos"]])
+        elif "perturb" in kwargs:
+            flags.append((kwargs["perturb"], kwargs["precise_end"], kwargs.get("aim", False)))
         return True
 
     robot.send_action = send_action
@@ -56,12 +61,17 @@ def test_block_bin_moves_in_the_base_frame_and_waits_on_sim_time(monkeypatch, st
         return SimpleNamespace(success=True, message="", collision=True)
 
     robot.callService = call
-    monkeypatch.setattr(st.time, "sleep", lambda seconds: None)  # a wall-clock wait would show by its absence in `slept`
-    monkeypatch.setattr(st, "namespace_base", "/Sim_0/Scene_0", raising=False)
-    monkeypatch.setattr(st, "startup_padding", startup)
+    init = solve.init_yaml(st)
+    init["dataset"]["camera_transition"] = {"enabled": bool(startup), "duration": startup}
 
-    assert st.solveTask(0, robot)
+    saved, info = solve.solve_episode(st, 0, {"franka": robot}, "/Sim_0", init, recipe=recipe)
 
+    assert saved and info["recipe"] == recipe and info["failed"] == []
+    # free ends: perturbed (precise_end false), aim only on one; never two in a row (a queued free tail has no second free end)
+    assert all(p for p, precise, _ in flags if not precise) and not any(aim and precise for _, precise, aim in flags)
+    assert not any(not a[1] and not b[1] for a, b in zip(flags, flags[1:]))
+    if recipe != "flawless":
+        return
     # the target, then all four blocks (ClearanceTargetPose looks for neighbours to keep the fingers off;
     # here each answers CUBE, i.e. is the target itself, so the grasp keeps its yaw), then the bin
     blocks = [f"/Scene_0/blocks/{c}_block" for c in ("blue", "yellow", "green", "red")]

@@ -1,0 +1,6 @@
+# Retry: one planned miss per episode, the grasp beside the block along the fingers' free axis: the hand
+# closes on air, lifts empty (NoGrasp) and PickRecovery reopens and picks again. No place miss.
+# Stages as light_fail.yaml.
+failures: {counts: [1], weights: [1.0]}
+stages:
+  air_grasp: {grasp: {axes: x, r: [0.045, 0.06]}}

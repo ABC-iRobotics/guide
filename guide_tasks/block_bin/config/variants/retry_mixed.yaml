@@ -1,0 +1,7 @@
+# Retry, mixed: 1 or 2 planned misses per episode (60 / 40 %) from the two pick stages (distinct targets,
+# so both can land): an aimed-off pre-grasp the descent corrects, an air grasp PickRecovery retries.
+# Stages as light_fail.yaml.
+failures: {counts: [1, 2], weights: [0.6, 0.4]}
+stages:
+  pick_aim: {pre_grasp: {axes: xy, r: [0.01, 0.025]}}
+  air_grasp: {grasp: {axes: x, r: [0.045, 0.06]}}

@@ -24,13 +24,6 @@ def generate_nodes(context, *args, **kwargs):
     with open(os.path.join(get_package_share_directory("block_bin"), "config", "init.yaml")) as f:
         config = yaml.safe_load(f)
     controller = config["robots"]["franka"].get("controller", "oscbf")  # OSC only
-    # dataset.camera_transition: GUIDE moves the cameras onto their mounts for `duration` s at the
-    # start of every episode, and the solver holds the arm still for as long plus one frame period
-    # at dataset.fps (GUIDE validates both).
-    transition = (config.get("dataset") or {}).get("camera_transition") or {}
-    startup_padding = transition.get("duration", 0.0) if transition.get("enabled") is True else 0.0
-    fps = (config.get("dataset") or {}).get("fps", 10)
-
     # Same-host DDS discovery on this machine needs the localhost cyclonedds
     # config (loopback has no MULTICAST flag + multiple NICs), otherwise these
     # nodes are invisible to rqt / ros2 CLI. Point every node here at the same
@@ -96,8 +89,7 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"block_bin_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller,
-                           "--startup-padding", str(startup_padding), "--fps", str(fps)],
+                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),
