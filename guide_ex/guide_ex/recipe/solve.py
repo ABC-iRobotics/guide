@@ -338,7 +338,8 @@ def finalize(robot, scene_id):
     from guide_msgs import srv
 
     try:
-        robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=600.0)
+        # 660 s: past GUIDE's own 600 s FINALIZE_TIMEOUT_S, so its answer arrives first.
+        robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=660.0)
     except Exception as e:
         robot.node.get_logger().error(f"Finalize failed: {e}")
     finally:
@@ -585,7 +586,7 @@ def main(argv=None) -> int:
         done, attempts, fallbacks = run_episodes(wanted, args.attempts, try_once, log)
     finally:
         try:  # saved episodes stay unreadable until finalized
-            robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=300.0)
+            robot.callService(robot.finalize_recording, srv.FinalizeRecording.Request(id=scene_id), timeout_sec=660.0)  # past GUIDE's 600 s FINALIZE_TIMEOUT_S
         except Exception as e:
             robot.node.get_logger().error(f"Finalize failed: {e}")
         finally:

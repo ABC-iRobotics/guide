@@ -1,6 +1,11 @@
+# A package name, a directory, or s3://bucket/key.tar.gz holding a task bundle.
 string path
+# Also launch the task's launch/bringup.launch.py (MoveIt + solver) for the new scene.
+bool bringup
 ---
 uint8 id
 float32[] offset
+# The registered task package ("" for a plain scene directory).
+string package
 string message
 bool success

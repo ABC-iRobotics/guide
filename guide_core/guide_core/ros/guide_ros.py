@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import signal
 import traceback
-from threading import Thread
+from threading import Lock, Thread
 from typing import Optional
 
 import rclpy
@@ -54,10 +56,15 @@ import numpy as np
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile
+from rclpy.signals import SignalHandlerOptions
 from scipy.spatial.transform import Rotation
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
 
 from guide_core.core.guide_simulator import GUIDESimulator
+from guide_core.core.recorder_manager import RecorderServer
+from guide_core.ros.task_bringup import TaskBringup
 from guide_core.types.geometry import Pose
 from guide_motion.targets import JOINTS, POSE, TWIST, Target
 from guide_msgs.msg import MotionTarget
@@ -72,12 +79,25 @@ from guide_msgs.srv import (
     StopRecording,
 )
 
+# Writing a long dataset's videos takes minutes; past this, finalize reports a stuck recorder.
+FINALIZE_TIMEOUT_S = 600.0
+
 
 class GUIDEROS2Interface(Node):
-    def __init__(self, backend: GUIDESimulator, node_name: Optional[str], namespace: Optional[str]):
+    def __init__(
+        self,
+        backend: GUIDESimulator,
+        node_name: Optional[str],
+        namespace: Optional[str],
+        tasks=None,
+    ):
         super().__init__(node_name=node_name, namespace=namespace)
 
         self._backend = backend
+        # Fetches, builds and launches tasks for Register (guide_core.ros.task_bringup).
+        self._tasks = tasks
+        self._shutdown_lock = Lock()  # taken once, never released: shutdown runs once
+        self._announced = set()  # dataset dirs already on dataset_finalized
 
         self._has_clock = False
         self._reentrant_group = ReentrantCallbackGroup()
@@ -178,6 +198,61 @@ class GUIDEROS2Interface(Node):
             callback=self._finalize_recording_callback,
             callback_group=self._reentrant_group,
         )
+
+        # Every dataset GUIDE finalizes, for whoever drives this simulator (a master, a
+        # script): {"scene": id, "path": dir}; path "" when the scene recorded nothing.
+        self._finalized_pub = self.create_publisher(
+            String,
+            "dataset_finalized",
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
+
+        # Stop this simulator. Ctrl-C and SIGTERM take the same path (ros_entry_point).
+        self._shutdown_service = self.create_service(
+            srv_type=Trigger,
+            srv_name="shutdown",
+            callback=self._shutdown_callback,
+            callback_group=self._reentrant_group,
+        )
+
+    def shutdown(self) -> None:
+        """The one way this simulator stops -- /shutdown, Ctrl-C and SIGTERM alike: finalize
+        every scene (announcing what was written), stop the task launches, close Isaac, end ROS."""
+        if not self._shutdown_lock.acquire(blocking=False):
+            return
+        self._logger.info("Shutting down: finalizing every scene...")
+        try:
+            for scene_id, path in self._backend._scene_manager.finalize_all_recordings():
+                if path:
+                    self._announce_finalized(scene_id, path)
+            if self._tasks:
+                self._tasks.shutdown()
+            self._backend.stop()  # no physics step may poll the recorder once it is gone
+            RecorderServer.stop()
+        except Exception as e:  # Isaac must still close and ROS end, or only SIGKILL stops us
+            self._logger.error(f"Shutdown: finalizing or stopping tasks failed: {e}")
+        try:
+            # Closes Isaac, which under the default fast_shutdown ends the process there and then;
+            # try_shutdown only runs when close() returns (fast_shutdown off, or close failing).
+            self._backend.call("shutdown", 60.0)
+        finally:
+            rclpy.try_shutdown()
+
+    def _shutdown_callback(
+        self, request: Trigger.Request, response: Trigger.Response
+    ) -> Trigger.Response:
+        Thread(target=self.shutdown).start()  # answer first: the shutdown ends this node
+        response.success = True
+        response.message = "Shutting down."
+        return response
+
+    def _announce_finalized(self, scene_id: int, path: str) -> None:
+        if path in self._announced:
+            return
+        if path:  # "nothing recorded" is announced every time
+            self._announced.add(path)
+        self._finalized_pub.publish(String(data=json.dumps({"scene": scene_id, "path": path})))
+
     def _randomize_callback(
         self, request: Randomize.Request, response: Randomize.Response
     ) -> Randomize.Response:
@@ -224,9 +299,15 @@ class GUIDEROS2Interface(Node):
     ) -> RegisterScene.Response:
         response = RegisterScene.Response()
         try:
-            self._backend.stop()
+            # A task given as a directory or an s3://….tar.gz is fetched and built with its
+            # dependencies first: that can take minutes, and the other scenes keep stepping.
+            path, package = (
+                self._tasks.prepare(request.path) if self._tasks else (request.path, None)
+            )
+            if request.bringup and package is None:
+                raise ValueError(f"{request.path} has no launch/bringup.launch.py to start")
 
-            path = request.path
+            self._backend.stop()
 
             id, offset = self._backend.register_scene(path)
             hosts = self._backend.motion_hosts(id)
@@ -238,12 +319,17 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Registered scene with id {id} at offset {offset}")
 
             if not self._has_clock:
-                self._backend.call("create_clock")
+                # /Sim_N/clock: every simulator runs at its own speed. Task launches remap
+                # their nodes' /clock to it (SetRemap in <task>/launch/bringup.launch.py).
+                self._backend.call("create_clock", namespace=self.get_namespace().strip("/"))
                 self._has_clock = True
 
             self._backend.play()
+            if request.bringup:
+                self._tasks.launch(package, id)  # the task's MoveIt + solver for this scene
             response.id = id
             response.offset = list(offset)
+            response.package = package or ""
             response.message = f"OSCBF control refused for {'; '.join(refused)}" if refused else ""
             response.success = True
 
@@ -467,8 +553,14 @@ class GUIDEROS2Interface(Node):
             self._logger.info(f"Finalizing recording for scene {id}...")
 
             self._backend._scene_manager.finalize_recording(id)
+            # Answer once the recorder has written the dataset: it adds the language columns
+            # after LeRobot's finalize, and only then is the dataset complete.
+            path = self._backend._scene_manager.wait_finalized(id, FINALIZE_TIMEOUT_S)
+            if path is None:
+                raise TimeoutError(f"the recorder did not finish scene {id} in {FINALIZE_TIMEOUT_S:.0f} s")
+            self._announce_finalized(id, path)
 
-            response.message = "Recording finalized successfully."
+            response.message = path or "Nothing was recorded."
             response.success = True
         except Exception as e:
             response.message = str(e)
@@ -523,24 +615,11 @@ def target_from_msg(msg: MotionTarget) -> Target:
 
 def launch_ros_interface(node: GUIDEROS2Interface):
     executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        executor.add_node(node)
         executor.spin()
-
-        node.destroy_node()
-        rclpy.shutdown()
-
-    except (KeyboardInterrupt, ExternalShutdownException):
-        node.get_logger().info("Shutting down cleanly... Finalizing all datasets!")
-        try:
-            if hasattr(node, "_backend") and node._backend is not None:
-                if (
-                    hasattr(node._backend, "_scene_manager")
-                    and node._backend._scene_manager is not None
-                ):
-                    node._backend._scene_manager.finalize_all_recordings()
-        except Exception as e:
-            node.get_logger().error(f"Error while finalizing datasets on shutdown: {e}")
+    except ExternalShutdownException:
+        pass  # GUIDEROS2Interface.shutdown ended ROS after finalizing every scene
 
 
 def str2bool(v):
@@ -578,10 +657,14 @@ def ros_entry_point():
     sim.init_runtime(debug=args.debug, logger=None)
     sim.init_scene_manager()
 
-    # 2. Initialize ROS 2
-    rclpy.init(args=None)
+    # 2. Initialize ROS 2. GUIDE handles the signals itself so that Ctrl-C, SIGTERM (docker stop,
+    #    ros2 launch) and /shutdown all take ros_interface.shutdown: rclpy's own handler interrupts
+    #    Isaac's loop mid-frame on SIGINT and never ends it on SIGTERM.
+    rclpy.init(args=None, signal_handler_options=SignalHandlerOptions.NO)
 
-    ros_interface = GUIDEROS2Interface(sim, node_name="GUIDE", namespace=NAMESPACE)
+    ros_interface = GUIDEROS2Interface(
+        sim, node_name="GUIDE", namespace=NAMESPACE, tasks=TaskBringup(args.id)
+    )
 
     # Dynamically set ROS 2 node logger severity based on debug CLI flag
     from rclpy.logging import LoggingSeverity
@@ -595,6 +678,9 @@ def ros_entry_point():
     sim._logger = backend_logger
     sim._runtime._logger = backend_logger
     sim._scene_manager._logger = backend_logger
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: Thread(target=ros_interface.shutdown).start())
 
     ros_t = Thread(target=launch_ros_interface, args=(ros_interface,))
     ros_t.start()

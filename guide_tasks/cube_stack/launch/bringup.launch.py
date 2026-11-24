@@ -8,16 +8,19 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 
 
 def generate_nodes(context, *args, **kwargs):
     num_env = int(LaunchConfiguration("num_env").perform(context))
+    first = int(LaunchConfiguration("first_scene").perform(context))
+    sim = f"/Sim_{LaunchConfiguration('sim_id').perform(context)}"
 
     # The motion layer: robots.franka.controller in config/init.yaml, the switch GUIDE reads when
     # it registers the scene (S2b). oscbf drives the arm from Isaac's physics step: no move_group.
@@ -42,8 +45,8 @@ def generate_nodes(context, *args, **kwargs):
     )
 
     nodes = []
-    for i in range(num_env):
-        ns = f"/Sim_0/Scene_{i}/franka"
+    for i in range(first, first + num_env):
+        ns = f"{sim}/Scene_{i}/franka"
         if controller == "moveit":
             nodes.append(
                 IncludeLaunchDescription(
@@ -66,7 +69,7 @@ def generate_nodes(context, *args, **kwargs):
                 name=f"cube_stack_solver_node_{i}",
                 prefix=venv_python,
                 parameters=[{"use_sim_time": True}],
-                arguments=["--namespace", f"/Sim_0/Scene_{i}", "--controller", controller],
+                arguments=["--namespace", f"{sim}/Scene_{i}", "--controller", controller],
                 remappings=[
                     ("/trajectory_execution_event", "trajectory_execution_event"),
                     ("/attached_collision_object", "attached_collision_object"),
@@ -74,14 +77,22 @@ def generate_nodes(context, *args, **kwargs):
                 ],
             )
         )
-    return nodes
+    # Each simulator publishes its own clock (/Sim_N/clock); use_sim_time nodes listen on
+    # /clock, so point every node of this launch, the included MoveIt ones too, at it.
+    return [GroupAction([SetRemap(src="/clock", dst=f"{sim}/clock"), *nodes])]
 
 
 def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "num_env", default_value="1", description="Number of environments to launch"
+                "num_env", default_value="1", description="Number of scenes to launch"
+            ),
+            DeclareLaunchArgument(
+                "first_scene", default_value="0", description="Id of the first scene to launch"
+            ),
+            DeclareLaunchArgument(
+                "sim_id", default_value="0", description="Simulator id: the Sim_<id> namespace"
             ),
             OpaqueFunction(function=generate_nodes),
         ]

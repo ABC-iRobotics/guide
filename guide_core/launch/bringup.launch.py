@@ -61,6 +61,8 @@ def generate_launch_description():
                 cmd=[LaunchConfiguration("python_executable"), node_path, "--debug", "False"],
                 name="GUIDE",
                 output="both",
+                sigterm_timeout="180",
+                sigkill_timeout="10",
                 additional_env={**env, "GUIDE_CAMERA_TOPICS": LaunchConfiguration("camera_topics")},
             ),
         ]

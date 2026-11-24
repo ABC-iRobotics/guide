@@ -3,7 +3,6 @@ DART labels, prismatic joint units, and a joint name two robots share."""
 
 import logging
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -12,10 +11,6 @@ import pytest
 
 from guide_core.scene.extra_features import POSE, cartesian_robots, key_info, listed, pose_keys, pose_names
 from guide_core.scene.scene_recorder import SceneRecorder
-
-sys.path.insert(0, str(Path(__file__).parent))  # this folder's test modules, for the Isaac stubs
-from test_command_fixes import isaac_import  # noqa: E402, F401  (fixture)
-
 
 TWO = ["psm1", "psm2"]
 

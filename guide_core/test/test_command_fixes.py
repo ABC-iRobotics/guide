@@ -6,7 +6,6 @@ imported under stubs, and every module imported meanwhile is dropped again after
 (a MagicMock left in sys.modules would follow every later test in the session).
 """
 
-import importlib
 import math
 import sys
 from types import MethodType, SimpleNamespace
@@ -15,45 +14,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from guide_core.types.isaac_state import IsaacState
-
-STUBBED = (
-    "carb",
-    "pxr",
-    "omni",
-    "omni.physx",
-    "isaacsim",
-    "isaacsim.core",
-    "isaacsim.core.prims",
-    "isaacsim.core.utils",
-    "isaacsim.core.utils.bounds",
-    "isaacsim.core.utils.prims",
-    "isaacsim.core.utils.stage",
-    "isaacsim.storage",
-    "isaacsim.storage.native",
-    "isaacsim.util",
-    "isaacsim.util.clash_detection",
-)
-
-
-@pytest.fixture
-def isaac_import():
-    """``isaac_import("guide_core.x")`` imports a module with Isaac stubbed out."""
-    before = dict(sys.modules)
-
-    def load(name):
-        for stub in STUBBED:
-            sys.modules[stub] = MagicMock()
-        sys.modules.pop(name, None)
-        return importlib.import_module(name)
-
-    yield load
-    # Drop what was imported against the stubs; real libraries (numpy, rclpy) stay.
-    stubbed_roots = {name.split(".")[0] for name in STUBBED} | {"guide_core"}
-    for name in set(sys.modules) - set(before):
-        if name.split(".")[0] in stubbed_roots:
-            del sys.modules[name]
-    sys.modules.update(before)
-
 
 @pytest.fixture
 def command_module(isaac_import):
@@ -440,7 +400,7 @@ def test_register_scene_reports_refused_robots_in_its_message(isaac_import):
     fine = SimpleNamespace(topic="/Sim_0/Scene_0/ur/motion_target", diagnostics={"refused": None})
     backend = SimpleNamespace(stop=lambda: None, play=lambda: None, call=lambda name: None,
                               register_scene=lambda path: (0, (0.0, 0.0, 0.0)), motion_hosts=lambda i: [refused, fine])
-    me = SimpleNamespace(_backend=backend, _logger=MagicMock(), _has_clock=True, _subscribe_motion_target=lambda host: None)
+    me = SimpleNamespace(_backend=backend, _logger=MagicMock(), _has_clock=True, _tasks=None, _subscribe_motion_target=lambda host: None)
 
     response = ros.GUIDEROS2Interface._register_callback(me, RegisterScene.Request(path="block_bin"), RegisterScene.Response())
 
@@ -548,3 +508,40 @@ def test_registration_builds_the_stage_before_anything_reads_it(command_module):
     module._cmd_register_scene(runtime, "task")
 
     assert calls == ["add_scene", "place", "build_stage", "robots", "cameras"]
+
+
+def test_shutdown_closes_isaac_even_when_stopping_fails(command_module):
+    stage = command_module("_cmd_stage")
+    h = host(
+        state=IsaacState.ERROR,
+        _cmd_stop=MagicMock(side_effect=RuntimeError("no world")),
+        simulation_app=MagicMock(),
+    )
+
+    with pytest.raises(RuntimeError):
+        stage._cmd_shutdown(h)
+
+    h.simulation_app.close.assert_called_once()
+    assert h.state == IsaacState.UNINITIALIZED
+
+
+def test_the_clock_publishes_under_the_sim_namespace(command_module, monkeypatch):
+    """Ros2ClockGraph.make_graph ignores _node_namespace, so it is set on PublishClock afterwards."""
+    for name in (
+        "omni.graph", "omni.graph.core", "isaacsim.core.api", "isaacsim.core.api.robots",
+        "isaacsim.core.utils.types", "isaacsim.ros2", "isaacsim.ros2.ui",
+        "isaacsim.ros2.ui.og_rtx_sensors", "isaacsim.ros2.ui.og_utils",
+        "isaacsim.sensors", "isaacsim.sensors.camera",
+    ):
+        monkeypatch.setitem(sys.modules, name, MagicMock())
+    robot = command_module("_cmd_robot")
+    robot._finalize_graph = MagicMock()
+    robot.og = MagicMock()
+
+    robot._cmd_create_clock(host(state=IsaacState.READY), namespace="Sim_3")
+
+    # An absolute attribute path: Controller.edit on the existing graph could not resolve the
+    # relative one live ("node=None, graph=None"), and the clock stayed on /clock.
+    graph = robot.Ros2ClockGraph.return_value._og_path
+    robot.og.Controller.attribute.assert_called_once_with(f"{graph}/PublishClock.inputs:nodeNamespace")
+    robot.og.Controller.attribute.return_value.set.assert_called_once_with("Sim_3")

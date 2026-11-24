@@ -1,0 +1,12 @@
+.git
+.claude
+modules
+docs
+build
+install
+log
+**/__pycache__
+docker/secrets
+.superpowers
+**/.pytest_cache
+**/*.env

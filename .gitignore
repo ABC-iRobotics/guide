@@ -97,3 +97,7 @@ cli_runner/
 docs/superpowers/
 .superpowers/
 docs/design/libero-asset-spike.md
+
+# Docker secrets (Ceph/MinIO keys) and env files never enter git
+docker/secrets/
+*.env

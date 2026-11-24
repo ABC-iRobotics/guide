@@ -485,6 +485,8 @@ class IsaacSimRuntime:
             start = time.perf_counter()
 
             self._process_commands(max_per_cycle=50)
+            if self.state in (SHUTTING_DOWN, UNINITIALIZED):
+                break  # a shutdown command closed Isaac: touch nothing more
 
             if self.state != RUNNING:
                 # Nothing renders, so don't make commands wait a frame period for the
